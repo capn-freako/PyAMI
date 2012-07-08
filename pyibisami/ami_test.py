@@ -22,31 +22,7 @@ import optparse
 from ctypes import *
 import numpy as np
 
-import amimodel
-
-kUseHaskellModel = False
-
-# Constant definitions.
-if(kUseHaskellModel):
-    kAmiFileName = "libami.so"
-    kAmiInitParams = """
-        (testAMI
-            (Mode 1)
-            (Dcgain 0)
-            (BW 0)
-            (Process 0)
-        )
-    """
-else:
-    kAmiFileName = "arria5_rx.linux.so"
-    kAmiInitParams = """
-        (Arria_V_Rx
-            (Mode 1)
-            (Dcgain 0)
-            (BW 0)
-            (Process 0)
-        )
-    """
+import amimodel as ami
 
 def main():
     """ami_test v0.1
@@ -61,6 +37,14 @@ def main():
     p.add_option('--bit_time', '-b', default="200.0e-12")
     p.add_option('--num_samples', '-n', default="128")
     p.add_option('--magnitude', '-m', default="0.1")
+    p.add_option('--dll_file', '-f', default="libami.so")
+    p.add_option('--ami_params', '-p', default=" \
+        (testAMI \
+            (Mode 1) \
+            (Dcgain 0) \
+            (BW 0) \
+            (Process 0) \
+        )")
     options, arguments = p.parse_args()
     
     # Fetch options and cast into local independent variables.
@@ -68,6 +52,8 @@ def main():
     sample_interval = float(options.sample_interval)
     bit_time        = float(options.bit_time)
     magnitude       = float(options.magnitude)
+    dll_file        = str(options.dll_file)
+    ami_params      = str(options.ami_params)
 
     # Calculate any local dependent variable values.
     stop_time = sample_interval * n
@@ -76,13 +62,13 @@ def main():
     # Initialize the model.
     print "Initializing AMI model..."
     Vector = c_double * n
-    init_data = AMIModelInitializer(
+    init_data = ami.AMIModelInitializer(
         channel_response=Vector(0.0, magnitude, 0.0, ),
         row_size=n,
         num_aggressors=0,
-        ami_params_in=kAmiInitParams
+        ami_params_in=ami_params
     )
-    theModel = AMIModel(kAmiFileName)
+    theModel = ami.AMIModel(dll_file)
     theModel.initialize(init_data)
     print theModel._msg.value
     print theModel._ami_params_out.value
