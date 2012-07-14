@@ -24,21 +24,25 @@ class AMIModelInitializer(object):
         redundant constants every time she invokes the AMIModel constructor.
     """
 
-    _initValues = {
+    ami_params = {
+        'root_name' : "",
+    }
+
+    _init_data = {
         'channel_response' : (c_double * 128)(0.0, 1.0, 0.0),
         'row_size'         : 128,
         'num_aggressors'   : 0,
         'sample_interval'  : c_double(25.0e-12),
-        'bit_time'         : c_double(0.1e-9),
-        'ami_params_in'    : ""
+        'bit_time'         : c_double(0.1e-9)
     }
 
-    def __init__(self, **optional_args):
-        """ Constructor accepts a dictionary of optional initialization
+    def __init__(self, ami_params, **optional_args):
+        """ Constructor accepts a mandatory dictionary containing the
+            AMI parameters, as well as optional initialization
             data overrides and validates them, before using them to
-            update the local initialization data structure.
+            update the local initialization data structures.
 
-            Valid dictionary keys:
+            Valid names of optional initialization data overrides:
 
             - channel_response
                 a matrix of `c_double's where the first row represents the
@@ -70,25 +74,70 @@ class AMIModelInitializer(object):
                 link, in seconds.
 
                 Default) 100e-12 (10 Gbits/s)
-
-            - ami_params_in
-                string containing the AMI input parameters
-
-                Default) empty string
         """
         for item in optional_args.items():
-            theKey = item[0]
-            if(not theKey in self._initValues):
-                del optional_args[theKey]
-        self._initValues.update(optional_args)
+            the_key = item[0]
+            if(the_key in self._init_data):
+                the_value = item[1]
+                eval('self.' + the_key + ' = ' + the_value)
+        self.ami_params.update(ami_params)
+
+    def _getChannelResponse(self):
+        return map(float, self._init_data['channel_response'])
+    def _setChannelResponse(self, h):
+        Vector = c_double * len(h)
+        self._init_data['channel_response'] = Vector(*h)
+    channel_response = property(_getChannelResponse, _setChannelResponse, \
+        doc='Channel impulse response to be passed to AMI_Init().')
+
+    def _getRowSize(self):
+        return self._init_data['row_size']
+    def _setRowSize(self, n):
+        self._init_data['row_size'] = n
+    row_size = property(_getRowSize, _setRowSize, \
+        doc='Number of elements in channel response vector(s).')
+
+    def _getNumAggressors(self):
+        return self._init_data['num_aggressors']
+    def _setNumAggressors(self, n):
+        self._init_data['num_aggressors'] = n
+    num_aggressors = property(_getNumAggressors, _setNumAggressors, \
+        doc="Number of vectors in `channel_response', minus one.")
+
+    def _getSampleInterval(self):
+        return float(self._init_data['sample_interval'].value)
+    def _setSampleInterval(self, T):
+        self._init_data['sample_interval'] = c_double(T)
+    sample_interval = property(_getSampleInterval, _setSampleInterval, \
+        doc='Time interval between adjacent elements in channel response vector(s).')
+
+    def _getBitTime(self):
+        return float(self._init_data['bit_time'].value)
+    def _setBitTime(self, T):
+        self._init_data['bit_time'] = c_double(T)
+    bit_time = property(_getBitTime, _setBitTime, \
+        doc='Link unit interval.')
 
 class AMIModel(object):
     """ Class defining the structure and behavior of a AMI Model.
         
-        Public Methods:
+        Public Methods: (See individual docs.)
           initialize()
           getWave()
         
+        Properties: (See individual docs.)
+          initOut
+          channel_response
+          clock
+          row_size
+          num_aggressors
+          sample_interval
+          bit_time
+          ami_params_in
+          ami_params_out
+          ami_mem_handle
+          msg
+
         Additional Features:
 
           - Makes the calling of AMI_Close() automagic, by calling it
@@ -124,30 +173,49 @@ class AMIModel(object):
             `initialize'. This is useful for PyLab command prompt testing.
         """
 
+        # Free any memory allocated by the previous initialization.
         if(self._ami_mem_handle):
             self._amiClose(self._ami_mem_handle)
-        self._channel_response = init_object._initValues['channel_response']
+            self._ami_mem_handle = c_char_p(None)
+
+        # Set up the AMI_Init() arguments.
+        self._channel_response = init_object._init_data['channel_response']
         self._clock            = cp.copy(self._channel_response)
-        self._wave             = cp.copy(self._channel_response)
-        self._row_size         = init_object._initValues['row_size']
-        self._num_aggressors   = init_object._initValues['num_aggressors']
-        self._sample_interval  = init_object._initValues['sample_interval']
-        self._bit_time         = init_object._initValues['bit_time']
-        self._ami_params_in    = init_object._initValues['ami_params_in']
+        self._initOut          = cp.copy(self._channel_response)
+        self._row_size         = init_object._init_data['row_size']
+        self._num_aggressors   = init_object._init_data['num_aggressors']
+        self._sample_interval  = init_object._init_data['sample_interval']
+        self._bit_time         = init_object._init_data['bit_time']
+
+        # Construct the AMI parameters string.
+        self._ami_params_in = "(" + init_object.ami_params['root_name'] + " "
+        for item in init_object.ami_params.items():
+            if(not item[0] == 'root_name'):
+                self._ami_params_in = self._ami_params_in + \
+                    "(" + str(item[0]) + " " + str(item[1]) + ")"
+        self._ami_params_in = self._ami_params_in + ")"
+
+        # Set handle types.
         self._ami_params_out   = c_char_p("")
-        self._ami_mem_handle   = c_char_p("")
+        self._ami_mem_handle   = c_char_p(None)
         self._msg              = c_char_p("")
-        self._amiInit(
-            byref(self._wave),
-            self._row_size,
-            self._num_aggressors,
-            self._sample_interval,
-            self._bit_time,
-            self._ami_params_in,
-            byref(self._ami_params_out),
-            byref(self._ami_mem_handle),
-            byref(self._msg)
-        )
+
+        # Call AMI_Init(), via our Python wrapper.
+        try:
+            self._amiInit(
+                byref(self._initOut),
+                self._row_size,
+                self._num_aggressors,
+                self._sample_interval,
+                self._bit_time,
+                self._ami_params_in,
+                byref(self._ami_params_out),
+                byref(self._ami_mem_handle),
+                byref(self._msg)
+            )
+        except:
+            print "`_ami_mem_handle' = ", self._ami_mem_handle
+            raise
 
     def getWave(self, wave, row_size=0):
         """ Wraps the `AMI_GetWave' function.
@@ -169,4 +237,43 @@ class AMIModel(object):
             self._ami_mem_handle
         )
         return np.array(_wave)
+
+    def _getInitOut(self):
+        return map(float, self._initOut)
+    initOut = property(_getInitOut, doc='Channel response convolved with model impulse response.')
+
+    def _getChannelResponse(self):
+        return map(float, self._channel_response)
+    channel_response = property(_getChannelResponse, doc='Channel response passed to initialize().')
+
+    def _getRowSize(self):
+        return self._row_size
+    row_size = property(_getRowSize, doc='Length of vector(s) passed to initialize().')
+
+    def _getNumAggressors(self):
+        return self._num_aggressors
+    num_aggressors = property(_getNumAggressors, \
+        doc='Number of rows in matrix passed to initialize(), minus one.')
+
+    def _getSampleInterval(self):
+        return float(self._sample_interval.value)
+    sample_interval = property(_getSampleInterval, \
+        doc='Time interval between adjacent elements of the vector(s) passed to initialize().')
+
+    def _getBitTime(self):
+        return float(self._bit_time.value)
+    bit_time = property(_getBitTime, doc='Link unit interval, as passed to initialize().')
+
+    def _getAmiParamsIn(self):
+        return self._ami_params_in
+    ami_params_in = property(_getAmiParamsIn, \
+        doc='The AMI parameter string passed to AMI_Init() by initialize().')
+
+    def _getAmiParamsOut(self):
+        return self._ami_params_out.value
+    ami_params_out = property(_getAmiParamsOut, doc='The AMI parameter string returned by AMI_Init().')
+
+    def _getMsg(self):
+        return self._msg.value
+    msg = property(_getMsg, doc='Message returned by most recent call to AMI_Init() or AMI_GetWave().')
 

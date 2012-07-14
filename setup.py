@@ -8,7 +8,7 @@ from distutils.core import setup
 
 setup(
     name='PyIBIS-AMI',
-    version='0.2',
+    version='0.3',
     packages=['pyibisami',],
     license='BSD',
     long_description=open('README.txt').read(),
