@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Python tool for testing IBIS-AMI models
+Python tool for testing IBIS-AMI models in batch mode.
 
 Original Author: David Banas
 Original Date:   July 3, 2012
@@ -24,8 +24,67 @@ import numpy as np
 
 import amimodel as ami
 
+# Making the model and its initialization data global.
+_theModel = None
+_theModelInitializer = None
+
+def doCmd(cmd_str):
+    """ Processes a single command line, typically, taken from a file
+        containing several such lines.
+
+        Available commands: (Commands may be abbreviated to uniqueness.)
+
+        - load <filename>
+            Loads a new AMI DLL from <filename>.
+
+        - initialize
+            Calls the `initialize' method of the model with the parameters
+            created and/or adjusted by the `parameters' command.
+            (See, below.)
+
+        - getwave
+            (Not yet implemented.)
+
+        - parameters {['<ami_param>':<new_value>],...} {['<init_data>:<new_value>'],...}
+            Creates or modifies the model initialization parameters.
+
+            Note) Both bracketed expressions MUST be present (although, they may be empty),
+                  and neither may contain spaces! Furthermore, if `<new_value>' is a
+                  string, it MUST be quoted.
+    """
+    global _theModel, _theModelInitializer
+
+    toks = cmd_str.split()
+    cmd = toks[0]
+
+    if(cmd.startswith('l')):
+        _filename = toks[1]
+        _theModel = ami.AMIModel(_filename)
+
+    elif(cmd.startswith('i')):
+        _theModel.initialize(_theModelInitializer)
+
+    elif(cmd.startswith('g')):
+        return
+
+    elif(cmd.startswith('p')):
+        _ami_params = eval(toks[1])
+        _init_data = eval(toks[2])
+        if(_theModelInitializer):
+            _theModelInitializer.ami_params.update(_ami_params)
+            for item in _init_data.items():
+                _the_prop = item[0]
+                _the_val = item[1]
+                eval('_theModelInitializer.' + _the_prop + ' = ' + _the_val)
+        else:
+            _theModelInitializer = ami.AMIModelInitializer(_ami_params)
+            for item in _init_data.items():
+                _the_prop = item[0]
+                _the_val = item[1]
+                eval('_theModelInitializer.' + _the_prop + ' = ' + _the_val)
+
 def main():
-    """ami_test v0.1
+    """ami_test v0.4 - PyIBIS-AMI batch command processor
     """
 
     # Script identification.
@@ -33,53 +92,33 @@ def main():
 
     # Configure and run the options parser.
     p = optparse.OptionParser()
-    p.add_option('--sample_interval', '-s', default="25.0e-12")
-    p.add_option('--bit_time', '-b', default="200.0e-12")
-    p.add_option('--num_samples', '-n', default="128")
-    p.add_option('--magnitude', '-m', default="0.1")
-    p.add_option('--dll_file', '-f', default="libami.so")
-    p.add_option('--ami_params', '-p', default=" \
-        (testAMI \
-            (Mode 1) \
-            (Dcgain 0) \
-            (BW 0) \
-            (Process 0) \
-        )")
+#    p.add_option('--command_file', '-c', default=None)
     options, arguments = p.parse_args()
     
     # Fetch options and cast into local independent variables.
-    n               = int(options.num_samples)
-    sample_interval = float(options.sample_interval)
-    bit_time        = float(options.bit_time)
-    magnitude       = float(options.magnitude)
-    dll_file        = str(options.dll_file)
-    ami_params      = str(options.ami_params)
+#    n               = int(options.command_file)
 
-    # Calculate any local dependent variable values.
-    stop_time = sample_interval * n
-    num_bits  = int(stop_time / bit_time)
+    # Open command file (or STDIN).
+    if(not arguments):
+        cmd_file = sys.stdin
+        print "Reading commands from <STDIN>"
+    else:
+        cmd_file = open(arguments[0])
+        print "Reading commands from ", arguments[0]
 
-    # Initialize the model.
-    print "Initializing AMI model..."
-    Vector = c_double * n
-    init_data = ami.AMIModelInitializer(
-        channel_response=Vector(0.0, magnitude, 0.0, ),
-        row_size=n,
-        num_aggressors=0,
-        ami_params_in=ami_params
-    )
-    theModel = ami.AMIModel(dll_file)
-    theModel.initialize(init_data)
-    print theModel._msg.value
-    print theModel._ami_params_out.value
-
-    # Call `GetWave'.
-    print "Calling GetWave..."
-    wave_in = [0.0, magnitude] + [0.0 for i in range(n - 2)]
-    wave_out = theModel.getWave(wave_in)
-    print theModel._msg.value
-    print theModel._ami_params_out.value
-    print wave_out
+    # Read and process commands.
+    i = 0
+    try:
+        for line in cmd_file:
+            toks = line.split()
+            if(not toks or toks[0].startswith('#')):
+                continue
+            print "[%4d]> "%i, line,
+            i = i + 1
+            doCmd(line)
+    finally:
+        if(arguments):
+            cmd_file.close()
 
 if __name__ == '__main__':
     main()
