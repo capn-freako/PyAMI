@@ -10,6 +10,9 @@ setup(
     name='PyIBIS-AMI',
     version='0.4',
     packages=['pyibisami',],
+    package_data={
+        'pyibisami': ['tests/*.em', 'test_results.x?l', '*.png'],
+    },
     license='BSD',
     long_description=open('README.txt').read(),
     url='https://github.com/capn-freako/PyAMI/wiki',

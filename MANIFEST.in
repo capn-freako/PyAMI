@@ -1,0 +1,4 @@
+include pyibisami/test_results.x?l
+include pyibisami/*.png
+recursive-include pyibisami/tests *.em
+
