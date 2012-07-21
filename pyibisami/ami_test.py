@@ -83,6 +83,14 @@ def doCmd(cmd_str):
                 _the_val = item[1]
                 eval('_theModelInitializer.' + _the_prop + ' = ' + _the_val)
 
+    elif(cmd.startswith('v')):
+        _var_name = toks[1]
+        _par_name = toks[2]
+        eval(_var_name + ' = ' + '_theModel.' + _par_name)
+
+    else:
+        print "Unrecognized command: ", cmd
+
 def main():
     """ami_test v0.4 - PyIBIS-AMI batch command processor
     """
