@@ -4,15 +4,19 @@
     July 7, 2012
 '''
 
-from distutils.core import setup
+import ez_setup
+ez_setup.use_setuptools()
+
+from setuptools import setup
 
 setup(
     name='PyIBIS-AMI',
-    version='0.4',
+    version='0.5',
     packages=['pyibisami',],
     package_data={
         'pyibisami': ['tests/*.em', 'test_results.x?l', '*.png'],
     },
+    install_requires = ['EmPy', 'numpy', 'matplotlib'],
     license='BSD',
     long_description=open('README.txt').read(),
     url='https://github.com/capn-freako/PyAMI/wiki',
