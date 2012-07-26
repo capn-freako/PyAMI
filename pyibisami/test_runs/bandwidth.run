@@ -1,0 +1,24 @@
+Sweep of `Bandwidth` parameter values.
+
+('Bandwidth = 0', \
+  ({'root_name' : 'testAMI', \
+    'Mode'      : 1, \
+    'Dcgain'    : 0, \
+    'BW'        : 0, \
+    'Process'   : 0, \
+   }, \
+   {} \
+  ) \
+)
+
+('Bandwidth = 1', \
+  ({'root_name' : 'testAMI', \
+    'Mode'      : 1, \
+    'Dcgain'    : 0, \
+    'BW'        : 1, \
+    'Process'   : 0, \
+   }, \
+   {} \
+  ) \
+)
+

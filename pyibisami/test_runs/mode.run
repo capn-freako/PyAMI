@@ -1,0 +1,35 @@
+Sweep of `Mode` parameter values.
+
+('Mode = 0', \
+  ({'root_name' : 'testAMI', \
+    'Mode'      : 0, \
+    'Dcgain'    : 0, \
+    'BW'        : 0, \
+    'Process'   : 0, \
+   }, \
+   {} \
+  ) \
+)
+
+('Mode = 1', \
+  ({'root_name' : 'testAMI', \
+    'Mode'      : 1, \
+    'Dcgain'    : 0, \
+    'BW'        : 0, \
+    'Process'   : 0, \
+   }, \
+   {} \
+  ) \
+)
+
+('Mode = 2', \
+  ({'root_name' : 'testAMI', \
+    'Mode'      : 2, \
+    'Dcgain'    : 0, \
+    'BW'        : 0, \
+    'Process'   : 0, \
+   }, \
+   {} \
+  ) \
+)
+

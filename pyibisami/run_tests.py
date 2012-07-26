@@ -54,8 +54,8 @@ def main():
                  help='Sets the name of the directory from which tests are taken. (Default: %default)')
     p.add_option('--model', '-m', default='libami.so',
                  help='Sets the AMI model DLL file name. (Default: %default)')
-    p.add_option('--params', '-p', default='"{"root_name":"Arria_V_Rx"}"',
-                 help='Defines initial AMI parameters. Format: "{"<name1>":"<val1>","<name2>":"<val2>",...}" (Default: %default)')
+    p.add_option('--params', '-p', default='[("cfg_dflt", "default", [("default", ({"root_name":"testAMI"},{})),]),]',
+                 help='List of lists of model configurations. Format: <filename> or [(name, [(label, ({AMI params., in "key:val" format},{Model params., in "key:val" format})), ...]), ...] (Default: %default)')
     p.add_option('--xml_file', '-x', default='test_results.xml',
                  help='Sets the name of the XML output file. You should load this file into your Web browser, after program completion. (Default: %default)')
     options, arguments = p.parse_args()
@@ -68,9 +68,39 @@ def main():
     # Fetch options and cast into local independent variables.
     test_dir = str(options.test_dir)
     model = str(options.model)
-    params = eval(options.params)
-    print params
     xml_filename = str(options.xml_file)
+    print "Testing model:", model
+    print "Using tests in:", test_dir
+    print "Sending XHTML output to:", xml_filename
+    if(os.path.exists(options.params)):
+        if(os.path.isfile(options.params)):
+            cfg_dir = '.'
+            cfg_files = [options.params,]
+        else:
+            cfg_dir = options.params
+            cfg_files = filter(lambda s: s.endswith('.run'), \
+                               filter(lambda f: os.path.isfile(cfg_dir + '/' + f), \
+                                      os.listdir(cfg_dir)))
+        params = []
+        for cfg_filename in cfg_files:
+            cfg_name = os.path.splitext(cfg_filename)[0]
+            param_list = []
+            with open(cfg_dir + '/' + cfg_filename, 'rt') as cfg_file:
+                description = cfg_file.readline()
+                expr = ""
+                for line in cfg_file:
+                    toks = line.split()
+                    if(not toks or toks[0].startswith('#')):
+                        continue
+                    expr += line
+                    if(line.endswith('\\\n')):
+                        expr = expr.rstrip('\\\n')
+                    else:
+                        param_list.append(eval(expr))
+                        expr = ""
+            params.append((cfg_name, description, param_list))
+    else:
+        params = eval(options.params)
 
     # Run the tests.
     with open(xml_filename, 'wt') as xml_file:
@@ -87,17 +117,22 @@ def main():
     for test in tests:
         print "Running test:", test
         theModel = ami.AMIModel(model)
-        theModelInitializer = ami.AMIModelInitializer(params)
-        with open(xml_filename, 'at') as xml_file:
-            interpreter = em.Interpreter(output = xml_file, \
-                                         globals = {'name' : test, \
-                                                    'model' : theModel, \
-                                                    'data' : theModelInitializer, \
-                                                    'plot_names' : plot_names})
-            try:
-                interpreter.file(open(test_dir + '/' + test + '.em'))
-            finally:
-                interpreter.shutdown()
+        for cfg_item in params:
+            cfg_name = cfg_item[0]
+            description = cfg_item[1]
+            param_list = cfg_item[2]
+            with open(xml_filename, 'at') as xml_file:
+                interpreter = em.Interpreter(output = xml_file,
+                                             globals = {'name'        : test + ' (' + cfg_name + ')',
+                                                        'model'       : theModel,
+                                                        'data'        : param_list,
+                                                        'plot_names'  : plot_names,
+                                                        'description' : description,
+                                                       })
+                try:
+                    interpreter.file(open(test_dir + '/' + test + '.em'))
+                finally:
+                    interpreter.shutdown()
     with open(xml_filename, 'at') as xml_file:
         xml_file.write('</tests>\n')
 

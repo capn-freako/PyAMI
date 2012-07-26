@@ -194,6 +194,7 @@ class AMIModel(object):
                 self._ami_params_in = self._ami_params_in + \
                     "(" + str(item[0]) + " " + str(item[1]) + ")"
         self._ami_params_in = self._ami_params_in + ")"
+        print self._ami_params_in
 
         # Set handle types.
         self._ami_params_out   = c_char_p("")
