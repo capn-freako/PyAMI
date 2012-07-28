@@ -25,3 +25,18 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
+# Project specific stuff
+*.so
+*.png
+MANIFEST
+*.swp
+*_log.txt
+empy_exec_test.*
+*.ami
+*.ibs
+*.old
+*.orig
+*.rej
+*.xml
+

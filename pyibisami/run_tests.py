@@ -148,17 +148,19 @@ def main():
                     if(not toks or toks[0].startswith('#')):
                         continue
                     expr += line
-                    if(line.endswith('\\\n')):
+                    if(toks[-1] == '\\'): # Test for line continuation.
                         expr = expr.rstrip('\\\n')
                     else:
                         new_item = eval(expr)
-                        if('channel_response' in new_item[1][1] and os.path.isfile(new_item[1][1]['channel_response'])):
+                        if('channel_response' in new_item[1][1]
+                           and os.path.isfile(new_item[1][1]['channel_response'])):
                             if('sample_interval' in new_item[1][1]):
                                 sample_interval = new_item[1][1]['sample_interval']
                             else:
 #                                sample_interval = ami.AMIModelInitializer.sample_interval # the default value
                                 sample_interval = 25.0e-12
                             new_item[1][1]['channel_response'] = getImpulse(new_item[1][1]['channel_response'], sample_interval)
+                            new_item[1][1]['row_size'] = len(new_item[1][1]['channel_response'])
                         param_list.append(new_item)
                         expr = ""
             params.append((cfg_name, description, param_list))

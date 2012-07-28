@@ -10,16 +10,16 @@
     <result>Pass</result>
     <description>Model frequency response for: @(description)</description>
     <output>
-@{from pylab import *}
-@{import pyibisami.amimodel as ami}
-@{cla()}
 @{
+from pylab import *
+import pyibisami.amimodel as ami
+cla()
 for cfg in data:
     cfg_name = cfg[0]
     params = cfg[1]
     initializer = ami.AMIModelInitializer(params[0])
     for item in params[1].items():
-        eval('initializer.' + item[0] + ' = ' + item[1])
+        exec ('initializer.' + item[0] + ' = ' + repr(item[1]))
     model.initialize(initializer)
     print '        <block name="Model Initialization (' + cfg_name + ')" type="text">'
     print model.msg
@@ -37,7 +37,7 @@ filename = plot_names.next()
 savefig(filename)
 }
         <block name="Model Frequency Response" type="image">
-@(filename)
+            @(filename)
         </block>
     </output>
 </test>
