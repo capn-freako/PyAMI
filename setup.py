@@ -11,7 +11,7 @@ from setuptools import setup
 
 setup(
     name='PyIBIS-AMI',
-    version='0.7',
+    version='0.8',
     packages=['pyibisami',],
     package_data={
         'pyibisami': ['tests/*.em', 'test_results.x?l', '*.png', 'test_runs/*.run'],

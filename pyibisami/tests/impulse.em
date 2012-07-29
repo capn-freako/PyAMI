@@ -18,6 +18,10 @@ cla()
 for cfg in data:
     cfg_name = cfg[0]
     params = cfg[1]
+    if(len(cfg) > 2):
+        reference = ref_dir + '/' + name.split()[0] + '/' + cfg[2]
+    else:
+        reference = None
     initializer = ami.AMIModelInitializer(params[0])
     items = params[1].items()
     items.sort(reverse=True)
@@ -31,7 +35,13 @@ for cfg in data:
     h = model.initOut
     T = model.sample_interval
     t = [i * T for i in range(len(h))]
-    plot(t, h, label=cfg_name)
+    rgb_main, rgb_ref = plot_colors.next()
+    color_main = "#%02X%02X%02X" % (rgb_main[0] * 0xFF, rgb_main[1] * 0xFF, rgb_main[2] * 0xFF)
+    color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
+    plot(t, h, label=cfg_name, color=color_main)
+    if(reference):
+        r = ami.getImpulse(reference, T)
+        plot(t, r, label=cfg_name+'_ref', color=color_ref)
 title('Model Impulse Response')
 xlabel('Time (sec.)')
 legend()

@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>
+<tests>
+
+<test>
+    <name>impulse (all_taps)</name>
+    <result>Pass</result>
+    <description>Model impulse response for: Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
+</description>
+    <output>
+(Stratix4_Tx (tap1 4)(Vod 8)(tap2 2)(ptap 2)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-2_4_2)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-2
+	Tap1:	4
+	Tap2:	2
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.010800
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 8)(Vod 8)(tap2 4)(ptap 4)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-4_8_4)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-4
+	Tap1:	8
+	Tap2:	4
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.113000
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 16)(Vod 8)(tap2 8)(ptap 8)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-8_16_8)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-8
+	Tap1:	16
+	Tap2:	8
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.317400
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 31)(Vod 8)(tap2 15)(ptap 15)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-15_31_15)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-15
+	Tap1:	31
+	Tap2:	15
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.675100
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 31)(Vod 8)(tap2 15)(ptap 15)(inv_ptap 0)(inv_tap2 1))
+        <block name="Model Initialization (15_31_-15)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	15
+	Tap1:	31
+	Tap2:	-15
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	0.857900
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+
+        <block name="Model Impulse Response" type="image">
+            plot_1.png
+        </block>
+    </output>
+</test>
+
+
+<test>
+    <name>freq_resp (all_taps)</name>
+    <result>Pass</result>
+    <description>Model frequency response for: Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
+</description>
+    <output>
+(Stratix4_Tx (tap1 4)(Vod 8)(tap2 2)(ptap 2)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-2_4_2)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-2
+	Tap1:	4
+	Tap2:	2
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.010800
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 8)(Vod 8)(tap2 4)(ptap 4)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-4_8_4)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-4
+	Tap1:	8
+	Tap2:	4
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.113000
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 16)(Vod 8)(tap2 8)(ptap 8)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-8_16_8)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-8
+	Tap1:	16
+	Tap2:	8
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.317400
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 31)(Vod 8)(tap2 15)(ptap 15)(inv_ptap 1)(inv_tap2 0))
+        <block name="Model Initialization (-15_31_15)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	-15
+	Tap1:	31
+	Tap2:	15
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	-0.675100
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+(Stratix4_Tx (tap1 31)(Vod 8)(tap2 15)(ptap 15)(inv_ptap 0)(inv_tap2 1))
+        <block name="Model Initialization (15_31_-15)" type="text">
+
+User selections:
+	Vod:	8
+	Pretap:	15
+	Tap1:	31
+	Tap2:	-15
+
+Calculated tap weights:
+	Main:	0.000000
+	Pre:	0.857900
+	Tap1:	0.000000
+	Tap2:	0.000000
+
+
+        </block>
+
+        <block name="Model Frequency Response" type="image">
+            plot_2.png
+        </block>
+    </output>
+</test>
+
+</tests>

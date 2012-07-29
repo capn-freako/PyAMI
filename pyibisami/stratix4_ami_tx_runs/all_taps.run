@@ -12,7 +12,7 @@ Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
    {'channel_response' : 'impulse_response_8ma.txt', \
     'sample_interval'  : 5.0e-12, \
    } \
-  ) \
+  ), \
 )
 
 ('-4_8_4', \
@@ -27,7 +27,7 @@ Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
    {'channel_response' : 'impulse_response_8ma.txt', \
     'sample_interval'  : 5.0e-12, \
    } \
-  ) \
+  ), \
 )
 
 ('-8_16_8', \
@@ -42,6 +42,37 @@ Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
    {'channel_response' : 'impulse_response_8ma.txt', \
     'sample_interval'  : 5.0e-12, \
    } \
-  ) \
+  ), \
+)
+
+('-15_31_15', \
+  ({'root_name' : 'Stratix4_Tx', \
+    'ptap'      : 15, \
+    'tap1'      : 31, \
+    'tap2'      : 15, \
+    'inv_ptap'  : 1, \
+    'inv_tap2'  : 0, \
+    'Vod'       : 8, \
+   }, \
+   {'channel_response' : 'impulse_response_8ma.txt', \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ), \
+)
+
+('15_31_-15', \
+  ({'root_name' : 'Stratix4_Tx', \
+    'ptap'      : 15, \
+    'tap1'      : 31, \
+    'tap2'      : 15, \
+    'inv_ptap'  : 0, \
+    'inv_tap2'  : 1, \
+    'Vod'       : 8, \
+   }, \
+   {'channel_response' : 'impulse_response_8ma.txt', \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ), \
+  'impulse_response_8ma.txt' \
 )
 

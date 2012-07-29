@@ -14,7 +14,7 @@ import sys
 import optparse
 import os.path
 
-from numpy import array
+from numpy import array, floor
 
 #import amimodel as ami           # Use this one for development/testing.
 import pyibisami.amimodel as ami # Use this one for distribution.
@@ -27,6 +27,64 @@ def plot_name(n=0):
         n += 1
         yield _plot_name_base + '_' + str(n) + '.' + _plot_name_ext
 plot_names = plot_name()
+
+def hsv2rgb(hue=0, saturation=1.0, value=1.0):
+    if(value < 0):
+        value = 0.0
+    elif(value > 1.0):
+        value = 1.0
+    if(saturation == 0):
+        return(value, value, value)
+    else:
+        if(saturation < 0):
+            saturation = 0
+        elif(saturation > 1.0):
+            saturation = 1.0
+        hue = hue % 360
+        H = float(hue)
+        S = float(saturation)
+        V = float(value)
+        H_i =  floor (H / 60)
+        f = ( H / 60 ) - H_i
+        p = V * ( 1 - S )
+        q = V * ( 1 - f * S )
+        t = V * ( 1 - ( 1 - f ) * S )
+        if(H_i == 0):
+            R = V
+            G = t
+            B = p
+        elif(H_i == 1):
+            R = q
+            G = V
+            B = p
+        elif(H_i == 2):
+            R = p
+            G = V
+            B = t
+        elif(H_i == 3):
+            R = p
+            G = q
+            B = V
+        elif(H_i == 4):
+            R = t
+            G = p
+            B = V
+        else:
+            R = V
+            G = p
+            B = q
+        return (R, G, B)
+
+def color_picker(num_hues=3, first_hue=0):
+    """ RGB color generator yields pairs of colors having the same hue, where the
+        first color is fully bright and saturated, and the second is half bright
+        and half saturated. Originally, the intent was to have the second color
+        used for the `reference` waveform.
+    """
+    hue = first_hue
+    while(True):
+        yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.5, 0.5))
+        hue += 360 / num_hues
 
 def main():
     """
@@ -61,6 +119,8 @@ def main():
                  help='List of lists of model configurations. Format: <filename> or [(name, [(label, ({AMI params., in "key:val" format},{Model params., in "key:val" format})), ...]), ...] (Default: %default)')
     p.add_option('--xml_file', '-x', default='test_results.xml',
                  help='Sets the name of the XML output file. You should load this file into your Web browser, after program completion. (Default: %default)')
+    p.add_option('--ref_dir', '-r', default='refs',
+                 help='Sets the name of the directory from which reference waveforms are taken. (Default: %default)')
     options, arguments = p.parse_args()
     
     # Script identification.
@@ -70,6 +130,7 @@ def main():
 
     # Fetch options and cast into local independent variables.
     test_dir = str(options.test_dir)
+    ref_dir = str(options.ref_dir)
     model = str(options.model)
     xml_filename = str(options.xml_file)
     print "Testing model:", model
@@ -86,7 +147,7 @@ def main():
                                       os.listdir(cfg_dir)))
         params = []
         for cfg_filename in cfg_files:
-            cfg_name = os.path.splitext(cfg_filename)[0]
+            cfg_name = os.path.splitext(os.path.split(cfg_filename)[1])[0]
             param_list = []
             with open(cfg_dir + '/' + cfg_filename, 'rt') as cfg_file:
                 description = cfg_file.readline()
@@ -118,12 +179,14 @@ def main():
                                                filter(lambda f: os.path.isfile(test_dir + '/' + f), \
                                                       os.listdir(test_dir)))))
     for test in tests:
-        print "Running test:", test
+        print "Running test:", test, "..."
         theModel = ami.AMIModel(model)
         for cfg_item in params:
             cfg_name = cfg_item[0]
+            print "\tRunning test configuration:", cfg_name, "..."
             description = cfg_item[1]
             param_list = cfg_item[2]
+            colors = color_picker(num_hues=len(param_list))
             with open(xml_filename, 'at') as xml_file:
                 interpreter = em.Interpreter(output = xml_file,
                                              globals = {'name'        : test + ' (' + cfg_name + ')',
@@ -131,11 +194,14 @@ def main():
                                                         'data'        : param_list,
                                                         'plot_names'  : plot_names,
                                                         'description' : description,
+                                                        'plot_colors' : colors,
+                                                        'ref_dir'     : ref_dir,
                                                        })
                 try:
                     interpreter.file(open(test_dir + '/' + test + '.em'))
                 finally:
                     interpreter.shutdown()
+        print "Test:", test, "complete."
     with open(xml_filename, 'at') as xml_file:
         xml_file.write('</tests>\n')
 

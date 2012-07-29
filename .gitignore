@@ -38,5 +38,4 @@ empy_exec_test.*
 *.old
 *.orig
 *.rej
-*.xml
 
