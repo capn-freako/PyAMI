@@ -10,6 +10,60 @@ Copyright (c) 2012 David Banas; All rights reserved World wide.
 from ctypes import *
 import numpy as np
 import copy as cp
+import os
+
+def loadWave(filename):
+    """ Load a waveform file consisting of any number of lines, where each
+        line contains, first, a time value and, second, a voltage value.
+        Assume the first line is a header, and discard it.
+
+        Specifically, this function may be used to load in waveform files
+        saved from CosmosScope.
+
+        Inputs:
+        - filename: Name of waveform file to read in.
+
+        Outputs:
+        - t: vector of time values
+        - v: vector of voltage values
+    """
+    with open(filename, mode='rU') as theFile:
+        theFile.readline()              # Consume the header line.
+        t = []
+        v = []
+        for line in theFile:
+            tmp = map (float, line.split())
+            t.append (tmp[0])
+            v.append (tmp[1])
+        return(t, v)
+
+def getImpulse(filename, sample_per):
+    """ Read in an impulse response from a file, and convert it to the
+        given sample rate, using linear interpolation.
+
+        Inputs:
+        - filename:   Name of waveform file to read in.
+        - sample_per: New sample interval
+
+        Outputs:
+        - res: resampled impulse response
+    """
+    impulse = loadWave(filename)
+    ts = impulse[0]
+    vs = impulse[1]
+    tmax = ts[-1]
+    # Build new impulse response, at new sampling period, using linear interpolation.
+    res = []
+    t = 0.0
+    i = 0
+    while(t < tmax):
+        while(ts[i] <= t):
+            i = i + 1
+        res.append(vs[i - 1] + (vs[i] - vs[i - 1]) * (t - ts[i - 1]) / (ts[i] - ts[i - 1]))
+        t = t + sample_per
+    res = np.array(res)
+    # Return normalized impulse response.
+    return res / sum(res)
 
 class AMIModelInitializer(object):
     """ Class containing the initialization data for an instance of `AMIModel'.
@@ -75,20 +129,26 @@ class AMIModelInitializer(object):
 
                 Default) 100e-12 (10 Gbits/s)
         """
-        for item in optional_args.items():
-            the_key = item[0]
-            if(the_key in self._init_data):
-                the_value = item[1]
-                eval('self.' + the_key + ' = ' + the_value)
         self.ami_params.update(ami_params)
+        # Need to reverse sort, in order to catch `sample_interval` and `row_size`,
+        # before `channel_response`, since `channel_response` depends upon `sample_interval`,
+        # when `h` is a file name, and overwrites `row_size`, in any case.
+        keys = optional_args.keys().sort(reverse=True)
+        if(keys):
+            for key in keys:
+                if(key in self._init_data):
+                    exec('self.' + key + ' = ' + optional_args[key])
 
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
     def _setChannelResponse(self, h):
+        if(os.path.isfile(h)):
+            h = getImpulse(h, self.sample_interval)
         Vector = c_double * len(h)
         self._init_data['channel_response'] = Vector(*h)
+        self.row_size = len(h)
     channel_response = property(_getChannelResponse, _setChannelResponse, \
-        doc='Channel impulse response to be passed to AMI_Init().')
+        doc='Channel impulse response to be passed to AMI_Init(). May be a file name.')
 
     def _getRowSize(self):
         return self._init_data['row_size']

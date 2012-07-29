@@ -16,7 +16,8 @@ import os.path
 
 from numpy import array
 
-import amimodel as ami
+#import amimodel as ami           # Use this one for development/testing.
+import pyibisami.amimodel as ami # Use this one for distribution.
 
 _plot_name_base = 'plot'
 _plot_name_ext = 'png'
@@ -26,59 +27,6 @@ def plot_name(n=0):
         n += 1
         yield _plot_name_base + '_' + str(n) + '.' + _plot_name_ext
 plot_names = plot_name()
-
-def loadWave(filename):
-    """ Load a waveform file consisting of any number of lines, where each
-        line contains, first, a time value and, second, a voltage value.
-        Assume the first line is a header, and discard it.
-
-        Specifically, this function may be used to load in waveform files
-        saved from CosmosScope.
-
-        Inputs:
-        - filename: Name of waveform file to read in.
-
-        Outputs:
-        - t: vector of time values
-        - v: vector of voltage values
-    """
-    with open(filename, mode='rU') as theFile:
-        theFile.readline()              # Consume the header line.
-        t = []
-        v = []
-        for line in theFile:
-            tmp = map (float, line.split())
-            t.append (tmp[0])
-            v.append (tmp[1])
-        return(t, v)
-
-def getImpulse(filename, sample_per):
-    """ Read in an impulse response from a file, and convert it to the
-        given sample rate, using linear interpolation.
-
-        Inputs:
-        - filename:   Name of waveform file to read in.
-        - sample_per: New sample interval
-
-        Outputs:
-        - res: resampled impulse response
-    """
-    impulse = loadWave(filename)
-    ts = impulse[0]
-    vs = impulse[1]
-    tmax = ts[-1]
-    # Build new impulse response, at new sampling period, using linear interpolation.
-    res = []
-    t = 0.0
-    i = 0
-    while(t < tmax):
-        while(ts[i] <= t):
-            i = i + 1
-        res.append(vs[i - 1] + (vs[i] - vs[i - 1]) * (t - ts[i - 1]) / (ts[i] - ts[i - 1]))
-        t = t + sample_per
-    res = array(res)
-    # Return normalized impulse response.
-    return res / sum(res)
 
 def main():
     """
@@ -151,17 +99,7 @@ def main():
                     if(toks[-1] == '\\'): # Test for line continuation.
                         expr = expr.rstrip('\\\n')
                     else:
-                        new_item = eval(expr)
-                        if('channel_response' in new_item[1][1]
-                           and os.path.isfile(new_item[1][1]['channel_response'])):
-                            if('sample_interval' in new_item[1][1]):
-                                sample_interval = new_item[1][1]['sample_interval']
-                            else:
-#                                sample_interval = ami.AMIModelInitializer.sample_interval # the default value
-                                sample_interval = 25.0e-12
-                            new_item[1][1]['channel_response'] = getImpulse(new_item[1][1]['channel_response'], sample_interval)
-                            new_item[1][1]['row_size'] = len(new_item[1][1]['channel_response'])
-                        param_list.append(new_item)
+                        param_list.append(eval(expr))
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:

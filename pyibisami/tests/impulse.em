@@ -12,13 +12,16 @@
     <output>
 @{
 from pylab import *
-import pyibisami.amimodel as ami
+#import amimodel as ami           # Use this one for developing/testing.
+import pyibisami.amimodel as ami # Use this one for distribution.
 cla()
 for cfg in data:
     cfg_name = cfg[0]
     params = cfg[1]
     initializer = ami.AMIModelInitializer(params[0])
-    for item in params[1].items():
+    items = params[1].items()
+    items.sort(reverse=True)
+    for item in items:
         exec ('initializer.' + item[0] + ' = ' + repr(item[1]))
     model.initialize(initializer)
     print '        <block name="Model Initialization (' + cfg_name + ')" type="text">'

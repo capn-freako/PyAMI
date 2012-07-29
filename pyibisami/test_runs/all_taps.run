@@ -1,0 +1,47 @@
+Sweep of Tx pre-emphasis filter tap weight values.
+
+('-2_4_2', \
+  ({'root_name' : 'testAMI', \
+    'ptap'      : 2, \
+    'tap1'      : 4, \
+    'tap2'      : 2, \
+    'inv_ptap'  : 1, \
+    'inv_tap2'  : 0, \
+    'Vod'       : 8, \
+   }, \
+   {'channel_response' : 'impulse_response_8ma.txt', \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('-4_8_4', \
+  ({'root_name' : 'testAMI', \
+    'ptap'      : 4, \
+    'tap1'      : 8, \
+    'tap2'      : 4, \
+    'inv_ptap'  : 1, \
+    'inv_tap2'  : 0, \
+    'Vod'       : 8, \
+   }, \
+   {'channel_response' : 'impulse_response_8ma.txt', \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('-8_16_8', \
+  ({'root_name' : 'testAMI', \
+    'ptap'      : 8, \
+    'tap1'      : 16, \
+    'tap2'      : 8, \
+    'inv_ptap'  : 1, \
+    'inv_tap2'  : 0, \
+    'Vod'       : 8, \
+   }, \
+   {'channel_response' : 'impulse_response_8ma.txt', \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+

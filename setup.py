@@ -11,7 +11,7 @@ from setuptools import setup
 
 setup(
     name='PyIBIS-AMI',
-    version='0.6',
+    version='0.7',
     packages=['pyibisami',],
     package_data={
         'pyibisami': ['tests/*.em', 'test_results.x?l', '*.png', 'test_runs/*.run'],
@@ -23,3 +23,4 @@ setup(
     author='David Banas',
     author_email='capn.freako@gmail.com',
 )
+
