@@ -35,10 +35,10 @@ def loadWave(filename):
             tmp = map (float, line.split())
             t.append (tmp[0])
             v.append (tmp[1])
-        return(t, v)
+        return(np.array(t), np.array(v))
 
-def getImpulse(filename, sample_per):
-    """ Read in an impulse response from a file, and convert it to the
+def interpFile(filename, sample_per):
+    """ Read in a waveform from a file, and convert it to the
         given sample rate, using linear interpolation.
 
         Inputs:
@@ -46,10 +46,11 @@ def getImpulse(filename, sample_per):
         - sample_per: New sample interval
 
         Outputs:
-        - res: resampled impulse response
+        - res: resampled waveform
     """
     impulse = loadWave(filename)
     ts = impulse[0]
+    ts = ts - ts[0]
     vs = impulse[1]
     tmax = ts[-1]
     # Build new impulse response, at new sampling period, using linear interpolation.
@@ -62,7 +63,11 @@ def getImpulse(filename, sample_per):
         res.append(vs[i - 1] + (vs[i] - vs[i - 1]) * (t - ts[i - 1]) / (ts[i] - ts[i - 1]))
         t = t + sample_per
     res = np.array(res)
+    return res
+
+def getImpulse(filename, sample_per):
     # Return normalized impulse response.
+    res = interpFile(filename, sample_per)
     return res / sum(res)
 
 class AMIModelInitializer(object):
@@ -142,7 +147,7 @@ class AMIModelInitializer(object):
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
     def _setChannelResponse(self, h):
-        if(os.path.isfile(h)):
+        if(isinstance(h, str) and os.path.isfile(h)):
             h = getImpulse(h, self.sample_interval)
         Vector = c_double * len(h)
         self._init_data['channel_response'] = Vector(*h)

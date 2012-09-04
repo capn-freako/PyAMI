@@ -83,7 +83,7 @@ def color_picker(num_hues=3, first_hue=0):
     """
     hue = first_hue
     while(True):
-        yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.5, 0.5))
+        yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.75, 0.75))
         hue += 360 / num_hues
 
 def main():

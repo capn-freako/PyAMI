@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: PyIBIS-AMI
-Version: 0.8
+Version: 0.9
 Summary: Python tools for developing and testing IBIS-AMI models
 Home-page: https://github.com/capn-freako/PyAMI/wiki
 Author: David Banas
