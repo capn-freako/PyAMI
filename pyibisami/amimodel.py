@@ -138,11 +138,12 @@ class AMIModelInitializer(object):
         # Need to reverse sort, in order to catch `sample_interval` and `row_size`,
         # before `channel_response`, since `channel_response` depends upon `sample_interval`,
         # when `h` is a file name, and overwrites `row_size`, in any case.
-        keys = optional_args.keys().sort(reverse=True)
+        keys = optional_args.keys()
+        keys.sort(reverse=True)
         if(keys):
             for key in keys:
                 if(key in self._init_data):
-                    exec('self.' + key + ' = ' + optional_args[key])
+                    exec('self.' + key + ' = ' + str(optional_args[key]))
 
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
@@ -259,7 +260,7 @@ class AMIModel(object):
                 self._ami_params_in = self._ami_params_in + \
                     "(" + str(item[0]) + " " + str(item[1]) + ")"
         self._ami_params_in = self._ami_params_in + ")"
-        print self._ami_params_in
+#        print self._ami_params_in
 
         # Set handle types.
         self._ami_params_out   = c_char_p("")
@@ -280,7 +281,6 @@ class AMIModel(object):
                 byref(self._msg)
             )
         except:
-            print "`_ami_mem_handle' = ", self._ami_mem_handle
             raise
 
     def getWave(self, wave, row_size=0):
