@@ -215,7 +215,10 @@ class AMIModel(object):
 
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
-        self._amiGetWave = my_dll.AMI_GetWave
+        try:
+            self._amiGetWave = my_dll.AMI_GetWave
+        except:
+            self._amiGetWave = None
         self._amiClose = my_dll.AMI_Close
         self._ami_mem_handle = None
 
