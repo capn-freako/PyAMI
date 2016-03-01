@@ -46,31 +46,35 @@ param_types = {
         },
     }
 
-parser = argparse.ArgumentParser(description='Configure IBIS-AMI model source code and/or *.AMI file.')
-parser.add_argument('out_file', type=str, help='name of generated file (*.cpp/ami)')
-parser.add_argument('em_file',  type=str, help='name of EmPy template file (*.em)')
-parser.add_argument('py_file',  type=str, help='name of model configuration file (*.py)')
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser(description='Configure IBIS-AMI model source code and/or *.AMI file.')
+    parser.add_argument('out_file', type=str, help='name of generated file (*.cpp/ami)')
+    parser.add_argument('em_file',  type=str, help='name of EmPy template file (*.em)')
+    parser.add_argument('py_file',  type=str, help='name of model configuration file (*.py)')
+    args = parser.parse_args()
 
-out_file = args.out_file
-em_file  = args.em_file
-py_file  = args.py_file
+    out_file = args.out_file
+    em_file  = args.em_file
+    py_file  = args.py_file
 
-with open(py_file, 'rt') as cfg_file:
-    cfg = imp.load_module(py_file.rsplit('.', 1)[0], cfg_file, py_file, ('py', 'r', imp.PY_SOURCE))
+    with open(py_file, 'rt') as cfg_file:
+        cfg = imp.load_module(py_file.rsplit('.', 1)[0], cfg_file, py_file, ('py', 'r', imp.PY_SOURCE))
 
-with open(out_file, 'wt') as out_file:
-    interpreter = em.Interpreter(
-        output = out_file,
-        globals = {
-            'ami_params'  : cfg.ami_params,
-            'param_types' : param_types,
-            'model_name'  : cfg.kFileBaseName,
-            'description' : cfg.kDescription,
-            }
-        )
-    try:
-        interpreter.file(open(em_file))
-    finally:
-        interpreter.shutdown()
+    with open(out_file, 'wt') as out_file:
+        interpreter = em.Interpreter(
+            output = out_file,
+            globals = {
+                'ami_params'  : cfg.ami_params,
+                'param_types' : param_types,
+                'model_name'  : cfg.kFileBaseName,
+                'description' : cfg.kDescription,
+                }
+            )
+        try:
+            interpreter.file(open(em_file))
+        finally:
+            interpreter.shutdown()
+
+if __name__=="__main__":
+    main()
 

@@ -16,7 +16,6 @@ import os.path
 
 from numpy import array, floor
 
-#import amimodel as ami           # Use this one for development/testing.
 import pyibisami.amimodel as ami # Use this one for distribution.
 
 _plot_name_base = 'plot'
@@ -160,7 +159,8 @@ def main():
                     if(toks[-1] == '\\'): # Test for line continuation.
                         expr = expr.rstrip('\\\n')
                     else:
-                        param_list.append(eval(expr))
+                        # param_list.append(eval(expr))
+                        param_list.append(eval(compile(expr, cfg_filename, 'eval')))
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:

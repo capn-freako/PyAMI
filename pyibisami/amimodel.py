@@ -66,9 +66,9 @@ def interpFile(filename, sample_per):
     return res
 
 def getImpulse(filename, sample_per):
-    # Return normalized impulse response.
+    # Return impulse response.
     res = interpFile(filename, sample_per)
-    return res / sum(res)
+    return res
 
 class AMIModelInitializer(object):
     """ Class containing the initialization data for an instance of `AMIModel'.
@@ -134,6 +134,9 @@ class AMIModelInitializer(object):
 
                 Default) 100e-12 (10 Gbits/s)
         """
+        self.ami_params = {
+            'root_name' : "",
+        }
         self.ami_params.update(ami_params)
         # Need to reverse sort, in order to catch `sample_interval` and `row_size`,
         # before `channel_response`, since `channel_response` depends upon `sample_interval`,
@@ -143,7 +146,9 @@ class AMIModelInitializer(object):
         if(keys):
             for key in keys:
                 if(key in self._init_data):
-                    exec('self.' + key + ' = ' + str(optional_args[key]))
+                    #exec('self.' + key + ' = ' + str(optional_args[key]))
+                    #exec('self.' + key + ' = ' + repr(optional_args[key]))
+                    self._init_data[key] = optional_args[key]
 
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
