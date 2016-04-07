@@ -55,6 +55,85 @@ param_types = {
         },
     }
 
+
+def print_param(indent, name, param):
+    """
+    Print AMI parameter specification. Handle nested parameters, via recursion.
+
+    Parameters:
+
+        - indent    String containing some number of spaces.
+
+        - name      Parameter name.
+
+        - param     Dictionary containing parameter definition fields.
+
+    """
+
+    print indent, "(%s" % name
+    if('subs' in param):
+        for key in param['subs']:
+            print_param(indent + "    ", key, param['subs'][key])
+        if('description' in param):
+            print indent + "    ", "(Description {})".format(param['description'])
+    else:
+        for (fld_name, fld_key) in [('Usage', 'usage'), ('Type', 'type'), ('Format', 'format'),
+                                    ('Default', 'default'), ('Description', 'description'), 
+                                    ]:
+            # Trap the special cases.
+            if(fld_name == 'Type'):
+                print indent, "    (Type", param_types[param['type']]['ami_type'], ")"
+            elif(fld_name == 'Default'):
+                if(param['format'] == 'Value'):
+                    pass
+            elif(fld_name == 'Format'):
+                if(param['format'] == 'Value'):
+                    print indent, "    (Value", param['default'], ")"
+                elif(param['format'] == 'List'):
+                    print indent, "    (List",
+                    for item in param['values']:
+                        print item,
+                    print ")"
+                    print indent, "    (List_Tip",
+                    for item in param['labels']:
+                        print item,
+                    print ")"
+                else:
+                    print indent, "    (%s" % param['format'], param['default'], param['min'], param['max'], ")"
+            # Execute the default action.
+            else:
+                print indent, "    (%s" % fld_name, param[fld_key], ")" 
+
+    print indent, ")"
+
+
+def print_code(pname, param):
+    """
+    Print C++ code needed to query AMI parameter tree for a particular leaf.
+
+    Parameters:
+
+        - pname     Parameter name.
+
+        - param     Dictionary containing parameter definition fields.
+
+    """
+
+    print "       ", 'node_names.push_back("%s");' % pname
+    if('subs' in param):
+        for key in param['subs']:
+            print_code(key, param['subs'][key])
+    else:
+        if(param['usage'] == 'In' or param['usage'] == 'InOut'):
+            ptype = param['type']
+            print "        {} {};".format(param_types[ptype]['c_type'], pname)
+            if(ptype == 'BOOL'):
+                print "        {} = {}(node_names, {});".format(pname, param_types[ptype]['getter'], param['default'].lower())
+            else:
+                print "        {} = {}(node_names, {});".format(pname, param_types[ptype]['getter'], param['default'])
+    print "       ", 'node_names.pop_back();'
+
+
 def main():
     parser = argparse.ArgumentParser(description='Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.')
     parser.add_argument('py_file',  type=str, help='name of model configuration file (*.py)')
@@ -79,6 +158,8 @@ def main():
         out_file = file_base_name + '.' + ext
         if(ext == 'ami'):
             em_file  = op.dirname(__file__) + '/generic.ami.em'
+        elif(ext == 'ibs'):
+            em_file  = op.dirname(__file__) + '/generic.ibs.em'
         else:
             em_file  = out_file + '.' + 'em'
         print "Buidling '%s' from '%s'..." % (out_file, em_file)
