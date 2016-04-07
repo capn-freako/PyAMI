@@ -6,7 +6,7 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:template match="/">
     <html>
         <body>
-            <h2>Test Results - Summary</h2>
+            <h2><a name="summary">Test Results - Summary</a></h2>
             <table border="1">
                 <tr bgcolor="#9acd32">
                     <th>Test Name</th>
@@ -22,24 +22,19 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               </xsl:for-each>
             </table>
             <h2>Test Results - Details</h2>
-          <xsl:for-each select="tests/test">
-              <h3><a name="{name}"><xsl:value-of select="name"/></a></h3>
-              <xsl:value-of select="description"/>
-              <xsl:for-each select="output/block">
-                  <h4><xsl:value-of select="./@name"/></h4>
-                  <xsl:choose>
-                      <xsl:when test="@type = 'text'">
-                          <pre><xsl:value-of select="."/></pre>
-                      </xsl:when>
-                      <xsl:when test="@type = 'image'">
-                          <img src="{.}"/>
-                      </xsl:when>
-                      <xsl:otherwise>
-                          <xsl:value-of select="."/>
-                      </xsl:otherwise>
-                  </xsl:choose>
+              <xsl:for-each select="tests/test">
+                <h3><a name="{name}"><xsl:value-of select="name"/> - <xsl:value-of select="description"/></a></h3> 
+                    <div style="overflow:auto;height:200px;background-color:lightgray;">
+                      <xsl:for-each select="output/block[@type='text']">
+                        <h4><xsl:value-of select="./@name"/></h4>
+                        <pre><xsl:value-of select="."/></pre>
+                      </xsl:for-each>
+                    </div>
+                  <xsl:for-each select="output/block[@type='image']">
+                    <img src="{.}"/>
+                  </xsl:for-each>
+                    <p><a href="#summary">Back to top.</a></p>
               </xsl:for-each>
-          </xsl:for-each>
         </body>
     </html>
 </xsl:template>

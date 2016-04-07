@@ -12,11 +12,12 @@ Copyright (c) 2012 David Banas; All rights reserved World wide.
 import em
 import sys
 import optparse
-import os.path
+import os
+import os.path as op
 
 from numpy import array, floor
 
-import pyibisami.amimodel as ami # Use this one for distribution.
+import pyibisami.amimodel as ami
 
 _plot_name_base = 'plot'
 _plot_name_ext = 'png'
@@ -75,10 +76,12 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
         return (R, G, B)
 
 def color_picker(num_hues=3, first_hue=0):
-    """ RGB color generator yields pairs of colors having the same hue, where the
-        first color is fully bright and saturated, and the second is half bright
-        and half saturated. Originally, the intent was to have the second color
-        used for the `reference` waveform.
+    """
+    Yields pairs of colors having the same hue, but different intensities.
+    
+    The first color is fully bright and saturated, and the second is
+    half bright and half saturated. Originally, the intent was to have
+    the second color used for the `reference` waveform in plots.
     """
     hue = first_hue
     while(True):
@@ -87,10 +90,12 @@ def color_picker(num_hues=3, first_hue=0):
 
 def main():
     """
-    Run a series of tests on a AMI model DLL file. If no tests are
-    specified on the command line, run all tests found in `test_dir'.
-    (See `-t' option.)
+    Run a series of tests on a AMI model DLL file.
+    
+    If no tests are specified on the command line, run all tests found
+    in `test_dir'. (See `-t' option.)
     """
+
     __epilog__ = """
     Tests are written in the EmPy templating language, and produce XML
     output. (See the examples provided in the `tests' directory of the
@@ -103,6 +108,7 @@ def main():
     working directory, in order to avoid file loading errors in your
     Web browser.
     """
+
     __ver__ = 'run_tests.py v0.1 2012-07-21'
     __usage__ = 'usage: %prog [options] [test1 [test2 ...]]'
 
@@ -120,6 +126,8 @@ def main():
                  help='Sets the name of the XML output file. You should load this file into your Web browser, after program completion. (Default: %default)')
     p.add_option('--ref_dir', '-r', default='refs',
                  help='Sets the name of the directory from which reference waveforms are taken. (Default: %default)')
+    p.add_option('--out_dir', '-o', default='test_results',
+                 help='Sets the name of the directory in which to place the results. (Default: %default)')
     options, arguments = p.parse_args()
     
     # Script identification.
@@ -132,21 +140,25 @@ def main():
     ref_dir = str(options.ref_dir)
     model = str(options.model)
     xml_filename = str(options.xml_file)
+    out_dir = str(options.out_dir)
+    xml_filename = op.join(out_dir, xml_filename)
+    if not op.exists(out_dir):
+        os.makedirs(out_dir)
     print "Testing model:", model
     print "Using tests in:", test_dir
     print "Sending XHTML output to:", xml_filename
-    if(os.path.exists(options.params)):
-        if(os.path.isfile(options.params)):
+    if(op.exists(options.params)):
+        if(op.isfile(options.params)):
             cfg_dir = '.'
             cfg_files = [options.params,]
         else:
             cfg_dir = options.params
             cfg_files = filter(lambda s: s.endswith('.run'), \
-                               filter(lambda f: os.path.isfile(cfg_dir + '/' + f), \
+                               filter(lambda f: op.isfile(cfg_dir + '/' + f), \
                                       os.listdir(cfg_dir)))
         params = []
         for cfg_filename in cfg_files:
-            cfg_name = os.path.splitext(os.path.split(cfg_filename)[1])[0]
+            cfg_name = op.splitext(op.split(cfg_filename)[1])[0]
             param_list = []
             with open(cfg_dir + '/' + cfg_filename, 'rt') as cfg_file:
                 description = cfg_file.readline()
@@ -169,15 +181,17 @@ def main():
     # Run the tests.
     with open(xml_filename, 'wt') as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
-        xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
+        xml_file.write('<?xml-stylesheet type="text/xsl" href="{}"?>\n'.format(op.dirname(__file__) + '/test_results.xsl'))
         xml_file.write('<tests>\n')
     if(arguments):
         tests = arguments
     else:
-        tests = map(lambda x: x[0], map(os.path.splitext, \
+        tests = map(lambda x: x[0], map(op.splitext, \
                                         filter(lambda s: s.endswith('.em'), \
-                                               filter(lambda f: os.path.isfile(test_dir + '/' + f), \
+                                               filter(lambda f: op.isfile(test_dir + '/' + f), \
                                                       os.listdir(test_dir)))))
+    test_dir = op.abspath(test_dir)
+    ref_dir = op.abspath(ref_dir)
     for test in tests:
         print "Running test:", test, "..."
         theModel = ami.AMIModel(model)
@@ -198,7 +212,10 @@ def main():
                                                         'ref_dir'     : ref_dir,
                                                        })
                 try:
-                    interpreter.file(open(test_dir + '/' + test + '.em'))
+                    tmp_dir = os.getcwd()
+                    os.chdir(out_dir)
+                    interpreter.file(open(op.join(test_dir, test + '.em')))
+                    os.chdir(tmp_dir)
                 finally:
                     interpreter.shutdown()
         print "Test:", test, "complete."

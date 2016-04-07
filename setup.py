@@ -11,7 +11,7 @@ from setuptools import setup
 
 setup(
     name='PyIBIS-AMI',
-    version='1.1.3',
+    version='1.1.4',
     packages=['pyibisami',],
     description='Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.',
     package_data={
