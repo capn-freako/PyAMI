@@ -14,6 +14,7 @@ import sys
 import optparse
 import os
 import os.path as op
+import shutil
 
 from numpy import array, floor
 
@@ -138,12 +139,19 @@ def main():
     # Fetch options and cast into local independent variables.
     test_dir = str(options.test_dir)
     ref_dir = str(options.ref_dir)
-    model = str(options.model)
+    model = op.abspath(str(options.model))
     xml_filename = str(options.xml_file)
     out_dir = str(options.out_dir)
     xml_filename = op.join(out_dir, xml_filename)
     if not op.exists(out_dir):
         os.makedirs(out_dir)
+
+    # Some browsers demand that the stylesheet be located in the same
+    # folder as the *.XML file. Besides, this allows the model tester
+    # to zip up her 'test_results' directory and send it off to
+    # someone, whom may not have the PyIBIS-AMI package installed.
+    shutil.copy(op.dirname(__file__) + '/test_results.xsl', out_dir)
+
     print "Testing model:", model
     print "Using tests in:", test_dir
     print "Sending XHTML output to:", xml_filename
@@ -181,7 +189,7 @@ def main():
     # Run the tests.
     with open(xml_filename, 'wt') as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
-        xml_file.write('<?xml-stylesheet type="text/xsl" href="{}"?>\n'.format(op.dirname(__file__) + '/test_results.xsl'))
+        xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
         xml_file.write('<tests>\n')
     if(arguments):
         tests = arguments
