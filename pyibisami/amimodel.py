@@ -146,9 +146,24 @@ class AMIModelInitializer(object):
         if(keys):
             for key in keys:
                 if(key in self._init_data):
-                    #exec('self.' + key + ' = ' + str(optional_args[key]))
-                    #exec('self.' + key + ' = ' + repr(optional_args[key]))
                     self._init_data[key] = optional_args[key]
+
+    def __str__(self):
+        "Implements printing of class."
+
+        ami_params = self.ami_params
+
+        res = "AMIModelInitializer instance:\n"
+        res += "\tami_params:\n"
+        for param_name in ami_params.keys():
+            res += "\t\t{}: {}\n".format(param_name, ami_params[param_name])
+        res += "\tlen(channel_response): {}\n".format(len(self.channel_response))
+        res += "\trow_size: {}\n".format(self.row_size)
+        res += "\tnum_aggressors: {}\n".format(self.num_aggressors)
+        res += "\tsample_interval: {}\n".format(self.sample_interval)
+        res += "\tbit_time: {}\n".format(self.bit_time)
+
+        return res
 
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
@@ -268,7 +283,6 @@ class AMIModel(object):
                 self._ami_params_in = self._ami_params_in + \
                     "(" + str(item[0]) + " " + str(item[1]) + ")"
         self._ami_params_in = self._ami_params_in + ")"
-#        print self._ami_params_in
 
         # Set handle types.
         self._ami_params_out   = c_char_p("")
@@ -289,6 +303,15 @@ class AMIModel(object):
                 byref(self._msg)
             )
         except:
+            print "*****"
+            print "pyibisami.amimodel.AMIModel.initialize(): Debugging output:"
+            print init_object
+            print "len(initOut): {}".format(len(self.initOut))
+            print "ami_params_out: {}".format(self.ami_params_out)
+            print "_ami_mem_handle: {}".format(self._ami_mem_handle)
+            print "msg: {}".format(self.msg)
+            print "pyibisami.amimodel.AMIModel.initialize(): End debugging output."
+            print "*****"
             raise
 
     def getWave(self, wave, row_size=0):
