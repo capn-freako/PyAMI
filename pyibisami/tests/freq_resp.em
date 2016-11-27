@@ -36,13 +36,13 @@ for cfg in data:
     H = fft(h)
     T = model.sample_interval
     f = [i * 1.0 / (T * len(h)) for i in range(len(h) / 2)]
-    rgb_main, rgb_ref = plot_colors.next()
-    color_main = "#%02X%02X%02X" % (rgb_main[0] * 0xFF, rgb_main[1] * 0xFF, rgb_main[2] * 0xFF)
-    color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
+    rgb_main, rgb_ref = plot_colors.next()
+    color_main = "#%02X%02X%02X" % (rgb_main[0] * 0xFF, rgb_main[1] * 0xFF, rgb_main[2] * 0xFF)
+    color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
     plot(f, abs(H[:len(H)/2]), label=cfg_name, color=color_main)
-    """if(reference):
-        r = ami.getImpulse(reference, T)
-        plot(f, r, label=cfg_name+'_ref', color=color_ref)"""
+    """if(reference):
+        r = ami.interpFile(reference, T)
+        plot(f, r, label=cfg_name+'_ref', color=color_ref)"""
 title('Model Frequency Response')
 xlabel('Frequency (Hz)')
 legend()

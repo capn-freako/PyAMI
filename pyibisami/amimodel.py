@@ -65,10 +65,20 @@ def interpFile(filename, sample_per):
     res = np.array(res)
     return res
 
-def getImpulse(filename, sample_per):
-    # Return impulse response.
-    res = interpFile(filename, sample_per)
-    return res
+# dbanas-2016_11_25: I'm not sure how this function came to be. It
+# offers nothing above and beyond interpFile(), above, which it calls.
+# And its name is very misleading.
+#
+# I'm deprecating it, leaving it here in commented form for a while,
+# as an aid to anyone, whos code I break. My apologies for any trouble.
+#
+# If you have code that breaks, due to the removal of this function,
+# the proper corrective action is to change any and all calls to the
+# getImpulse() function to calls to interpFile(), instead.
+# def getImpulse(filename, sample_per):
+#     # Return impulse response.
+#     res = interpFile(filename, sample_per)
+#     return res
 
 class AMIModelInitializer(object):
     """ Class containing the initialization data for an instance of `AMIModel'.
@@ -154,7 +164,7 @@ class AMIModelInitializer(object):
         return map(float, self._init_data['channel_response'])
     def _setChannelResponse(self, h):
         if(isinstance(h, str) and os.path.isfile(h)):
-            h = getImpulse(h, self.sample_interval)
+            h = interpFile(h, self.sample_interval)
         Vector = c_double * len(h)
         self._init_data['channel_response'] = Vector(*h)
         self.row_size = len(h)

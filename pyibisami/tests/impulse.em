@@ -40,7 +40,7 @@ for cfg in data:
     color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
     plot(t, h, label=cfg_name, color=color_main)
     if(reference):
-        r = ami.getImpulse(reference, T)
+        r = ami.interpFile(reference, T)
         plot(t, r, label=cfg_name+'_ref', color=color_ref)
 title('Model Impulse Response')
 xlabel('Time (sec.)')
