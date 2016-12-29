@@ -75,6 +75,7 @@ def interpFile(filename, sample_per):
 # If you have code that breaks, due to the removal of this function,
 # the proper corrective action is to change any and all calls to the
 # getImpulse() function to calls to interpFile(), instead.
+#
 # def getImpulse(filename, sample_per):
 #     # Return impulse response.
 #     res = interpFile(filename, sample_per)
@@ -144,10 +145,12 @@ class AMIModelInitializer(object):
 
                 Default) 100e-12 (10 Gbits/s)
         """
+
         self.ami_params = {
             'root_name' : "",
         }
         self.ami_params.update(ami_params)
+
         # Need to reverse sort, in order to catch `sample_interval` and `row_size`,
         # before `channel_response`, since `channel_response` depends upon `sample_interval`,
         # when `h` is a file name, and overwrites `row_size`, in any case.
@@ -156,8 +159,6 @@ class AMIModelInitializer(object):
         if(keys):
             for key in keys:
                 if(key in self._init_data):
-                    #exec('self.' + key + ' = ' + str(optional_args[key]))
-                    #exec('self.' + key + ' = ' + repr(optional_args[key]))
                     self._init_data[key] = optional_args[key]
 
     def _getChannelResponse(self):
@@ -228,6 +229,7 @@ class AMIModel(object):
     def __init__(self, filename):
         " Load the dll and bind the 3 AMI functions."
 
+        self._ami_mem_handle = None
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
         try:
@@ -235,7 +237,6 @@ class AMIModel(object):
         except:
             self._amiGetWave = None
         self._amiClose = my_dll.AMI_Close
-        self._ami_mem_handle = None
 
     def __del__(self):
         """ Destructor - Calls AMI_Close with handle to AMI model memory.
@@ -278,7 +279,6 @@ class AMIModel(object):
                 self._ami_params_in = self._ami_params_in + \
                     "(" + str(item[0]) + " " + str(item[1]) + ")"
         self._ami_params_in = self._ami_params_in + ")"
-#        print self._ami_params_in
 
         # Set handle types.
         self._ami_params_out   = c_char_p("")
