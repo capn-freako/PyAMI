@@ -273,12 +273,12 @@ class AMIModel(object):
         self._bit_time         = init_object._init_data['bit_time']
 
         # Construct the AMI parameters string.
-        self._ami_params_in = "(" + init_object.ami_params['root_name'] + " "
+        ami_params_in = "({} ".format(init_object.ami_params['root_name'])
         for item in init_object.ami_params.items():
             if(not item[0] == 'root_name'):
-                self._ami_params_in = self._ami_params_in + \
-                    "(" + str(item[0]) + " " + str(item[1]) + ")"
-        self._ami_params_in = self._ami_params_in + ")"
+                ami_params_in += "({} {})".format(str(item[0]), str(item[1]))
+        ami_params_in += ")"
+        self._ami_params_in = ami_params_in
 
         # Set handle types.
         self._ami_params_out   = c_char_p("")
@@ -293,7 +293,7 @@ class AMIModel(object):
                 self._num_aggressors,
                 self._sample_interval,
                 self._bit_time,
-                self._ami_params_in,
+                '{}'.format(self._ami_params_in),  # Prevents model from mucking up our input parameter string.
                 byref(self._ami_params_out),
                 byref(self._ami_mem_handle),
                 byref(self._msg)

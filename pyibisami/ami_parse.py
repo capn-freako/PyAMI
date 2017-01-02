@@ -88,6 +88,7 @@ class AMIParamConfigurator(HasTraits):
                             gui_items.append(Item(pname, tooltip=param.pdescription ))
                         elif(pformat == 'List'):
                             list_tips = param.plist_tip
+                            default = param.pdefault
                             if(list_tips):
                                 # The attempt, below, doesn't work.
                                 # Prevent alphabetic sorting of list tips by Traits/UI machinery.
@@ -99,9 +100,18 @@ class AMIParamConfigurator(HasTraits):
                                 tmp_dict = {}
                                 # tmp_dict.update(zip(tmp_tips, param.pvalue))
                                 tmp_dict.update(zip(list_tips, param.pvalue))
-                                new_traits.append((pname, Trait(tmp_dict.keys()[0], tmp_dict)))
+                                val = tmp_dict.keys()[0]
+                                if(default):
+                                    for tip in tmp_dict:
+                                        if(tmp_dict[tip] == default):
+                                            val = tip
+                                            break
+                                new_traits.append((pname, Trait(val, tmp_dict)))
                             else:
-                                new_traits.append((pname, Enum(param.pvalue)))
+                                val = param.pvalue[0]
+                                if(default):
+                                    val = default
+                                new_traits.append((pname, Enum([val] + param.pvalue)))
                             gui_items.append(Item(pname, tooltip=param.pdescription ))
                         else:  # Value
                             new_traits.append((pname, param.pvalue))
@@ -224,8 +234,9 @@ lexeme = lambda p: p << ignore  # skip all ignored characters.
 
 lparen = lexeme(string('('))
 rparen = lexeme(string(')'))
-number = lexeme(regex(r'-?[\d\.]+'))
-symbol = lexeme(regex(r'[\d\w_-]+'))
+number = lexeme(regex(r'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'))
+# symbol = lexeme(regex(r'[\d\w_-\[\]]+'))
+symbol = lexeme(regex(r'[a-zA-Z_][^\s()]*'))
 true = lexeme(string('True')).result(True)
 false = lexeme(string('False')).result(False)
 ami_string = lexeme(regex(r'"[^"]*"'))
@@ -305,8 +316,10 @@ def proc_branch(branch):
         param_dict[param_name] = {}
         for param_tag in param_tags:
             temp_str, temp_dict = proc_branch(param_tag)
-            err_str += temp_str
             param_dict[param_name].update(temp_dict)
+            if(temp_str):
+                err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(param_name, temp_str)
+                return (err_str, param_dict)
 
         return (err_str, param_dict)
 
@@ -362,6 +375,10 @@ def parse_ami_param_defs(param_str):
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)
+    if(err_str):
+        return (err_str, {  'res'  : res,
+                            'dict' : param_dict})
+
     reserved_found               = False
     init_returns_impulse_found   = False
     getwave_exists_found         = False

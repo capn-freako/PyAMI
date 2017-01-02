@@ -24,7 +24,15 @@ class AMIParameter(object):
 
     """
 
-    RESERVED_PARAM_NAMES = ['AMI_Version', 'GetWave_Exists', 'Init_Returns_Impulse', 'Ignore_Bits']
+    RESERVED_PARAM_NAMES = [
+        'AMI_Version',
+        'GetWave_Exists',
+        'Init_Returns_Impulse',
+        'Ignore_Bits',
+        'Rx_Receiver_Sensitivity',
+        'Max_Init_Aggressors',
+        'Use_Init_Output',
+    ]
 
     # Properties.
 
@@ -36,12 +44,12 @@ class AMIParameter(object):
     # __init__(). They may raise an *AMIParamError* exception. This is
     # to ensure that a malformed instance never be created.
 
-    ## name
+    ## pname
     def _get_name(self):
         return self._name
     pname = property(_get_name, doc="Name of AMI parameter.")
 
-    ## usage
+    ## pusage
     def _set_usage(self, values):
         'Process *Usage* tag.'
 
@@ -67,7 +75,7 @@ class AMIParameter(object):
         return self._type
     ptype = property(_get_type, doc="Value of AMI parameter 'Type' tag.")
 
-    ## format
+    ## pformat
     def _set_format(self, values):
         'Process *Format* tag.'
 
@@ -82,17 +90,17 @@ class AMIParameter(object):
         return self._format
     pformat = property(_get_format, doc="Value of AMI parameter 'Format' tag.")
 
-    ## value
+    ## pvalue
     def _get_value(self):
         return self._value
     pvalue = property(_get_value, doc="Value of AMI parameter.")
 
-    ## min
+    ## pmin
     def _get_min(self):
         return self._min
     pmin = property(_get_min, doc="Minimum value of AMI parameter.")
 
-    ## max
+    ## pmax
     def _get_max(self):
         return self._max
     pmax = property(_get_max, doc="Maximum value of AMI parameter.")
@@ -101,8 +109,11 @@ class AMIParameter(object):
     def _set_default(self, values):
         'Process *Default* tag.'
         self._default = values[0]
+    def _get_default(self):
+        return self._default
+    pdefault = property(_get_default, doc="Default value of AMI parameter.")
 
-    ## description
+    ## pdescription
     def _set_description(self, values):
         'Process *Description* tag.'
         self._description = values[0]
@@ -110,7 +121,7 @@ class AMIParameter(object):
         return self._description
     pdescription = property(_get_description, doc="Description of AMI parameter.")
 
-    ## list_tip
+    ## plist_tip
     def _set_list_tip(self, values):
         'Process *List_Tip* tag.'
         self._list_tip = map(lambda x: x.strip('"'), values)
@@ -145,6 +156,13 @@ class AMIParameter(object):
         return self._set_format(['List'] + values)
 
 
+    # Holds any warnings encountered, during initialization.
+    # (Any errors encountered will prevent initialization from completing.)
+    _msg = ""
+    def _get_msg(self):
+        return self._msg
+    msg = property(_get_msg, doc="Any warning messages encountered, during parameter initialization.")
+
     # This dictionary defines both:
     #
     #  - the allowed parameter definition tag names, and
@@ -160,6 +178,7 @@ class AMIParameter(object):
         'Value'             : _set_value,
         'Range'             : _set_range,
         'List'              : _set_list,
+        'Corner'            : _set_list,
         'Default'           : _set_default,
         'Description'       : _set_description,
         'List_Tip'          : _set_list_tip,
@@ -173,7 +192,7 @@ class AMIParameter(object):
     _min                = None
     _max                = None
     _default            = None
-    _description        = None
+    _description        = ""
     _list_tip           = None
 
     def __init__(self, name, tags):
@@ -194,12 +213,12 @@ class AMIParameter(object):
         for tag in tags:
             tag_name = tag[0]
             if(not tag_name in self._param_def_tag_procs):
-                raise AMIParamError("Unrecognized tag, '{}', found in definition of parameter, '{}'.".format(tag_name, name))
+                raise AMIParamError("Unrecognized tag, '{}', found in definition of parameter, '{}'.\n".format(tag_name, name))
             else:
                 try:
                     self._param_def_tag_procs[tag_name](self, tag[1])
                 except AMIParamError as err:
-                    raise AMIParamError("Problem initializing parameter, '{}':\n\t".format(name) + err.message)
+                    raise AMIParamError("Problem initializing parameter, '{}': ".format(name) + err.message + "\n")
 
         # Validate and complete the instance.
         ## Check for required tags.
@@ -208,22 +227,23 @@ class AMIParameter(object):
         param_format  = self._format
         param_default = self._default
         if(param_usage is None):
-            raise AMIParamError("Missing 'Usage' tag!")
+            raise AMIParamError("Missing 'Usage' tag!\n")
         if(param_type is None):
-            raise AMIParamError("Missing 'Type' tag!")
+            raise AMIParamError("Missing 'Type' tag!\n")
         if(param_format is None):
             if(param_default is None):
-                raise AMIParamError("Missing both 'Format' and 'Default' tags!")
+                raise AMIParamError("Missing both 'Format' and 'Default' tags!\n")
             else:
                 self._value = param_default
-
+                param_format = 'Value'
+                self._format_rem = [param_default]
         ## Check for mutual exclusivity of 'Format Value' and 'Default'.
-        if( (param_format == 'Value') and (param_default is not None) ):
-            raise AMIParamError("'Format Value' and 'Default' both found! (They are mutually exclusive.)")
+        elif( (param_format == 'Value') and (param_default is not None) ):
+            self._msg += "'Format Value' and 'Default' both found! (They are mutually exclusive.)\n"
 
         ## Check for 'Default' used with parameter type 'Out'.
         if( (param_type == 'Out') and (param_default is not None) ):
-            raise AMIParamError("'Default' may not be used with parameter type 'Out'!")
+            raise AMIParamError("'Default' may not be used with parameter type 'Out'!\n")
 
         ## Complete the instance.
         vals = self._format_rem
@@ -233,36 +253,36 @@ class AMIParameter(object):
                 try:
                     self._value = float(value_str)
                 except:
-                    raise AMIParamError("Couldn't read float from '{}'.".format(value_str))
+                    raise AMIParamError("Couldn't read float from '{}'.\n".format(value_str))
             elif(param_type == 'Integer'):
                 try:
                     self._value = int(value_str)
                 except:
-                    raise AMIParamError("Couldn't read integer from '{}'.".format(value_str))
+                    raise AMIParamError("Couldn't read integer from '{}'.\n".format(value_str))
             elif(param_type == 'Boolean'):
                 if(value_str == 'True'):
                     self._value = True
                 elif(value_str == 'False'):
                     self._value = False
                 else:
-                    raise AMIParamError("Couldn't read Boolean from '{}'.".format(value_str))
+                    raise AMIParamError("Couldn't read Boolean from '{}'.\n".format(value_str))
             else:
                 self._value = value_str.strip('"')
         elif(param_format == 'Range'):
             if(not ( param_type == 'Float' or param_type == 'Integer' or param_type == 'UI' )):
-                raise AMIParamError("Illegal type, '{}', for use with Range.".format(param_type))
+                raise AMIParamError("Illegal type, '{}', for use with Range.\n".format(param_type))
             if(len(vals) < 3):
-                raise AMIParamError("Insufficient number of values, {}, provided for Range.".format(len(vals)))
+                raise AMIParamError("Insufficient number of values, {}, provided for Range.\n".format(len(vals)))
             if(param_type == 'Float' or param_type == 'UI'):
                 try:
                     temp_vals = map(float, vals[:3])
                 except:
-                    raise AMIParamError("Couldn't read floats from '{}'.".format(vals[:3]))
+                    raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals[:3]))
             else:
                 try:
                     temp_vals = map(int, vals[:3])
                 except:
-                    raise AMIParamError("Couldn't read integers from '{}'.".format(vals[:3]))
+                    raise AMIParamError("Couldn't read integers from '{}'.\n".format(vals[:3]))
             self._value = temp_vals[0]
             self._min   = temp_vals[1]
             self._max   = temp_vals[2]
@@ -271,15 +291,19 @@ class AMIParameter(object):
                 try:
                     temp_vals = map(float, vals)
                 except:
-                    raise AMIParamError("Couldn't read floats from '{}'.".format(vals))
-            else:
+                    raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals))
+            elif(param_type == 'Integer'):
                 try:
                     temp_vals = map(int, vals)
                 except:
-                    raise AMIParamError("Couldn't read integers from '{}'.".format(vals))
+                    raise AMIParamError("Couldn't read integers from '{}'.\n".format(vals))
+            else:  # 'param_type' == 'String'
+                try:
+                    temp_vals = map(str, vals)
+                    temp_vals = map(lambda x: x.strip('"'), temp_vals)
+                except:
+                    raise AMIParamError("Couldn't read strings from '{}'.\n".format(vals))
             self._value = temp_vals
 
         self._name = name
-
-
 
