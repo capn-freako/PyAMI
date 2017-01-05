@@ -80,8 +80,8 @@ class AMIParameter(object):
         'Process *Format* tag.'
 
         form = values[0]
-        if(not form in ['Value', 'Range', 'List']):
-            raise AMIParamError ("Unrecognized format value: '{}'.".format(form))
+#        if(not form in ['Value', 'Range', 'List']):
+#            raise AMIParamError ("Unrecognized format value: '{}'.".format(form))
         if(len(values) < 2):
             raise AMIParamError ("No values provided for: '{}'.".format(form))
         self._format = form
@@ -213,7 +213,8 @@ class AMIParameter(object):
         for tag in tags:
             tag_name = tag[0]
             if(not tag_name in self._param_def_tag_procs):
-                raise AMIParamError("Unrecognized tag, '{}', found in definition of parameter, '{}'.\n".format(tag_name, name))
+                # raise AMIParamError("Unrecognized tag, '{}', found in definition of parameter, '{}'.\n".format(tag_name, name))
+                pass
             else:
                 try:
                     self._param_def_tag_procs[tag_name](self, tag[1])

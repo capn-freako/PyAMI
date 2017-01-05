@@ -139,7 +139,12 @@ class AMIParamConfigurator(HasTraits):
         err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
         top_branch = param_dict.items()[0]
         param_dict = top_branch[1]
-        params = param_dict['Model_Specific']
+        try:
+            params = param_dict['Model_Specific']
+        except:
+            print err_str
+            print param_dict
+            raise
         gui_items, new_traits = make_gui_items('Model Specific In/InOut Parameters', params)
         trait_names = []
         for trait in new_traits:
