@@ -11,6 +11,7 @@ from ctypes import *
 import numpy as np
 import copy as cp
 import os
+import unicodedata
 
 def loadWave(filename):
     """ Load a waveform file consisting of any number of lines, where each
@@ -230,6 +231,8 @@ class AMIModel(object):
         " Load the dll and bind the 3 AMI functions."
 
         self._ami_mem_handle = None
+        if(type(filename) is unicode):
+            filename = unicodedata.normalize('NFKD', filename).encode('ascii','ignore')
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
         try:
