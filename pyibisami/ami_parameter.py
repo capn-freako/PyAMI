@@ -182,6 +182,8 @@ class AMIParameter(object):
         'Default'           : _set_default,
         'Description'       : _set_description,
         'List_Tip'          : _set_list_tip,
+        'Label'             : _set_list_tip,
+        'Labels'            : _set_list_tip,
     }
 
     # Initialization

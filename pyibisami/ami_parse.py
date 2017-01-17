@@ -14,7 +14,7 @@ import re
 from parsec import *
 
 from traits.api      import HasTraits, Array, Range, Float, Int, Property, Trait, String, Enum, Bool, List
-from traitsui.api    import View, Item, Group, Include
+from traitsui.api    import View, Item, Group, Include, HGroup, VGroup
 from traitsui.menu   import ModalButtons
 
 from ami_parameter   import AMIParameter, AMIParamError
@@ -70,7 +70,7 @@ class AMIParamConfigurator(HasTraits):
         # to get all the Traits/UI machinery setup correctly.
         super(AMIParamConfigurator, self).__init__()
 
-        def make_gui_items(pname, param):
+        def make_gui_items(pname, param, first_call=False):
             'Builds list of GUI items from AMI parameter dictionary.'
 
             gui_items = []
@@ -121,15 +121,31 @@ class AMIParamConfigurator(HasTraits):
                 subparam_names.sort()
                 sub_items = []
                 group_desc = ''
+
+                # Build GUI items for this branch.
                 for subparam_name in subparam_names:
                     if(subparam_name == 'description'):
                         group_desc = param[subparam_name]
                     else:
                         tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
-                        sub_items.append(tmp_items)
+                        sub_items.extend(tmp_items)
                         new_traits.extend(tmp_traits)
-                sub_items = sum(sub_items, [])  # Using sum to concatenate.
-                gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
+
+                # Put all top-level ungrouped parameters in a single VGroup.
+                top_lvl_params = []
+                sub_params = []
+                for item in sub_items:
+                    if(isinstance(item, Item)):
+                        top_lvl_params.append(item)
+                    else:
+                        sub_params.append(item)
+                sub_items = [Group(top_lvl_params)] + sub_params
+
+                # Make the top-level group an HGroup; all others VGroups (default).
+                if(first_call):
+                    gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True, orientation='horizontal'))
+                else:
+                    gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
 
             return gui_items, new_traits
 
@@ -145,7 +161,8 @@ class AMIParamConfigurator(HasTraits):
             print err_str
             print param_dict
             raise
-        gui_items, new_traits = make_gui_items('Model Specific In/InOut Parameters', params)
+        gui_items, new_traits = make_gui_items('Model Specific In/InOut Parameters', params, first_call=True)
+        gui_items[0].content[0].orientation = 'horizontal'
         trait_names = []
         for trait in new_traits:
             self.add_trait(trait[0], trait[1])
