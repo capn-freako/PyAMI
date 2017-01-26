@@ -4,6 +4,7 @@
 IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
 
 Original author: David Banas
+
 Original date:   February 26, 2016
 
 This script gets called from a makefile, when any of the following need
@@ -60,13 +61,10 @@ def print_param(indent, name, param):
     """
     Print AMI parameter specification. Handle nested parameters, via recursion.
 
-    Parameters:
-
-        - indent    String containing some number of spaces.
-
-        - name      Parameter name.
-
-        - param     Dictionary containing parameter definition fields.
+    Args:
+        indent (str): String containing some number of spaces.
+        name (str): Parameter name.
+        param (dict): Dictionary containing parameter definition fields.
 
     """
 
@@ -111,11 +109,9 @@ def print_code(pname, param):
     """
     Print C++ code needed to query AMI parameter tree for a particular leaf.
 
-    Parameters:
-
-        - pname     Parameter name.
-
-        - param     Dictionary containing parameter definition fields.
+    Args:
+        pname (str): Parameter name.
+        param (dict): Dictionary containing parameter definition fields.
 
     """
 

@@ -1,0 +1,465 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyibisami.amimodel &mdash; PyIBIS-AMI Developer Guide 2.0.5 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.0.5',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="PyIBIS-AMI Developer Guide 2.0.5 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">PyIBIS-AMI Developer Guide 2.0.5 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyibisami.amimodel</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Class definitions for working with IBIS-AMI models</span>
+
+<span class="sd">Original Author: David Banas</span>
+
+<span class="sd">Original Date:   July 3, 2012</span>
+
+<span class="sd">Copyright (c) 2012 David Banas; All rights reserved World wide.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">ctypes</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">copy</span> <span class="kn">as</span> <span class="nn">cp</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">unicodedata</span>
+
+<div class="viewcode-block" id="loadWave"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.loadWave">[docs]</a><span class="k">def</span> <span class="nf">loadWave</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Load a waveform file.</span>
+<span class="sd">    </span>
+<span class="sd">    The file should consist of any number of lines, where each line</span>
+<span class="sd">    contains, first, a time value and, second, a voltage value.</span>
+<span class="sd">    Assume the first line is a header, and discard it.</span>
+
+<span class="sd">    Specifically, this function may be used to load in waveform files</span>
+<span class="sd">    saved from CosmosScope.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        filename (str): Name of waveform file to read in.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        tuple ([float], [float]): A pair of NumPy arrays containing the time</span>
+<span class="sd">            and voltage values, respectively.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;rU&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">theFile</span><span class="p">:</span>
+        <span class="n">theFile</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>              <span class="c1"># Consume the header line.</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">theFile</span><span class="p">:</span>
+            <span class="n">tmp</span> <span class="o">=</span> <span class="nb">map</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">append</span> <span class="p">(</span><span class="n">tmp</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">v</span><span class="o">.</span><span class="n">append</span> <span class="p">(</span><span class="n">tmp</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">v</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="interpFile"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.interpFile">[docs]</a><span class="k">def</span> <span class="nf">interpFile</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">sample_per</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read in a waveform from a file, and convert it to the given sample</span>
+<span class="sd">    rate, using linear interpolation.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        filename (str): Name of waveform file to read in.</span>
+<span class="sd">        sample_per (float): New sample interval, in seconds.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        res ([float]): A NumPy array containing the resampled waveform.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">impulse</span> <span class="o">=</span> <span class="n">loadWave</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="n">ts</span> <span class="o">=</span> <span class="n">impulse</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">ts</span> <span class="o">=</span> <span class="n">ts</span> <span class="o">-</span> <span class="n">ts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">impulse</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">tmax</span> <span class="o">=</span> <span class="n">ts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="c1"># Build new impulse response, at new sampling period, using linear interpolation.</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span><span class="p">(</span><span class="n">t</span> <span class="o">&lt;</span> <span class="n">tmax</span><span class="p">):</span>
+        <span class="k">while</span><span class="p">(</span><span class="n">ts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">t</span><span class="p">):</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vs</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">vs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">vs</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="n">ts</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">ts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">ts</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]))</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">t</span> <span class="o">+</span> <span class="n">sample_per</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">res</span></div>
+
+<span class="c1"># dbanas-2016_11_25: I&#39;m not sure how this function came to be. It</span>
+<span class="c1"># offers nothing above and beyond interpFile(), above, which it calls.</span>
+<span class="c1"># And its name is very misleading.</span>
+<span class="c1">#</span>
+<span class="c1"># I&#39;m deprecating it, leaving it here in commented form for a while,</span>
+<span class="c1"># as an aid to anyone, whos code I break. My apologies for any trouble.</span>
+<span class="c1">#</span>
+<span class="c1"># If you have code that breaks, due to the removal of this function,</span>
+<span class="c1"># the proper corrective action is to change any and all calls to the</span>
+<span class="c1"># getImpulse() function to calls to interpFile(), instead.</span>
+<span class="c1">#</span>
+<span class="c1"># def getImpulse(filename, sample_per):</span>
+<span class="c1">#     # Return impulse response.</span>
+<span class="c1">#     res = interpFile(filename, sample_per)</span>
+<span class="c1">#     return res</span>
+
+<div class="viewcode-block" id="AMIModelInitializer"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.AMIModelInitializer">[docs]</a><span class="k">class</span> <span class="nc">AMIModelInitializer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Class containing the initialization data for an instance of `AMIModel&#39;.</span>
+
+<span class="sd">        Created primarily to facilitate use of the PyAMI package at the</span>
+<span class="sd">        pylab command prompt, this class can be used by the pylab user,</span>
+<span class="sd">        in order to store all the data required to initialize an instance</span>
+<span class="sd">        of class `AMIModel&#39;. In this way, the pylab user may assemble</span>
+<span class="sd">        the AMIModel initialization data just once, and modify it</span>
+<span class="sd">        incrementally, as she experiments with different initialization</span>
+<span class="sd">        settings. In this way, she can avoid having to type a lot of</span>
+<span class="sd">        redundant constants every time she invokes the AMIModel constructor.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ami_params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;root_name&#39;</span> <span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">_init_data</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;channel_response&#39;</span> <span class="p">:</span> <span class="p">(</span><span class="n">c_double</span> <span class="o">*</span> <span class="mi">128</span><span class="p">)(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+        <span class="s1">&#39;row_size&#39;</span>         <span class="p">:</span> <span class="mi">128</span><span class="p">,</span>
+        <span class="s1">&#39;num_aggressors&#39;</span>   <span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s1">&#39;sample_interval&#39;</span>  <span class="p">:</span> <span class="n">c_double</span><span class="p">(</span><span class="mf">25.0e-12</span><span class="p">),</span>
+        <span class="s1">&#39;bit_time&#39;</span>         <span class="p">:</span> <span class="n">c_double</span><span class="p">(</span><span class="mf">0.1e-9</span><span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ami_params</span><span class="p">,</span> <span class="o">**</span><span class="n">optional_args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Constructor accepts a mandatory dictionary containing the</span>
+<span class="sd">            AMI parameters, as well as optional initialization</span>
+<span class="sd">            data overrides and validates them, before using them to</span>
+<span class="sd">            update the local initialization data structures.</span>
+
+<span class="sd">            Valid names of optional initialization data overrides:</span>
+
+<span class="sd">            - channel_response</span>
+<span class="sd">                a matrix of `c_double&#39;s where the first row represents the</span>
+<span class="sd">                impulse response of the analog channel, and the rest represent</span>
+<span class="sd">                the impulse responses of several aggressor-to-victim far end</span>
+<span class="sd">                crosstalk (FEXT) channels.</span>
+
+<span class="sd">                Default) a single 128 element vector containing an ideal impulse</span>
+
+<span class="sd">            - row_size</span>
+<span class="sd">                integer giving the size of the rows in `channel_response&#39;.</span>
+
+<span class="sd">                Default) 128</span>
+
+<span class="sd">            - num_aggressors</span>
+<span class="sd">                integer giving the number or rows in `channel_response&#39;, minus</span>
+<span class="sd">                one.</span>
+
+<span class="sd">                Default) 0</span>
+
+<span class="sd">            - sample_interval</span>
+<span class="sd">                c_double giving the time interval, in seconds, between</span>
+<span class="sd">                successive elements in any row of `channel_response&#39;.</span>
+
+<span class="sd">                Default) 25e-12 (40 GHz sampling rate)</span>
+
+<span class="sd">            - bit_time</span>
+<span class="sd">                c_double giving the bit period (i.e. - unit interval) of the</span>
+<span class="sd">                link, in seconds.</span>
+
+<span class="sd">                Default) 100e-12 (10 Gbits/s)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ami_params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;root_name&#39;</span> <span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ami_params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ami_params</span><span class="p">)</span>
+
+        <span class="c1"># Need to reverse sort, in order to catch `sample_interval` and `row_size`,</span>
+        <span class="c1"># before `channel_response`, since `channel_response` depends upon `sample_interval`,</span>
+        <span class="c1"># when `h` is a file name, and overwrites `row_size`, in any case.</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">optional_args</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="n">keys</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">if</span><span class="p">(</span><span class="n">keys</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+                <span class="k">if</span><span class="p">(</span><span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">optional_args</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_getChannelResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;channel_response&#39;</span><span class="p">])</span>
+    <span class="k">def</span> <span class="nf">_setChannelResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">h</span><span class="p">):</span>
+        <span class="k">if</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">h</span><span class="p">)):</span>
+            <span class="n">h</span> <span class="o">=</span> <span class="n">interpFile</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample_interval</span><span class="p">)</span>
+        <span class="n">Vector</span> <span class="o">=</span> <span class="n">c_double</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;channel_response&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">(</span><span class="o">*</span><span class="n">h</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">row_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+    <span class="n">channel_response</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getChannelResponse</span><span class="p">,</span> <span class="n">_setChannelResponse</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Channel impulse response to be passed to AMI_Init(). May be a file name.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getRowSize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;row_size&#39;</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">_setRowSize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;row_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span>
+    <span class="n">row_size</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getRowSize</span><span class="p">,</span> <span class="n">_setRowSize</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Number of elements in channel response vector(s).&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getNumAggressors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;num_aggressors&#39;</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">_setNumAggressors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;num_aggressors&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span>
+    <span class="n">num_aggressors</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getNumAggressors</span><span class="p">,</span> <span class="n">_setNumAggressors</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s2">&quot;Number of vectors in `channel_response&#39;, minus one.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getSampleInterval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;sample_interval&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_setSampleInterval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;sample_interval&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">c_double</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+    <span class="n">sample_interval</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getSampleInterval</span><span class="p">,</span> <span class="n">_setSampleInterval</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Time interval between adjacent elements in channel response vector(s).&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getBitTime</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;bit_time&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_setBitTime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;bit_time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">c_double</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+    <span class="n">bit_time</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getBitTime</span><span class="p">,</span> <span class="n">_setBitTime</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Link unit interval.&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AMIModel"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.AMIModel">[docs]</a><span class="k">class</span> <span class="nc">AMIModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Class defining the structure and behavior of a AMI Model.</span>
+<span class="sd">        </span>
+<span class="sd">        Public Methods: (See individual docs.)</span>
+<span class="sd">          initialize()</span>
+<span class="sd">          getWave()</span>
+<span class="sd">        </span>
+<span class="sd">        Properties: (See individual docs.)</span>
+<span class="sd">          initOut</span>
+<span class="sd">          channel_response</span>
+<span class="sd">          clock</span>
+<span class="sd">          row_size</span>
+<span class="sd">          num_aggressors</span>
+<span class="sd">          sample_interval</span>
+<span class="sd">          bit_time</span>
+<span class="sd">          ami_params_in</span>
+<span class="sd">          ami_params_out</span>
+<span class="sd">          ami_mem_handle</span>
+<span class="sd">          msg</span>
+
+<span class="sd">        Additional Features:</span>
+
+<span class="sd">          - Makes the calling of AMI_Close() automagic, by calling it</span>
+<span class="sd">            from the destructor.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="s2">&quot; Load the dll and bind the 3 AMI functions.&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">unicode</span><span class="p">):</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">unicodedata</span><span class="o">.</span><span class="n">normalize</span><span class="p">(</span><span class="s1">&#39;NFKD&#39;</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;ascii&#39;</span><span class="p">,</span><span class="s1">&#39;ignore&#39;</span><span class="p">)</span>
+        <span class="n">my_dll</span> <span class="o">=</span> <span class="n">CDLL</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_amiInit</span> <span class="o">=</span> <span class="n">my_dll</span><span class="o">.</span><span class="n">AMI_Init</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_amiGetWave</span> <span class="o">=</span> <span class="n">my_dll</span><span class="o">.</span><span class="n">AMI_GetWave</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_amiGetWave</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_amiClose</span> <span class="o">=</span> <span class="n">my_dll</span><span class="o">.</span><span class="n">AMI_Close</span>
+
+<div class="viewcode-block" id="AMIModel.__del__"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.AMIModel.__del__">[docs]</a>    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Destructor - Calls AMI_Close with handle to AMI model memory.</span>
+<span class="sd">        </span>
+<span class="sd">            This obviates the need for the user to call the AMI_Close</span>
+<span class="sd">            function explicitly, and guards against memory leaks, during</span>
+<span class="sd">            PyLab command prompt operation, by ensuring that AMI_Close</span>
+<span class="sd">            gets called automagically when the model goes out of scope.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_amiClose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AMIModel.initialize"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.AMIModel.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">init_object</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Wraps the `AMI_Init&#39; function.</span>
+<span class="sd">            </span>
+<span class="sd">            Takes an instance of `AMIModelInitializer&#39; as its only argument.</span>
+<span class="sd">            This allows model initialization data to be constructed once,</span>
+<span class="sd">            and modified incrementally in between multiple calls of</span>
+<span class="sd">            `initialize&#39;. This is useful for PyLab command prompt testing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Free any memory allocated by the previous initialization.</span>
+        <span class="k">if</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_amiClose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span> <span class="o">=</span> <span class="n">c_char_p</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+
+        <span class="c1"># Set up the AMI_Init() arguments.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_channel_response</span> <span class="o">=</span> <span class="n">init_object</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;channel_response&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_clock</span>            <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_channel_response</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initOut</span>          <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_channel_response</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_row_size</span>         <span class="o">=</span> <span class="n">init_object</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;row_size&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_num_aggressors</span>   <span class="o">=</span> <span class="n">init_object</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;num_aggressors&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sample_interval</span>  <span class="o">=</span> <span class="n">init_object</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;sample_interval&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bit_time</span>         <span class="o">=</span> <span class="n">init_object</span><span class="o">.</span><span class="n">_init_data</span><span class="p">[</span><span class="s1">&#39;bit_time&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Construct the AMI parameters string.</span>
+        <span class="n">ami_params_in</span> <span class="o">=</span> <span class="s2">&quot;({} &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">init_object</span><span class="o">.</span><span class="n">ami_params</span><span class="p">[</span><span class="s1">&#39;root_name&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">init_object</span><span class="o">.</span><span class="n">ami_params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span><span class="p">(</span><span class="ow">not</span> <span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;root_name&#39;</span><span class="p">):</span>
+                <span class="n">ami_params_in</span> <span class="o">+=</span> <span class="s2">&quot;({} {})&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="n">ami_params_in</span> <span class="o">+=</span> <span class="s2">&quot;)&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_in</span> <span class="o">=</span> <span class="n">ami_params_in</span>
+
+        <span class="c1"># Set handle types.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_out</span>   <span class="o">=</span> <span class="n">c_char_p</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span>   <span class="o">=</span> <span class="n">c_char_p</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_msg</span>              <span class="o">=</span> <span class="n">c_char_p</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Call AMI_Init(), via our Python wrapper.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_amiInit</span><span class="p">(</span>
+                <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_initOut</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_row_size</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_num_aggressors</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_sample_interval</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_bit_time</span><span class="p">,</span>
+                <span class="s1">&#39;{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_in</span><span class="p">),</span>  <span class="c1"># Prevents model from mucking up our input parameter string.</span>
+                <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_out</span><span class="p">),</span>
+                <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span><span class="p">),</span>
+                <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_msg</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">raise</span></div>
+
+<div class="viewcode-block" id="AMIModel.getWave"><a class="viewcode-back" href="../../modules.html#pyibisami.amimodel.AMIModel.getWave">[docs]</a>    <span class="k">def</span> <span class="nf">getWave</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">row_size</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Wraps the `AMI_GetWave&#39; function.</span>
+<span class="sd">            </span>
+<span class="sd">            Takes an input waveform, as a standard Python type, and,</span>
+<span class="sd">            optionally, a new processing block size, and calls</span>
+<span class="sd">            AMI_GetWave(), returning the processed waveform as a NumPy array.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span><span class="p">(</span><span class="n">row_size</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_row_size</span> <span class="o">=</span> <span class="n">row_size</span>
+        <span class="n">Vector</span> <span class="o">=</span> <span class="n">c_double</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+        <span class="n">_wave</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">(</span><span class="o">*</span><span class="n">wave</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_amiGetWave</span><span class="p">(</span>
+            <span class="n">byref</span><span class="p">(</span><span class="n">_wave</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_row_size</span><span class="p">,</span>
+            <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_clock</span><span class="p">),</span>
+            <span class="n">byref</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_out</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ami_mem_handle</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_wave</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_getInitOut</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_initOut</span><span class="p">)</span>
+    <span class="n">initOut</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getInitOut</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Channel response convolved with model impulse response.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getChannelResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_channel_response</span><span class="p">)</span>
+    <span class="n">channel_response</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getChannelResponse</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Channel response passed to initialize().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getRowSize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_row_size</span>
+    <span class="n">row_size</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getRowSize</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Length of vector(s) passed to initialize().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getNumAggressors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_num_aggressors</span>
+    <span class="n">num_aggressors</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getNumAggressors</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Number of rows in matrix passed to initialize(), minus one.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getSampleInterval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sample_interval</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">sample_interval</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getSampleInterval</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Time interval between adjacent elements of the vector(s) passed to initialize().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getBitTime</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_bit_time</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">bit_time</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getBitTime</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Link unit interval, as passed to initialize().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getAmiParamsIn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_in</span>
+    <span class="n">ami_params_in</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getAmiParamsIn</span><span class="p">,</span> \
+        <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;The AMI parameter string passed to AMI_Init() by initialize().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getAmiParamsOut</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ami_params_out</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">ami_params_out</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getAmiParamsOut</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;The AMI parameter string returned by AMI_Init().&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_getMsg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_msg</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">msg</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_getMsg</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="s1">&#39;Message returned by most recent call to AMI_Init() or AMI_GetWave().&#39;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">PyIBIS-AMI Developer Guide 2.0.5 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Banas.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

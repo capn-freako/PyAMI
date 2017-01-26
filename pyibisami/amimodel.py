@@ -2,6 +2,7 @@
 Class definitions for working with IBIS-AMI models
 
 Original Author: David Banas
+
 Original Date:   July 3, 2012
 
 Copyright (c) 2012 David Banas; All rights reserved World wide.
@@ -14,20 +15,24 @@ import os
 import unicodedata
 
 def loadWave(filename):
-    """ Load a waveform file consisting of any number of lines, where each
-        line contains, first, a time value and, second, a voltage value.
-        Assume the first line is a header, and discard it.
-
-        Specifically, this function may be used to load in waveform files
-        saved from CosmosScope.
-
-        Inputs:
-        - filename: Name of waveform file to read in.
-
-        Outputs:
-        - t: vector of time values
-        - v: vector of voltage values
     """
+    Load a waveform file.
+    
+    The file should consist of any number of lines, where each line
+    contains, first, a time value and, second, a voltage value.
+    Assume the first line is a header, and discard it.
+
+    Specifically, this function may be used to load in waveform files
+    saved from CosmosScope.
+
+    Args:
+        filename (str): Name of waveform file to read in.
+
+    Returns:
+        tuple ([float], [float]): A pair of NumPy arrays containing the time
+            and voltage values, respectively.
+    """
+
     with open(filename, mode='rU') as theFile:
         theFile.readline()              # Consume the header line.
         t = []
@@ -39,16 +44,18 @@ def loadWave(filename):
         return(np.array(t), np.array(v))
 
 def interpFile(filename, sample_per):
-    """ Read in a waveform from a file, and convert it to the
-        given sample rate, using linear interpolation.
-
-        Inputs:
-        - filename:   Name of waveform file to read in.
-        - sample_per: New sample interval
-
-        Outputs:
-        - res: resampled waveform
     """
+    Read in a waveform from a file, and convert it to the given sample
+    rate, using linear interpolation.
+
+    Args:
+        filename (str): Name of waveform file to read in.
+        sample_per (float): New sample interval, in seconds.
+
+    Returns:
+        res ([float]): A NumPy array containing the resampled waveform.
+    """
+
     impulse = loadWave(filename)
     ts = impulse[0]
     ts = ts - ts[0]

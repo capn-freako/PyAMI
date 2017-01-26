@@ -2,6 +2,7 @@
 IBIS-AMI parameter parsing and configuration utilities.
 
 Original author: David Banas <capn.freako@gmail.com>
+
 Original date:   December 17, 2016
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
@@ -44,26 +45,25 @@ class AMIParamConfigurator(HasTraits):
         a function. The instance will then present a GUI to the user,
         allowing him to modify the values of any In or InOut parameters.
         The resultant AMI parameter dictionary, suitable for passing
-        into the 'ami_params' parameter of the AMIModelInitializer
+        into the 'ami_params' parameter of the *AMIModelInitializer*
         constructor, can be accessed, via the instance's
-        'input_ami_params' property. The latest user selections will be
+        *input_ami_params* property. The latest user selections will be
         remembered, as long as the instance remains in scope.
 
     The entire AMI parameter definition dictionary, which should NOT be
     passed to the AMIModelInitializer constructor, is available in the
-    instance's 'ami_param_defs' property.
+    instance's *ami_param_defs* property.
 
     Any errors or warnings encountered while parsing are available, in
-    the 'ami_parsing_errors' property.
+    the *ami_parsing_errors* property.
 
     """
 
     def __init__(self, ami_file_contents_str):
         """
-        Inputs:
-
-          - ami_file_contents_str   The unprocessed contents of the AMI
-                                    file, as a single string.
+        Args:
+            ami_file_contents_str (str): The unprocessed contents of
+                the AMI file, as a single string.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -285,10 +285,10 @@ def proc_branch(branch):
     Process a branch in a AMI parameter definition tree.
 
     That is, build a dictionary from a pair containing:
-    - a parameter name, and
-    - a list of either:
-        - parameter definition tags, or
-        - subparameters.
+        - a parameter name, and
+        - a list of either:
+            - parameter definition tags, or
+            - subparameters.
 
     We distinguish between the two possible kinds of payloads, by
     peaking at the names of the first two items in the list and noting
@@ -297,17 +297,17 @@ def proc_branch(branch):
     tag and the fact that we have no guarantee of any particular
     ordering of subparameter branch items.
 
-    Inputs:
+    Args:
+        p (str, list): A pair, as described above.
 
-        - Pair, as described above.
-
-    Outputs:
-
-        - err_str     String containing any errors or warnings
-                      encountered, while building the parameter
-                      dictionary.
-
-        - param_dict  Resultant parameter dictionary.
+    Returns:
+        (str, dict): A pair containing:
+        
+            err_str:
+                String containing any errors or warnings encountered,
+                while building the parameter dictionary.
+            param_dict:
+                Resultant parameter dictionary.
 
     """
 
@@ -350,26 +350,29 @@ def parse_ami_param_defs(param_str):
     """
     Parse the contents of a IBIS-AMI parameter definition file.
 
-    Inputs:
+    Args:
+        param_str (str): The contents of the file, as a single string.
 
-      - param_str   The contents of the file, as a single string.
-                    For example:
+    Example:
+        ::
 
-                        with open(<ami_file_name>) as ami_file:
-                            param_str = ami_file.read()
-                            parse_ami_param_defs(param_str)
+            with open(<ami_file_name>) as ami_file:
+                param_str = ami_file.read()
+                (err_str, param_dict) = parse_ami_param_defs(param_str)
 
-    Outputs:
+    Returns:
+        (str, dict): A pair containing:
 
-      - err_str     None, if parser succeeds;
-                    Helpful message, if it fails.
-
-      - param_dict  Dictionary containing parameter definitions.
-                    (Empty, on failure.)
-                    It has a single key, at the top level, which is the
-                    model root name. This key indexes the actual
-                    parameter dictionary, which has the following
-                    structure:
+            err_str:
+                - None, if parser succeeds.
+                - Helpful message, if it fails.
+            param_dict:
+                Dictionary containing parameter definitions.
+                (Empty, on failure.)
+                It has a single key, at the top level, which is the
+                model root name. This key indexes the actual
+                parameter dictionary, which has the following
+                structure::
 
                     {
                         'description'           :   <optional model description string>
@@ -377,16 +380,16 @@ def parse_ami_param_defs(param_str):
                         'Model_Specific'        :   <dictionary of model specific parameter definitions>
                     }
 
-                    The keys of the 'Reserved_Parameters' dictionary are
-                    limited to those called out in the IBIS-AMI
-                    specification.
+                The keys of the 'Reserved_Parameters' dictionary are
+                limited to those called out in the IBIS-AMI
+                specification.
 
-                    The keys of the 'Model_Specific' dictionary can be
-                    anything.
+                The keys of the 'Model_Specific' dictionary can be
+                anything.
 
-                    The values of both are either:
-                      - instances of class *AMIParameter*, or
-                      - sub-dictionaries following the same pattern.
+                The values of both are either:
+                    - instances of class *AMIParameter*, or
+                    - sub-dictionaries following the same pattern.
 
     """
 

@@ -39,3 +39,6 @@ empy_exec_test.*
 *.orig
 *.rej
 
+# Temporary files
+.*
+

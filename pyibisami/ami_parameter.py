@@ -2,6 +2,7 @@
 *AMIParameter* class definition, plus some helpers.
 
 Original author: David Banas <capn.freako@gmail.com>
+
 Original date:   December 24, 2016
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
@@ -199,15 +200,14 @@ class AMIParameter(object):
 
     def __init__(self, name, tags):
         """
-        Inputs:
+        Args:
+            name (str): The name of the AMI parameter being created.
+            tags ([(str, [a])]): A list of pairs, each containing:
 
-          - name    The name of the AMI parameter being created.
-
-          - tags    A list of pairs, each containing:
-                      - a parameter definition tag name
-                        (Must be one of the keys from the
-                         '_param_def_tag_procs' dictionary, above.)
-                      - a list of values to be associated with that tag.
+                - a parameter definition tag name
+                    (Must be one of the keys from the
+                    '_param_def_tag_procs' dictionary.)
+                - a list of values to be associated with that tag.
 
         """
 
