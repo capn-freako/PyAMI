@@ -91,10 +91,10 @@ else:
 }
 
 [Algorithmic Model]
-Executable linux_gcc4.1.2_32          @(model_name)_x86.so     @(model_name).ami
-Executable linux_gcc4.1.2_64          @(model_name)_amd64.so   @(model_name).ami
-Executable Windows_VisualStudio_32    @(model_name)_x86.dll    @(model_name).ami
-Executable Windows_VisualStudio_64    @(model_name)_amd64.dll  @(model_name).ami
+Executable linux_gcc4.1.2_32          @(model_name)_x86.so         @(model_name).ami
+Executable linux_gcc4.1.2_64          @(model_name)_x86_amd64.so   @(model_name).ami
+Executable Windows_VisualStudio_32    @(model_name)_x86.dll        @(model_name).ami
+Executable Windows_VisualStudio_64    @(model_name)_x86_amd64.dll  @(model_name).ami
 [End Algorithmic Model]
 
 @{
