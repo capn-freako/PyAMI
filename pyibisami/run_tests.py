@@ -89,7 +89,7 @@ def color_picker(num_hues=3, first_hue=0):
         yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.75, 0.75))
         hue += 360 / num_hues
 
-def main():
+def main(args):
     """
     Run a series of tests on a AMI model DLL file.
     
@@ -129,7 +129,7 @@ def main():
                  help='Sets the name of the directory from which reference waveforms are taken. (Default: %default)')
     p.add_option('--out_dir', '-o', default='test_results',
                  help='Sets the name of the directory in which to place the results. (Default: %default)')
-    options, arguments = p.parse_args()
+    options, arguments = p.parse_args(args)
     
     # Script identification.
     if(options.version):
@@ -233,5 +233,5 @@ def main():
     print "Please, open file, `" + xml_filename + "' in a Web browser, in order to view the test results."
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
 

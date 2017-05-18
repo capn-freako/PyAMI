@@ -325,12 +325,14 @@ class AMIModel(object):
         _wave = Vector(*wave)
         self._amiGetWave(
             byref(_wave),
-            self._row_size,
+            # self._row_size,
+            len(_wave),
             byref(self._clock),
             byref(self._ami_params_out),
             self._ami_mem_handle
         )
         return np.array(_wave)
+        # return wave
 
     def _getInitOut(self):
         return map(float, self._initOut)
