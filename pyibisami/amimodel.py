@@ -169,6 +169,10 @@ class AMIModelInitializer(object):
                 if(key in self._init_data):
                     self._init_data[key] = optional_args[key]
 
+        # Perform some sanity checks.
+        # if((self.bit_time / self.sample_interval) != int(self.bit_time / self.sample_interval)):
+            # raise ValueError("bit_time must be an integral multiple of sample_interval.")
+
     def _getChannelResponse(self):
         return map(float, self._init_data['channel_response'])
     def _setChannelResponse(self, h):
@@ -218,7 +222,7 @@ class AMIModel(object):
         Properties: (See individual docs.)
           initOut
           channel_response
-          clock
+          clock_times
           row_size
           num_aggressors
           sample_interval
@@ -275,7 +279,7 @@ class AMIModel(object):
 
         # Set up the AMI_Init() arguments.
         self._channel_response = init_object._init_data['channel_response']
-        self._clock            = cp.copy(self._channel_response)
+        # self._clock_times      = cp.copy(self._channel_response)
         self._initOut          = cp.copy(self._channel_response)
         self._row_size         = init_object._init_data['row_size']
         self._num_aggressors   = init_object._init_data['num_aggressors']
@@ -311,28 +315,64 @@ class AMIModel(object):
         except:
             raise
 
-    def getWave(self, wave, row_size=0):
-        """ Wraps the `AMI_GetWave' function.
+        # Initialize attributes used by getWave().
+        bit_time = self._bit_time.value 
+        sample_interval = self._sample_interval.value 
+        # ToDo: Fix this.
+        # if(bit_time % sample_interval):
+            # raise ValueError("bit_time ({:6.3G}) must be an integral multiple of sample_interval ({:6.3G}).".format(self._bit_time.value, self._sample_interval.value))
+        self._samps_per_bit = int(bit_time / sample_interval)
+        self._bits_per_call = self._row_size / self._samps_per_bit
+
+
+    def getWave(self, wave, bits_per_call=0):
+        """
+        Performs time domain processing of input waveform, using the `AMI_GetWave' function.
             
-            Takes an input waveform, as a standard Python type, and,
-            optionally, a new processing block size, and calls
-            AMI_GetWave(), returning the processed waveform as a NumPy array.
+        Args:
+            wave(array-like): Waveform to be processed.
+            bits_per_call(Integer): Number of bits to use, per call to AMI_GetWave().
+                (Optional; default = existing value.)
+
+        Returns:
+            wave_out(NumPy 1D array): The processed waveform.
+            clock_times(NumPy 1D array): The recovered slicer sampling instants.
         """
 
-        if(row_size):
-            self._row_size = row_size
-        Vector = c_double * len(wave)
-        _wave = Vector(*wave)
-        self._amiGetWave(
-            byref(_wave),
-            # self._row_size,
-            len(_wave),
-            byref(self._clock),
-            byref(self._ami_params_out),
-            self._ami_mem_handle
-        )
-        return np.array(_wave)
-        # return wave
+        if(bits_per_call):
+            self._bits_per_call = bits_per_call
+        bits_per_call  = self._bits_per_call
+        samps_per_call = self._samps_per_bit * bits_per_call
+
+        # Create the required C types.
+        Signal = c_double * samps_per_call 
+        Clocks = c_double * bits_per_call
+
+        idx = 0          # Holds the starting index of the next processing chunk.
+        _clock_times = Clocks(0.0)
+        wave_out = []
+        clock_times = []
+        input_len = len(wave)
+        while(idx < input_len):
+            remaining_samps = input_len - idx
+            if(remaining_samps < samps_per_call):
+                Signal = c_double * remaining_samps
+                tmp_wave = wave[idx:]
+            else:
+                tmp_wave = wave[idx : idx + samps_per_call]
+            _wave = Signal(*tmp_wave)
+            self._amiGetWave(
+                byref(_wave),
+                len(_wave),
+                byref(_clock_times),
+                byref(self._ami_params_out),
+                self._ami_mem_handle
+            )
+            wave_out.extend(_wave)
+            clock_times.extend(_clock_times)
+            idx += len(_wave)
+
+        return np.array(wave_out), np.array(clock_times[:len(wave_out) // self._samps_per_bit])
 
     def _getInitOut(self):
         return map(float, self._initOut)
@@ -372,4 +412,8 @@ class AMIModel(object):
     def _getMsg(self):
         return self._msg.value
     msg = property(_getMsg, doc='Message returned by most recent call to AMI_Init() or AMI_GetWave().')
+
+    def _getClockTimes(self):
+        return self._clock_times
+    clock_times = property(_getClockTimes, doc='Clock times returned by most recent call to getWave().')
 
