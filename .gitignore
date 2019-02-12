@@ -42,3 +42,5 @@ empy_exec_test.*
 # Temporary files
 .*
 
+tests/examples/out
+Pipfile*

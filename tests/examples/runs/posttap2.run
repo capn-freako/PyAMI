@@ -1,0 +1,86 @@
+Sweep of Tx pre-emphasis filter posttap2 values.
+
+('Posttap2 = 0', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 1', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 1, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 2', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 2, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 3', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 3, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 4', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 4, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 5', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 5, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Posttap2 = 6', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 6, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+

@@ -1,6 +1,7 @@
-include ez_setup.py
-include pyibisami/test_results.x?l
-include pyibisami/*.png
-recursive-include pyibisami/tests *.em
-recursive-include pyibisami/test_runs *.run
-
+include README.md
+include LICENSE
+include pyibisami/test_results.xsl
+include pyibisami/generic.ami.em
+include pyibisami/generic.ibs.em
+recursive-include docs/source/*
+recursive-include examples/*

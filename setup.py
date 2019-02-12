@@ -1,35 +1,37 @@
-''' setup.py - Distutils setup file for PyIBIS-AMI package
+""" setup.py - Distutils setup file for PyIBIS-AMI package
 
     David Banas
     July 7, 2012
-'''
-
-import ez_setup
-ez_setup.use_setuptools()
-
-from setuptools import setup
+"""
+from setuptools import setup, find_packages
 
 setup(
-    name='PyIBIS-AMI',
-    version='2.0.5',
-    packages=['pyibisami',],
-    description='Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.',
-    package_data={
-        'pyibisami': ['tests/*.em', 'test_results.x?l', '*.png', 'test_runs/*.run', 'generic*.em'],
+    name="PyIBIS-AMI",
+    version="2.3.0",
+    packages=find_packages(exclude=["docs", "tests"]),
+    include_package_data=True,
+    description="Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.",
+    install_requires=[
+        "Click",
+        "empy",
+        "numpy",
+        "scipy",
+        "matplotlib",
+        "parsec",
+        "traits",
+    ],
+    entry_points={
+        "console_scripts": [
+            "ami-config = pyibisami.ami_config:main",
+            "run-tests = pyibisami.run_tests:main",
+        ]
     },
-    install_requires = [
-        'empy',
-        'numpy',
-        'scipy',
-        'matplotlib',
-        'parsec',
-        ],
-    license='BSD',
-    long_description=open('README.txt').read(),
-    url='https://github.com/capn-freako/PyAMI/wiki',
-    author='David Banas',
-    author_email='capn.freako@gmail.com',
-    keywords = ['ibis-ami', ],
+    license="BSD",
+    long_description=open("README.md").read(),
+    url="https://github.com/capn-freako/PyAMI/wiki",
+    author="David Banas",
+    author_email="capn.freako@gmail.com",
+    keywords=["ibis-ami"],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment :: Console",
@@ -37,10 +39,10 @@ setup(
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: System :: Emulators",
-        "Topic :: Utilities"
-    ]
+        "Topic :: Utilities",
+    ],
 )
-

@@ -3,11 +3,12 @@
     (Description "@description")
 
 @{
+from __future__ import print_function
 import sys
 from pyibisami import ami_config as ac
 
 for (sec_name, sec_key) in [('Reserved_Parameters', 'reserved'), ('Model_Specific', 'model')]:
-    print "    (%s" % sec_name
+    print("    (%s" % sec_name)
     for param_name in ami_params[sec_key]:
         param = ami_params[sec_key][param_name]
         try:
@@ -15,7 +16,7 @@ for (sec_name, sec_key) in [('Reserved_Parameters', 'reserved'), ('Model_Specifi
         except Exception as e:
             e.args += (param_name,)
             raise
-    print "    )"
+    print("    )")
 }
 )
 

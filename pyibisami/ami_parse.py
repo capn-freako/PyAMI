@@ -7,23 +7,19 @@ Original date:   December 17, 2016
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
 """
-
-from __future__ import generators
-
 import re
 
-from parsec import *
+from parsec import ParseError, generate, many, many1, regex, string
+from traits.api import Bool, Enum, HasTraits, Range, Trait
+from traitsui.api import Group, Item, View
+from traitsui.menu import ModalButtons
 
-from traits.api      import HasTraits, Array, Range, Float, Int, Property, Trait, String, Enum, Bool, List
-from traitsui.api    import View, Item, Group, Include, HGroup, VGroup
-from traitsui.menu   import ModalButtons
-
-from ami_parameter   import AMIParameter, AMIParamError
-
+from .ami_parameter import AMIParamError, AMIParameter
 
 #####
 # AMI parameter configurator.
 #####
+
 
 class AMIParamConfigurator(HasTraits):
     """
@@ -71,25 +67,25 @@ class AMIParamConfigurator(HasTraits):
         super(AMIParamConfigurator, self).__init__()
 
         def make_gui_items(pname, param, first_call=False):
-            'Builds list of GUI items from AMI parameter dictionary.'
+            """Builds list of GUI items from AMI parameter dictionary."""
 
             gui_items = []
             new_traits = []
-            if(isinstance(param, AMIParameter)):
+            if isinstance(param, AMIParameter):
                 pusage = param.pusage
-                if(pusage == 'In' or pusage == 'InOut'):
-                    if(param.ptype == 'Boolean'):
+                if pusage in ('In', 'InOut'):
+                    if param.ptype == "Boolean":
                         new_traits.append((pname, Bool(param.pvalue)))
-                        gui_items.append(Item(pname, tooltip=param.pdescription ))
+                        gui_items.append(Item(pname, tooltip=param.pdescription))
                     else:
                         pformat = param.pformat
-                        if(pformat == 'Range'):
+                        if pformat == "Range":
                             new_traits.append((pname, Range(param.pmin, param.pmax, param.pvalue)))
-                            gui_items.append(Item(pname, tooltip=param.pdescription ))
-                        elif(pformat == 'List'):
+                            gui_items.append(Item(pname, tooltip=param.pdescription))
+                        elif pformat == "List":
                             list_tips = param.plist_tip
                             default = param.pdefault
-                            if(list_tips):
+                            if list_tips:
                                 # The attempt, below, doesn't work.
                                 # Prevent alphabetic sorting of list tips by Traits/UI machinery.
                                 # i = 0
@@ -99,32 +95,32 @@ class AMIParamConfigurator(HasTraits):
                                 #     tmp_tips.append("{:02d}:{}".format(i, list_tip))
                                 tmp_dict = {}
                                 # tmp_dict.update(zip(tmp_tips, param.pvalue))
-                                tmp_dict.update(zip(list_tips, param.pvalue))
-                                val = tmp_dict.keys()[0]
-                                if(default):
+                                tmp_dict.update(list(zip(list_tips, param.pvalue)))
+                                val = list(tmp_dict.keys())[0]
+                                if default:
                                     for tip in tmp_dict:
-                                        if(tmp_dict[tip] == default):
+                                        if tmp_dict[tip] == default:
                                             val = tip
                                             break
                                 new_traits.append((pname, Trait(val, tmp_dict)))
                             else:
                                 val = param.pvalue[0]
-                                if(default):
+                                if default:
                                     val = default
                                 new_traits.append((pname, Enum([val] + param.pvalue)))
-                            gui_items.append(Item(pname, tooltip=param.pdescription ))
+                            gui_items.append(Item(pname, tooltip=param.pdescription))
                         else:  # Value
                             new_traits.append((pname, param.pvalue))
-                            gui_items.append(Item(pname, style='readonly', tooltip=param.pdescription ))
+                            gui_items.append(Item(pname, style="readonly", tooltip=param.pdescription))
             else:  # subparameter branch
-                subparam_names = param.keys()
+                subparam_names = list(param.keys())
                 subparam_names.sort()
                 sub_items = []
-                group_desc = ''
+                group_desc = ""
 
                 # Build GUI items for this branch.
                 for subparam_name in subparam_names:
-                    if(subparam_name == 'description'):
+                    if subparam_name == "description":
                         group_desc = param[subparam_name]
                     else:
                         tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
@@ -135,34 +131,40 @@ class AMIParamConfigurator(HasTraits):
                 top_lvl_params = []
                 sub_params = []
                 for item in sub_items:
-                    if(isinstance(item, Item)):
+                    if isinstance(item, Item):
                         top_lvl_params.append(item)
                     else:
                         sub_params.append(item)
                 sub_items = [Group(top_lvl_params)] + sub_params
 
                 # Make the top-level group an HGroup; all others VGroups (default).
-                if(first_call):
-                    gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True, orientation='horizontal'))
+                if first_call:
+                    gui_items.append(
+                        Group(
+                            [Item(label=group_desc)] + sub_items,
+                            label=pname,
+                            show_border=True,
+                            orientation="horizontal",
+                        )
+                    )
                 else:
                     gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
 
             return gui_items, new_traits
 
-
         # Parse the AMI file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
-        top_branch = param_dict.items()[0]
+        top_branch = list(param_dict.items())[0]
         param_dict = top_branch[1]
         try:
-            params = param_dict['Model_Specific']
-        except:
-            print err_str
-            print param_dict
+            params = param_dict["Model_Specific"]
+        except KeyError:
+            print(err_str)
+            print(param_dict)
             raise
-        gui_items, new_traits = make_gui_items('Model Specific In/InOut Parameters', params, first_call=True)
-        gui_items[0].content[0].orientation = 'horizontal'
+        gui_items, new_traits = make_gui_items("Model Specific In/InOut Parameters", params, first_call=True)
+        gui_items[0].content[0].orientation = "horizontal"
         trait_names = []
         for trait in new_traits:
             self.add_trait(trait[0], trait[1])
@@ -174,7 +176,6 @@ class AMIParamConfigurator(HasTraits):
         self._param_trait_names = trait_names
         self._param_dict = param_dict
 
-
     def __call__(self):
         """
         Present a customized GUI to the user, for parameter
@@ -183,63 +184,68 @@ class AMIParamConfigurator(HasTraits):
 
         self.edit_traits()
 
-
     def default_traits_view(self):
         view = View(
-            resizable = False,
-            buttons = ModalButtons,
-            title='PyBERT AMI Parameter Configurator',
-            id='pybert.pybert_ami.param_config',
+            resizable=False,
+            buttons=ModalButtons,
+            title="PyBERT AMI Parameter Configurator",
+            id="pybert.pybert_ami.param_config",
         )
         view.set_content(self._content)
         return view
 
-
     def fetch_param_val(self, branch_names):
-        "Returns the value of the parameter found by traversing 'branch_names', or None if not found."
+        """Returns the value of the parameter found by traversing 'branch_names'
+        or None if not found.
+        """
 
         param_dict = self.ami_param_defs
         while branch_names:
             branch_name = branch_names.pop(0)
-            if(branch_name in param_dict):
+            if branch_name in param_dict:
                 param_dict = param_dict[branch_name]
             else:
                 return None
-        if(isinstance(param_dict, AMIParameter)):
+        if isinstance(param_dict, AMIParameter):
             return param_dict.pvalue
-        else:
-            return None
-
+        return None
 
     # Properties
 
-    ## ami_parsing_errors
     def _get_ami_parsing_errors(self):
+        """ami_parsing_errors"""
         return self._ami_parsing_errors
-    ami_parsing_errors = property(_get_ami_parsing_errors,
-            doc='Any errors or warnings encountered, while parsing the AMI parameter definition file contents.')
 
+    ami_parsing_errors = property(
+        _get_ami_parsing_errors,
+        doc="Any errors or warnings encountered, while parsing the AMI parameter definition file contents.",
+    )
 
-    ## ami_param_defs
     def _get_ami_param_defs(self):
+        """## ami_param_defs"""
         return self._param_dict
-    ami_param_defs = property(_get_ami_param_defs,
-            doc='The entire AMI parameter definition dictionary. Should NOT be passed to AMIModelInitializer constructor!')
 
+    ami_param_defs = property(
+        _get_ami_param_defs,
+        doc="The entire AMI parameter definition dictionary. Should NOT be passed to AMIModelInitializer constructor!",
+    )
 
-    ## input_ami_params
     def _get_input_ami_params(self):
+        """input_ami_params"""
         res = {}
-        res['root_name'] = self._root_name 
+        res["root_name"] = self._root_name
         for pname in self._param_trait_names:
             # See the docs on the *HasTraits* class, if this is confusing.
             try:  # Querry for a mapped trait, first, by trying to get '<trait_naem>_'. (Note the underscore.)
-                res[pname] = self.get(pname + '_')[pname + '_']
+                res[pname] = self.get(pname + "_")[pname + "_"]
             except:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
                 res[pname] = self.get(pname)[pname]
         return res
-    input_ami_params = property(_get_input_ami_params,
-            doc='The dictionary of AMI parameters of type In or InOut, along with their user selected values. Should be passed to AMIModelInitializer constructor.')
+
+    input_ami_params = property(
+        _get_input_ami_params,
+        doc="The dictionary of AMI parameters of type In or InOut, along with their user selected values. Should be passed to AMIModelInitializer constructor.",
+    )
 
 
 #####
@@ -247,27 +253,31 @@ class AMIParamConfigurator(HasTraits):
 #####
 
 # ignore cases.
-whitespace = regex(r'\s+', re.MULTILINE)
-comment = regex(r'\|.*')
+whitespace = regex(r"\s+", re.MULTILINE)
+comment = regex(r"\|.*")
 ignore = many((whitespace | comment))
 
-# lexer for words.
-lexeme = lambda p: p << ignore  # skip all ignored characters.
 
-lparen = lexeme(string('('))
-rparen = lexeme(string(')'))
-number = lexeme(regex(r'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'))
+def lexeme(p):
+    """Lexer for words."""
+    return p << ignore  # skip all ignored characters.
+
+
+lparen = lexeme(string("("))
+rparen = lexeme(string(")"))
+number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 # symbol = lexeme(regex(r'[\d\w_-\[\]]+'))
-symbol = lexeme(regex(r'[a-zA-Z_][^\s()]*'))
-true = lexeme(string('True')).result(True)
-false = lexeme(string('False')).result(False)
+symbol = lexeme(regex(r"[a-zA-Z_][^\s()]*"))
+true = lexeme(string("True")).result(True)
+false = lexeme(string("False")).result(False)
 ami_string = lexeme(regex(r'"[^"]*"'))
 
 atom = number | symbol | ami_string | (true | false)
 
-@generate('AMI node')
+
+@generate("AMI node")
 def node():
-    'Parse AMI node.'
+    "Parse AMI node."
     yield lparen
     label = yield symbol
     values = yield many1(expr)
@@ -275,6 +285,7 @@ def node():
     err = StopIteration()
     err.value = (label, values)
     raise err
+
 
 expr = atom | node
 ami_defs = ignore >> node
@@ -302,7 +313,7 @@ def proc_branch(branch):
 
     Returns:
         (str, dict): A pair containing:
-        
+
             err_str:
                 String containing any errors or warnings encountered,
                 while building the parameter dictionary.
@@ -311,8 +322,8 @@ def proc_branch(branch):
 
     """
 
-    if(len(branch) != 2):
-        if(len(branch) < 1):
+    if len(branch) != 2:
+        if not branch:
             err_str = "ERROR: Empty branch provided to proc_branch()!\n"
         else:
             err_str = "ERROR: Malformed item: {}\n".format(branch[0])
@@ -321,17 +332,21 @@ def proc_branch(branch):
     param_name = branch[0]
     param_tags = branch[1]
 
-    if(len(param_tags) == 0):
+    if not param_tags:
         err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
         return (err_str, {})
 
-    if( (len(param_tags) > 1) and (param_tags[0][0] in AMIParameter._param_def_tag_procs) and (param_tags[1][0] in AMIParameter._param_def_tag_procs) ):
+    if (
+            (len(param_tags) > 1)
+            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
+            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
+    ):
         try:
-            return ('', {param_name : AMIParameter(param_name, param_tags)})
+            return ("", {param_name: AMIParameter(param_name, param_tags)})
         except AMIParamError as err:
-            return (err.message, {})
-    elif(param_name == 'Description'):
-        return ('', {'description' : param_tags[0].strip('"')})
+            return (str(err), {})
+    elif param_name == "Description":
+        return ("", {"description": param_tags[0].strip('"')})
     else:
         err_str = ""
         param_dict = {}
@@ -339,8 +354,10 @@ def proc_branch(branch):
         for param_tag in param_tags:
             temp_str, temp_dict = proc_branch(param_tag)
             param_dict[param_name].update(temp_dict)
-            if(temp_str):
-                err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(param_name, temp_str)
+            if temp_str:
+                err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
+                    param_name, temp_str
+                )
                 return (err_str, param_dict)
 
         return (err_str, param_dict)
@@ -400,49 +417,51 @@ def parse_ami_param_defs(param_str):
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)
-    if(err_str):
-        return (err_str, {  'res'  : res,
-                            'dict' : param_dict})
+    if err_str:
+        return (err_str, {"res": res, "dict": param_dict})
 
-    reserved_found               = False
-    init_returns_impulse_found   = False
-    getwave_exists_found         = False
-    model_spec_found             = False
-    params = param_dict.items()[0][1]
-    for label in params.keys():
-        if (label == 'Reserved_Parameters'):
+    reserved_found = False
+    init_returns_impulse_found = False
+    getwave_exists_found = False
+    model_spec_found = False
+    params = list(param_dict.items())[0][1]
+    for label in list(params.keys()):
+        if label == "Reserved_Parameters":
             reserved_found = True
             tmp_params = params[label]
-            for param_name in tmp_params.keys():
-                if(not param_name in AMIParameter.RESERVED_PARAM_NAMES):
-                    err_str += "WARNING: Unrecognized reserved parameter name, '{}', found in parameter definition string!\n".format(param_name)
+            for param_name in list(tmp_params.keys()):
+                if param_name not in AMIParameter.RESERVED_PARAM_NAMES:
+                    err_str += "WARNING: Unrecognized reserved parameter name, '{}', found in parameter definition string!\n".format(
+                        param_name
+                    )
                     continue
                 param = tmp_params[param_name]
-                if(param.pname == 'AMI_Version'):
-                    if(param.pusage != 'Info' or param.ptype != 'String'):
+                if param.pname == "AMI_Version":
+                    if param.pusage != "Info" or param.ptype != "String":
                         err_str += "WARNING: Malformed 'AMI_Version' parameter.\n"
-                elif(param.pname == 'Init_Returns_Impulse'):
+                elif param.pname == "Init_Returns_Impulse":
                     init_returns_impulse_found = True
-                elif(param.pname == 'GetWave_Exists'):
+                elif param.pname == "GetWave_Exists":
                     getwave_exists_found = True
-        elif (label == 'Model_Specific'):
+        elif label == "Model_Specific":
             model_spec_found = True
-        elif (label == 'description'):
+        elif label == "description":
             pass
         else:
-            err_str += "WARNING: Unrecognized group with label, '{}', found in parameter definition string!\n".format(label)
+            err_str += "WARNING: Unrecognized group with label, '{}', found in parameter definition string!\n".format(
+                label
+            )
 
-    if(not reserved_found):
+    if not reserved_found:
         err_str += "ERROR: Reserved parameters section not found! It is required."
 
-    if(not init_returns_impulse_found):
+    if not init_returns_impulse_found:
         err_str += "ERROR: Reserved parameter, 'Init_Returns_Impulse', not found! It is required."
 
-    if(not getwave_exists_found):
+    if not getwave_exists_found:
         err_str += "ERROR: Reserved parameter, 'GetWave_Exists', not found! It is required."
 
-    if(not model_spec_found):
+    if not model_spec_found:
         err_str += "WARNING: Model specific parameters section not found!"
 
     return (err_str, param_dict)
-

@@ -1,0 +1,98 @@
+Sweep of Tx pre-emphasis filter pretap values.
+
+('Pretap = 0', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 0, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 1', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 1, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 2', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 2, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 3', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 3, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 4', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 4, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 5', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 5, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 6', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 6, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
+('Pretap = 7', \
+  ({'root_name'        : 'example_tx', \
+    'tx_tap_np1'       : 7, \
+    'tx_tap_nm1'       : 0, \
+    'tx_tap_nm2'       : 0, \
+   }, \
+   {'channel_response' : [2.0e11] + [0.]*127, \
+    'sample_interval'  : 5.0e-12, \
+   } \
+  ) \
+)
+
