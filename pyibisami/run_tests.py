@@ -10,11 +10,10 @@ Copyright (c) 2012 David Banas; All rights reserved World wide.
 """
 
 import shutil
-import em
-from os import chdir
 from pathlib import Path
 
 import click
+import em
 from numpy import floor
 import pyibisami.ami_model as ami
 
@@ -144,10 +143,7 @@ def run_tests(**kwargs):
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
         xml_file.write("<tests>\n")
-        try:
-            tests = kwargs["tests"]
-        except KeyError:
-            tests = list(test_dir.glob("*.em"))
+        tests = list(test_dir.glob("*.em"))
         for test in tests:
             print("Running test: {} ...".format(test.stem))
             theModel = ami.AMIModel(model)
@@ -160,20 +156,17 @@ def run_tests(**kwargs):
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
-                        "name": test.stem + " (" + cfg_name + ")",
+                        "name": "{} ({})".format(test.stem, cfg_name),
                         "model": theModel,
                         "data": param_list,
                         "plot_names": plot_names,
                         "description": description,
                         "plot_colors": colors,
-                        "ref_dir": ref_dir,
+                        "ref_dir": str(ref_dir),
                     },
                 )
                 try:
-                    cwd = Path().cwd()
-                    chdir(out_dir)
-                    interpreter.file(open(test_dir.joinpath("{}.em".format(test.name))))
-                    chdir(cwd)
+                    interpreter.file(open(test))
                 finally:
                     interpreter.shutdown()
             print("Test:", test.stem, "complete.")

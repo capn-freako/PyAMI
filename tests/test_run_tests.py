@@ -28,7 +28,6 @@ class TestRunTests(object):
     def test_run_tests(self):
         model = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so")
         test_dir = Path(__file__).parent.joinpath("examples", "tests")
-        ref_dir = Path(__file__).parent.joinpath("examples", "ref")
         params = Path(__file__).parent.joinpath("examples", "runs")
         out_dir = Path(__file__).parent.joinpath("examples", "out")
         run_tests(
@@ -36,6 +35,6 @@ class TestRunTests(object):
             test_dir=test_dir,
             params=params,
             out_dir=out_dir,
-            ref_dir=ref_dir,
+            ref_dir="",
             xml_file="test.xml",
         )

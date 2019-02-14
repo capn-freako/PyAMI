@@ -294,9 +294,9 @@ class AMIModel(object):
         self._ami_params_in = ami_params_in
 
         # Set handle types.
-        self._ami_params_out = c_char_p("")
+        self._ami_params_out = c_char_p(b"")
         self._ami_mem_handle = c_char_p(None)
-        self._msg = c_char_p("")
+        self._msg = c_char_p(b"")
 
         # Call AMI_Init(), via our Python wrapper.
         try:
