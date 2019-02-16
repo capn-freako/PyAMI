@@ -45,3 +45,4 @@ empy_exec_test.*
 tests/examples/out
 Pipfile*
 tests/examples/test_results
+htmlcov

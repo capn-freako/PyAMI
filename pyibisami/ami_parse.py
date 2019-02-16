@@ -3,9 +3,7 @@ IBIS-AMI parameter parsing and configuration utilities.
 
 Original author: David Banas <capn.freako@gmail.com>
 
-Original date:   December 17, 2016
-
-Copyright (c) 2016 David Banas; all rights reserved World wide.
+Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 import re
 

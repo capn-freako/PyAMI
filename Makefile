@@ -3,13 +3,14 @@
 .PHONY: tox clean test lint
 
 tox:
-	tox
+	pipenv run tox
 
 lint:
-	tox -e pylint,flake8
+	pipenv run tox -e pylint,flake8
 
 test:
-	tox -e py36,py37
+	pipenv run tox -e py37
 
 clean:
-	rm -rf .tox docs/build/ __pycache__/ tests/__pycache__ .pytest_cache/ *.egg-info
+	rm -rf .tox docs/build/ __pycache__/ tests/__pycache__ .pytest_cache/ *.egg-info \
+		Pipfile Pipfile.lock

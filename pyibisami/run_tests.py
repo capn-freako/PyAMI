@@ -15,7 +15,8 @@ from pathlib import Path
 import click
 import em
 from numpy import floor
-import pyibisami.ami_model as ami
+
+from .ami_model import AMIModel
 
 
 def plot_name(n=0):
@@ -90,33 +91,16 @@ def color_picker(num_hues=3, first_hue=0):
         hue += 360 / num_hues
 
 
-def run_tests(**kwargs):
-    """Provide a thin wrapper around the click interface so that we can test the operation."""
+def expand_params(input_parameters):
+    """Take the command line input and convert it into usable parameters.
 
-    # Fetch options and cast into local independent variables.
-    test_dir = Path(kwargs["test_dir"])
-    ref_dir = Path(kwargs["ref_dir"])
-    model = Path(kwargs["model"]).resolve()
-    out_dir = Path(kwargs["out_dir"])
-    out_dir.mkdir(exist_ok=True)
-    xml_filename = out_dir.joinpath(kwargs["xml_file"])
-
-    # Some browsers demand that the stylesheet be located in the same
-    # folder as the *.XML file. Besides, this allows the model tester
-    # to zip up her 'test_results' directory and send it off to
-    # someone, whom may not have the PyIBIS-AMI package installed.
-    shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
-
-    print("Testing model: {}".format(model))
-    print("Using tests in: {}".format(test_dir))
-    print("Sending XHTML output to: {}".format(xml_filename))
-    if Path(kwargs["params"]).exists():
-        if Path(kwargs["params"]).is_file():
-            cfg_dir = Path().cwd()
-            cfg_files = [kwargs["params"]]
+    We can pass in a file, directory or raw string here. Handle all three cases.
+    """
+    if Path(input_parameters).exists():
+        if Path(input_parameters).is_file():
+            cfg_files = [input_parameters]
         else:
-            cfg_dir = kwargs["params"]
-            cfg_files = list(Path(cfg_dir).glob("*.run"))
+            cfg_files = list(Path(input_parameters).glob("*.run"))
         params = []
         for cfg_filename in cfg_files:
             cfg_name = cfg_filename.stem
@@ -136,9 +120,33 @@ def run_tests(**kwargs):
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:
-        params = eval(kwargs["params"])
+        params = eval(input_parameters)
+    return params
+
+
+def run_tests(**kwargs):
+    """Provide a thin wrapper around the click interface so that we can test the operation."""
+
+    # Fetch options and cast into local independent variables.
+    test_dir = Path(kwargs["test_dir"])
+    ref_dir = Path(kwargs["ref_dir"])
+    model = Path(kwargs["model"]).resolve()
+    out_dir = Path(kwargs["out_dir"])
+    out_dir.mkdir(exist_ok=True)
+    xml_filename = out_dir.joinpath(kwargs["xml_file"])
+
+    # Some browsers demand that the stylesheet be located in the same
+    # folder as the *.XML file. Besides, this allows the model tester
+    # to zip up her 'test_results' directory and send it off to
+    # someone, whom may not have the PyIBIS-AMI package installed.
+    shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
+
+    print("Testing model: {}".format(model))
+    print("Using tests in: {}".format(test_dir))
+    params = expand_params(kwargs["params"])
 
     # Run the tests.
+    print("Sending XHTML output to: {}".format(xml_filename))
     with open(xml_filename, "w") as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
@@ -146,7 +154,7 @@ def run_tests(**kwargs):
         tests = list(test_dir.glob("*.em"))
         for test in tests:
             print("Running test: {} ...".format(test.stem))
-            theModel = ami.AMIModel(model)
+            theModel = AMIModel(model)
             for cfg_item in params:
                 cfg_name = cfg_item[0]
                 print("\tRunning test configuration: {} ...".format(cfg_name))

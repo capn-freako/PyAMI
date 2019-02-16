@@ -5,8 +5,6 @@ IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
 
 Original author: David Banas
 
-Original date:   February 26, 2016
-
 This script gets called from a makefile, when any of the following need rebuilding:
 
 * a C++ source code file
@@ -26,7 +24,7 @@ The idea, here, is that the *.IBS file, the *.AMI file, and the
 C++ source file should be configured from a common model configuration
 file, so as to ensure consistency between the three.
 
-Copyright (c) 2016 David Banas; all rights reserved World wide.
+Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 from datetime import date
 import importlib.util
@@ -143,7 +141,7 @@ def ami_config(py_file):
         else:
             em_file = out_file.with_suffix(".cpp.em")
 
-        print("Buidling '%s' from '%s'..." % (out_file, em_file))
+        print(f"Buidling '{out_file}' from '{em_file}'...")
         with open(out_file, "w") as out_file:
             interpreter = em.Interpreter(
                 output=out_file,

@@ -3,7 +3,6 @@
     (Description "@description")
 
 @{
-from __future__ import print_function
 import sys
 from pyibisami import ami_config as ac
 

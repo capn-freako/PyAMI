@@ -3,11 +3,10 @@ Class definitions for working with IBIS-AMI models
 
 Original Author: David Banas
 
-Original Date:   July 3, 2012
-
-Copyright (c) 2012 David Banas; All rights reserved World wide.
+Copyright (c) 2019 David Banas; All rights reserved World wide.
 """
 from pathlib import Path
+from typing import Dict
 
 import copy as cp
 import unicodedata
@@ -72,8 +71,7 @@ def interpFile(filename, sample_per):
             i = i + 1
         res.append(vs[i - 1] + (vs[i] - vs[i - 1]) * (t - ts[i - 1]) / (ts[i] - ts[i - 1]))
         t = t + sample_per
-    res = np.array(res)
-    return res
+    return np.array(res)
 
 
 class AMIModelInitializer(object):
@@ -99,7 +97,7 @@ class AMIModelInitializer(object):
         "bit_time": c_double(0.1e-9),
     }
 
-    def __init__(self, ami_params, **optional_args):
+    def __init__(self, ami_params: Dict, **optional_args):
         """ Constructor accepts a mandatory dictionary containing the
             AMI parameters, as well as optional initialization
             data overrides and validates them, before using them to
@@ -238,7 +236,7 @@ class AMIModel(object):
     """
 
     def __init__(self, filename):
-        " Load the dll and bind the 3 AMI functions."
+        """ Load the dll and bind the 3 AMI functions."""
 
         self._ami_mem_handle = None
         if isinstance(filename, str):

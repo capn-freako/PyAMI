@@ -1,7 +1,6 @@
 """ setup.py - Distutils setup file for PyIBIS-AMI package
 
     David Banas
-    July 7, 2012
 """
 from setuptools import setup, find_packages
 
