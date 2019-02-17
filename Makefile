@@ -1,5 +1,4 @@
 # Replace the individual build scripts with one Makefile to provide the same functionality.
-DOCKER=docker run -v ~/git/PyAMI:/data/PyAMI:rw -v ~/git/ibisami:/data/ibisami:rw -it pyami
 .PHONY: tox clean test lint
 
 tox:
