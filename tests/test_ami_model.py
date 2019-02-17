@@ -1,41 +1,50 @@
 from pathlib import Path
 import sys
 
+import pytest
+
 from pyibisami.ami_model import loadWave, AMIModelInitializer, AMIModel
 
 
-def test_loadWave():
+def test_loadWave(tmp_path):
     """Simple test case to verify pytest and tox is up and working."""
-    wave = loadWave(
-        Path(__file__).parent.joinpath("examples", "runs", "impulse_response_8ma.txt")
-    )
+    waveform = tmp_path.joinpath("waveform.txt")
+    with open(waveform, "w") as test_file:
+        test_file.write("Time Voltage\n")
+        test_file.write("0.00 .000\n")
+        test_file.write("0.01 .001\n")
+        test_file.write("0.02 .002\n")
+        test_file.write("0.03 .003\n")
+        test_file.write("0.04 .004\n")
+
+    wave = loadWave(waveform)
     assert len(wave[0]) == len(wave[1])
-    assert len(wave[0]) == 1149
+    assert len(wave[0]) == 5
 
 
 class Test_AMIModel(object):
+    @pytest.mark.skipif(sys.platform == "darwin", reason="os x won't link for me.")
     def test_init(self):
-        """Verify that we can load in a .so file."""
+        """Verify that we can load in a .so file.
+
+        This example and compiled object files come from ibisami a related module that this
+        command is used with.
+        """
         if sys.platform == "win32":
             example_so = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.dll")
-        else:
+        elif sys.platform.startswith("linux"):
             example_so = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so")
         the_model = AMIModel(example_so)
 
-        assert not the_model._ami_mem_handle
-        # Verify that all three functions were bound.
-        assert the_model._amiInit
-        assert the_model._amiGetWave
-        assert the_model._amiClose
+        initializer = AMIModelInitializer({'root_name': "exampleTx"})
 
-        initializer = AMIModelInitializer(
-            [("default", ({"root_name": "testAMI"}, {}))]
-        )
         the_model.initialize(initializer)
-        # assert the_model.msg == b''
-        # assert the_model.ami_params_out == b''
-        assert len(the_model.initOut) == 128
-        assert the_model.sample_interval == 2.5e-11
+        assert the_model.msg == b"Initializing Tx...\n\n"
+        assert the_model.ami_params_out == (
+            "(example_tx (tx_tap_units 27) (taps[0] 0) (taps[1] 27) (taps[2] 0) "
+            "(taps[3] 0) (tap_weights_[0] -0) (tap_weights_[1] 1.0989) (tap_weights_[2] -0) "
+            "(tap_weights_[3] -0)\n"
+        ).encode("utf-8")
 
 
 class Test_AMIModelInitializer(object):

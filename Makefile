@@ -1,5 +1,5 @@
 # Replace the individual build scripts with one Makefile to provide the same functionality.
-
+DOCKER=docker run -v ~/git/PyAMI:/data/PyAMI:rw -v ~/git/ibisami:/data/ibisami:rw -it pyami
 .PHONY: tox clean test lint
 
 tox:
@@ -14,3 +14,9 @@ test:
 clean:
 	rm -rf .tox docs/build/ __pycache__/ tests/__pycache__ .pytest_cache/ *.egg-info \
 		Pipfile Pipfile.lock
+
+docker-build:
+	docker build -t pyami .
+
+docker-shell:
+	docker run -v ~/git/PyAMI:/data/PyAMI:rw -it pyami /bin/bash

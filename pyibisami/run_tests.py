@@ -10,6 +10,7 @@ Copyright (c) 2012 David Banas; All rights reserved World wide.
 """
 
 import shutil
+from os import chdir
 from pathlib import Path
 
 import click
@@ -128,8 +129,10 @@ def run_tests(**kwargs):
     """Provide a thin wrapper around the click interface so that we can test the operation."""
 
     # Fetch options and cast into local independent variables.
-    test_dir = Path(kwargs["test_dir"])
+    test_dir = Path(kwargs["test_dir"]).resolve()
     ref_dir = Path(kwargs["ref_dir"])
+    if not ref_dir.exists():
+        ref_dir = None
     model = Path(kwargs["model"]).resolve()
     out_dir = Path(kwargs["out_dir"])
     out_dir.mkdir(exist_ok=True)
@@ -151,16 +154,20 @@ def run_tests(**kwargs):
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
         xml_file.write("<tests>\n")
+    if kwargs["tests"]:
+        tests = kwargs["tests"]
+    else:
         tests = list(test_dir.glob("*.em"))
-        for test in tests:
-            print("Running test: {} ...".format(test.stem))
-            theModel = AMIModel(model)
-            for cfg_item in params:
-                cfg_name = cfg_item[0]
-                print("\tRunning test configuration: {} ...".format(cfg_name))
-                description = cfg_item[1]
-                param_list = cfg_item[2]
-                colors = color_picker(num_hues=len(param_list))
+    for test in tests:
+        print("Running test: {} ...".format(test.stem))
+        theModel = AMIModel(model)
+        for cfg_item in params:
+            cfg_name = cfg_item[0]
+            print("\tRunning test configuration: {} ...".format(cfg_name))
+            description = cfg_item[1]
+            param_list = cfg_item[2]
+            colors = color_picker(num_hues=len(param_list))
+            with open(xml_filename, "a") as xml_file:
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
@@ -170,15 +177,19 @@ def run_tests(**kwargs):
                         "plot_names": plot_names,
                         "description": description,
                         "plot_colors": colors,
-                        "ref_dir": str(ref_dir),
+                        "ref_dir": ref_dir,
                     },
                 )
                 try:
+                    cwd = Path().cwd()
+                    chdir(out_dir)  # So that the images are saved in the output directory.
                     interpreter.file(open(test))
+                    chdir(cwd)
                 finally:
                     interpreter.shutdown()
-            print("Test:", test.stem, "complete.")
-            xml_file.write("</tests>\n")
+        print("Test:", test.stem, "complete.")
+    with open(xml_filename, "a") as xml_file:
+        xml_file.write("</tests>\n")
 
     print("Please, open file, `{}` in a Web browser, in order to view the test results.".format(xml_filename))
 
@@ -245,4 +256,5 @@ def main(**kwargs):
     working directory, in order to avoid file loading errors in your
     Web browser.
     """
+    print(kwargs)
     run_tests(**kwargs)

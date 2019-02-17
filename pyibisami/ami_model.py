@@ -289,7 +289,7 @@ class AMIModel(object):
             if not item[0] == "root_name":
                 ami_params_in += "({} {})".format(str(item[0]), str(item[1]))
         ami_params_in += ")"
-        self._ami_params_in = ami_params_in
+        self._ami_params_in = ami_params_in.encode("utf-8")
 
         # Set handle types.
         self._ami_params_out = c_char_p(b"")
@@ -304,13 +304,13 @@ class AMIModel(object):
                 self._num_aggressors,
                 self._sample_interval,
                 self._bit_time,
-                "{}".format(self._ami_params_in),  # Prevents model from mucking up our input parameter string.
+                self._ami_params_in,
                 byref(self._ami_params_out),
                 byref(self._ami_mem_handle),
                 byref(self._msg),
             )
-        except:
-            raise
+        except OSError as error:
+            raise error
 
         # Initialize attributes used by getWave().
         bit_time = self._bit_time.value

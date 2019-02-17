@@ -1,4 +1,8 @@
-from pyibisami.run_tests import color_picker, plot_name, hsv2rgb, expand_params
+from pathlib import Path
+
+import pytest
+
+from pyibisami.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
 
 
 class TestRunTests(object):
@@ -109,3 +113,21 @@ class TestRunTests(object):
                 ],
             )
         ]
+
+    @pytest.mark.xfail(reason="EMPY looses its stdout proxy.")
+    def test_run_tests(self):
+        model = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so")
+        test_dir = Path(__file__).parent.joinpath("examples", "tests")
+        params = Path(__file__).parent.joinpath("examples", "runs")
+        xml_file = "test_results.xml"
+        ref_dir = Path().cwd()
+        out_dir = Path(__file__).parent.joinpath("examples", "test_results")
+        run_tests(
+            model=model,
+            test_dir=test_dir,
+            params=params,
+            xml_file=xml_file,
+            ref_dir=ref_dir,
+            out_dir=out_dir,
+            tests=(),
+        )
