@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 from pylab import *
 from numpy import cumsum, concatenate
-import pyibisami.ami_model as ami
+import pyibisami.amimodel as ami
 figure(1)
 cla()
 figure(2)
@@ -50,17 +50,19 @@ for cfg in data:
     H = fft(h)
     H *= s[-1] / abs(H[0])  # Normalize for proper d.c.
     H2 = fft(h2)
-    f = array([i * 1.0 / (T * len(h)) for i in range(len(h) / 2)])
-    rgb_main, rgb_ref = plot_colors.next()
-    color_main = "#%02X%02X%02X" % (rgb_main[0] * 0xFF, rgb_main[1] * 0xFF, rgb_main[2] * 0xFF)
-    color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
+    f = array([i * 1.0 // (T * len(h)) for i in range(len(h) // 2)])
+    rgb_main, rgb_ref = next(plot_colors)
+    rgb_main = tuple(int(color * 0xFF) for color in rgb_main)
+    rgb_ref = tuple(int(color * 0xFF) for color in rgb_ref)
+    color_main = f"#{rgb_main[0]:02x}{rgb_main[1]:02x}{rgb_main[2]:02x}"
+    color_ref = f"#{rgb_ref[0]:02x}{rgb_ref[1]:02x}{rgb_ref[2]:02x}"
     figure(1)
     plot(t * 1.e9, s,       label=cfg_name+'_Init',    color=color_main)
     plot(t * 1.e9, s2_plot, '.', label=cfg_name+'_GetWave', color=color_main)
     figure(2)
     semilogx(f / 1.e9, 20. * log10(abs(H[:len(f)])),        label=cfg_name+'_Init',    color=color_main)
     semilogx(f / 1.e9, 20. * log10(abs(H2[:len(f)])), '.',  label=cfg_name+'_GetWave', color=color_main)
-    if(reference):
+    if reference:
         try:
             if(ref is None):
                 ref = ami.AMIModel(reference)
@@ -78,22 +80,22 @@ for cfg in data:
             r = ami.interpFile(reference, T)
         semilogx(f / 1.e9, 20. * log10(abs(r[:len(r)/2])), label=cfg_name+'_ref', color=color_ref)
     print('        </block>')
-figure(1)
-title('Model Step Response')
-xlabel('Time (ns)')
-ylabel('s(t) (V)')
-axis(xmax=1)
-legend(loc='upper right')
-filename1 = plot_names.next()
-savefig(filename1)
-figure(2)
-title('Model Frequency Response')
-xlabel('Frequency (GHz)')
-ylabel('|H(f)| (dB)')
-axis(xmin=0.1, xmax=20, ymin=-30)
-legend(loc='lower left')
-filename2 = plot_names.next()
-savefig(filename2)
+    figure(1)
+    title('Model Step Response')
+    xlabel('Time (ns)')
+    ylabel('s(t) (V)')
+    axis(xmax=1)
+    legend(loc='upper right')
+    filename1 = next(plot_names)
+    savefig(filename1)
+    figure(2)
+    title('Model Frequency Response')
+    xlabel('Frequency (GHz)')
+    ylabel('|H(f)| (dB)')
+    axis(xmin=0.1, xmax=20, ymin=-30)
+    legend(loc='lower left')
+    filename2 = next(plot_names)
+    savefig(filename2)
 }
         <block name="Model Step Response" type="image">@(filename1)</block>
         <block name="Model Frequency Response" type="image">@(filename2)</block>
