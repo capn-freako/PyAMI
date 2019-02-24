@@ -12,7 +12,7 @@ test:
 
 clean:
 	rm -rf .tox docs/build/ __pycache__/ tests/__pycache__ .pytest_cache/ *.egg-info \
-		Pipfile Pipfile.lock
+		Pipfile Pipfile.lock .venv
 
 docker-build:
 	docker build -t pyami .
