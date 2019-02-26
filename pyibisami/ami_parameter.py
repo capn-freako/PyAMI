@@ -3,6 +3,8 @@
 
 Original author: David Banas <capn.freako@gmail.com>
 
+Original date:   December 24, 2016
+
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 """

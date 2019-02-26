@@ -5,6 +5,8 @@ IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
 
 Original author: David Banas
 
+Original date:   February 26, 2016
+
 This script gets called from a makefile, when any of the following need rebuilding:
 
 * a C++ source code file

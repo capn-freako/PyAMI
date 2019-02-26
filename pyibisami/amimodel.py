@@ -3,6 +3,8 @@ Class definitions for working with IBIS-AMI models
 
 Original Author: David Banas
 
+Original Date:   July 3, 2012
+
 Copyright (c) 2019 David Banas; All rights reserved World wide.
 """
 from pathlib import Path
@@ -304,7 +306,7 @@ class AMIModel(object):
                 self._num_aggressors,
                 self._sample_interval,
                 self._bit_time,
-                self._ami_params_in,
+                "{}".format(self._ami_params_in),  # Prevents model from mucking up our input parameter string.
                 byref(self._ami_params_out),
                 byref(self._ami_mem_handle),
                 byref(self._msg),
