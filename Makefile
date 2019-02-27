@@ -1,6 +1,7 @@
 # Replace the individual build scripts with one Makefile to provide the same functionality.
 .PHONY: tox clean test lint
 
+# If you don't want to use pipenv, replace it with pip or conda.  Tox must be installed first.
 tox:
 	pipenv run tox
 
@@ -17,5 +18,6 @@ clean:
 docker-build:
 	docker build -t pyami .
 
+# Update ~/git/PyAMI to match your local path.
 docker-shell:
 	docker run -v ~/git/PyAMI:/data/PyAMI:rw -it pyami /bin/bash
