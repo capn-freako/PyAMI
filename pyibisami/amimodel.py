@@ -306,7 +306,7 @@ class AMIModel(object):
                 self._num_aggressors,
                 self._sample_interval,
                 self._bit_time,
-                "{}".format(self._ami_params_in),  # Prevents model from mucking up our input parameter string.
+                self._ami_params_in,  # Prevents model from mucking up our input parameter string.
                 byref(self._ami_params_out),
                 byref(self._ami_mem_handle),
                 byref(self._msg),

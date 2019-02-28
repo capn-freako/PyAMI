@@ -23,7 +23,6 @@ def test_loadWave(tmp_path):
 
 
 class Test_AMIModel(object):
-    @pytest.mark.skipif(sys.platform == "darwin", reason="os x won't link for me.")
     def test_init(self):
         """Verify that we can load in a .so file.
 
@@ -34,6 +33,9 @@ class Test_AMIModel(object):
             example_so = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.dll")
         elif sys.platform.startswith("linux"):
             example_so = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so")
+        else:  # darwin aka OS X
+            example_so = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64_osx.so")
+
         the_model = AMIModel(example_so)
 
         initializer = AMIModelInitializer({'root_name': "exampleTx"})
