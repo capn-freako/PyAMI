@@ -1,7 +1,7 @@
 # Replace the individual build scripts with one Makefile to provide the same functionality.
 .PHONY: tox clean test lint
 
-# If you don't want to use pipenv, replace it with pip or conda.  Tox must be installed first.
+# If you don't want to use pipenv, remove "pipenv run".  Tox must be installed first.
 tox:
 	pipenv run tox
 
