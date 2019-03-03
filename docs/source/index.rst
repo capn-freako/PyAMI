@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 ===================================================
- *PyIBIS-AMI* Source Code Developer's Guide v2.0.5
+ *PyIBIS-AMI* Source Code Developer's Guide v3.0.0
 ===================================================
 
 Welcome to the *PyIBIS-AMI Developer's Guide*!
