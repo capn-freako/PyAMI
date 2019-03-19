@@ -18,6 +18,7 @@ setup(
         "matplotlib",
         "parsec",
         "traits",
+        "traitsui"
     ],
     entry_points={
         "console_scripts": [

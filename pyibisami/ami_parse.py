@@ -14,7 +14,7 @@ from traits.api import Bool, Enum, HasTraits, Range, Trait
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
 
-from .ami_parameter import AMIParamError, AMIParameter
+from pyibisami.ami_parameter import AMIParamError, AMIParameter
 
 #####
 # AMI parameter configurator.
