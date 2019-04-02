@@ -10,9 +10,6 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 import re
 
 from parsec import ParseError, generate, many, many1, regex, string
-from traits.api import Bool, Enum, HasTraits, Range, Trait
-from traitsui.api import Group, Item, View
-from traitsui.menu import ModalButtons
 
 from pyibisami.ami_parameter import AMIParamError, AMIParameter
 
@@ -21,7 +18,7 @@ from pyibisami.ami_parameter import AMIParamError, AMIParameter
 #####
 
 
-class AMIParamConfigurator(HasTraits):
+class AMIParamConfigurator:
     """
     Customizable IBIS-AMI model parameter configurator.
 
@@ -73,7 +70,7 @@ class AMIParamConfigurator(HasTraits):
             new_traits = []
             if isinstance(param, AMIParameter):
                 pusage = param.pusage
-                if pusage in ('In', 'InOut'):
+                if pusage in ("In", "InOut"):
                     if param.ptype == "Boolean":
                         new_traits.append((pname, Bool(param.pvalue)))
                         gui_items.append(Item(pname, tooltip=param.pdescription))
@@ -86,15 +83,7 @@ class AMIParamConfigurator(HasTraits):
                             list_tips = param.plist_tip
                             default = param.pdefault
                             if list_tips:
-                                # The attempt, below, doesn't work.
-                                # Prevent alphabetic sorting of list tips by Traits/UI machinery.
-                                # i = 0
-                                # tmp_tips = []
-                                # for list_tip in list_tips:
-                                #     i += 1
-                                #     tmp_tips.append("{:02d}:{}".format(i, list_tip))
                                 tmp_dict = {}
-                                # tmp_dict.update(zip(tmp_tips, param.pvalue))
                                 tmp_dict.update(list(zip(list_tips, param.pvalue)))
                                 val = list(tmp_dict.keys())[0]
                                 if default:
@@ -111,7 +100,9 @@ class AMIParamConfigurator(HasTraits):
                             gui_items.append(Item(pname, tooltip=param.pdescription))
                         else:  # Value
                             new_traits.append((pname, param.pvalue))
-                            gui_items.append(Item(pname, style="readonly", tooltip=param.pdescription))
+                            gui_items.append(
+                                Item(pname, style="readonly", tooltip=param.pdescription)
+                            )
             else:  # subparameter branch
                 subparam_names = list(param.keys())
                 subparam_names.sort()
@@ -148,7 +139,9 @@ class AMIParamConfigurator(HasTraits):
                         )
                     )
                 else:
-                    gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
+                    gui_items.append(
+                        Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True)
+                    )
 
             return gui_items, new_traits
 
@@ -163,7 +156,9 @@ class AMIParamConfigurator(HasTraits):
             print(err_str)
             print(param_dict)
             raise
-        gui_items, new_traits = make_gui_items("Model Specific In/InOut Parameters", params, first_call=True)
+        gui_items, new_traits = make_gui_items(
+            "Model Specific In/InOut Parameters", params, first_call=True
+        )
         gui_items[0].content[0].orientation = "horizontal"
         trait_names = []
         for trait in new_traits:
@@ -282,9 +277,7 @@ def node():
     label = yield symbol
     values = yield many1(expr)
     yield rparen
-    err = StopIteration()
-    err.value = (label, values)
-    raise err
+    return (label, values)
 
 
 expr = atom | node
@@ -321,32 +314,32 @@ def proc_branch(branch):
                 Resultant parameter dictionary.
 
     """
-
+    results = ("", {})  # Empty Results
     if len(branch) != 2:
         if not branch:
             err_str = "ERROR: Empty branch provided to proc_branch()!\n"
         else:
             err_str = "ERROR: Malformed item: {}\n".format(branch[0])
-        return (err_str, {})
+        results = (err_str, {})
 
     param_name = branch[0]
     param_tags = branch[1]
 
     if not param_tags:
         err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
-        return (err_str, {})
+        results = (err_str, {})
 
     if (
-            (len(param_tags) > 1)
-            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
-            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
+        (len(param_tags) > 1)
+        and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
+        and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
     ):
         try:
-            return ("", {param_name: AMIParameter(param_name, param_tags)})
+            results = ("", {param_name: AMIParameter(param_name, param_tags)})
         except AMIParamError as err:
-            return (str(err), {})
+            results = (str(err), {})
     elif param_name == "Description":
-        return ("", {"description": param_tags[0].strip('"')})
+        results = ("", {"description": param_tags[0].strip('"')})
     else:
         err_str = ""
         param_dict = {}
@@ -358,9 +351,10 @@ def proc_branch(branch):
                 err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
                     param_name, temp_str
                 )
-                return (err_str, param_dict)
+                results = (err_str, param_dict)
 
-        return (err_str, param_dict)
+        results = (err_str, param_dict)
+    return results
 
 
 def parse_ami_param_defs(param_str):
@@ -409,11 +403,10 @@ def parse_ami_param_defs(param_str):
                     - sub-dictionaries following the same pattern.
 
     """
-
     try:
         res = ami_defs.parse(param_str)
     except ParseError as pe:
-        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index:])
+        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index :])
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)

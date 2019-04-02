@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 from pylab import *
 from numpy import cumsum, concatenate
-import pyibisami.amimodel as ami
+import pyibisami.ami_model as ami
 figure(1)
 cla()
 figure(2)

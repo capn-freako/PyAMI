@@ -19,7 +19,7 @@ class AMIParamError(Exception):
     pass
 
 
-class AMIParameter(object):
+class AMIParameter:
     """
     IBIS-AMI model parameter.
 
@@ -59,7 +59,7 @@ class AMIParameter(object):
         "Process *Usage* tag."
 
         val = values[0]
-        if val in ["In", "Out", "InOut", "Info"]:
+        if val in ("In", "Out", "InOut", "Info"):
             self._usage = val
         else:
             raise AMIParamError("Unrecognized usage value: '{}'.".format(val))
@@ -74,7 +74,7 @@ class AMIParameter(object):
         "Process *Type* tag."
 
         val = values[0]
-        if val in ["Float", "Integer", "String", "Boolean", "UI"]:
+        if val in ("Float", "Integer", "String", "Boolean", "UI"):
             self._type = val
         else:
             raise AMIParamError("Unrecognized type value: '{}'.".format(val))
@@ -205,17 +205,6 @@ class AMIParameter(object):
         "Labels": _set_list_tip,
     }
 
-    # Initialization
-    _usage = None
-    _type = None
-    _format = None
-    _value = None
-    _min = None
-    _max = None
-    _default = None
-    _description = ""
-    _list_tip = None
-
     def __init__(self, name, tags):
         """
         Args:
@@ -228,6 +217,20 @@ class AMIParameter(object):
                 - a list of values to be associated with that tag.
 
         """
+        # Initialization
+        self._usage = None
+        self._type = None
+        self._format = None
+        self._value = None
+        self._min = None
+        self._max = None
+        self._default = None
+        self._description = ""
+        self._list_tip = None
+
+        # Holds any warnings encountered, during initialization.
+        # (Any errors encountered will prevent initialization from completing.)
+        self._msg = ""
 
         # Process all parameter definition tags.
         for tag in tags:
@@ -253,10 +256,9 @@ class AMIParameter(object):
         if param_format is None:
             if param_default is None:
                 raise AMIParamError("Missing both 'Format' and 'Default' tags!\n")
-            else:
-                self._value = param_default
-                param_format = "Value"
-                self._format_rem = [param_default]
+            self._value = param_default
+            param_format = "Value"
+            self._format_rem = [param_default]
         # Check for mutual exclusivity of 'Format Value' and 'Default'.
         elif (param_format == "Value") and (param_default is not None):
             self._msg += "'Format Value' and 'Default' both found! (They are mutually exclusive.)\n"

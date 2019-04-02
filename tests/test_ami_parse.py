@@ -1,10 +1,9 @@
-from pyibisami.ami_parse import AMIParamConfigurator
+import pytest
+from pyibisami.ami_parse import parse_ami_param_defs, AMIParamConfigurator
 
-
-class TestAMIParse():
-
-    def test_AMIParamConfigurator(self):
-        test_ami_config = r"""(example_tx
+@pytest.fixture
+def test_ami_config():
+    return r"""(example_tx
 
     (Description "Example Tx model from ibisami package.")
 
@@ -58,6 +57,11 @@ class TestAMIParse():
 )
 
 """
-        param_test = AMIParamConfigurator(test_ami_config)
-        assert param_test.ami_valid
-        assert param_test.has_getwave
+
+@pytest.mark.usefixtures("test_ami_config")
+class TestAMIParse():
+
+    def test_parse_ami_param_defs(self, test_ami_config):
+        error_string, param_defs = parse_ami_param_defs(test_ami_config)
+        assert error_string == ""
+        assert param_defs["example_tx"]["description"] == "Example Tx model from ibisami package."

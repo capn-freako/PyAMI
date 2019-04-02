@@ -76,7 +76,7 @@ def interpFile(filename, sample_per):
     return np.array(res)
 
 
-class AMIModelInitializer(object):
+class AMIModelInitializer:
     """ Class containing the initialization data for an instance of `AMIModel`.
 
         Created primarily to facilitate use of the PyAMI package at the
@@ -211,7 +211,7 @@ class AMIModelInitializer(object):
     bit_time = property(_getBitTime, _setBitTime, doc="Link unit interval.")
 
 
-class AMIModel(object):
+class AMIModel:
     """ Class defining the structure and behavior of a AMI Model.
 
         Public Methods: (See individual docs.)
