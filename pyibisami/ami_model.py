@@ -357,7 +357,7 @@ class AMIModel:
                 Signal = c_double * remaining_samps
                 tmp_wave = wave[idx:]
             else:
-                tmp_wave = wave[idx: idx + samps_per_call]
+                tmp_wave = wave[idx : idx + samps_per_call]
             _wave = Signal(*tmp_wave)
             self._amiGetWave(
                 byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle

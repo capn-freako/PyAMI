@@ -194,10 +194,7 @@ def run_tests(**kwargs):
     print("Please, open file, `{}` in a Web browser, in order to view the test results.".format(xml_filename))
 
 
-@click.command(context_settings=dict(
-    ignore_unknown_options=True,
-    help_option_names=["-h", "--help"]
-))
+@click.command(context_settings=dict(ignore_unknown_options=True, help_option_names=["-h", "--help"]))
 @click.option(
     "--model", "-m", default="libami.so", type=click.Path(exists=True), help="Sets the AMI model DLL file name."
 )

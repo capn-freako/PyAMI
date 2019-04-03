@@ -16,6 +16,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 class AMIParamError(Exception):
     """Base Exception for all AMI Parameter Errors."""
+
     pass
 
 
@@ -239,9 +240,7 @@ class AMIParameter:
                 try:
                     self._param_def_tag_procs[tag_name](self, tag[1])
                 except AMIParamError as err:
-                    raise AMIParamError(
-                        "Problem initializing parameter, '{}': {}\n".format(name, err)
-                    )
+                    raise AMIParamError("Problem initializing parameter, '{}': {}\n".format(name, err))
 
         # Validate and complete the instance.
         # Check for required tags.
@@ -294,9 +293,7 @@ class AMIParameter:
             if param_type not in ("Float", "Integer", "UI"):
                 raise AMIParamError("Illegal type, '{}', for use with Range.\n".format(param_type))
             if len(vals) < 3:
-                raise AMIParamError(
-                    "Insufficient number of values, {}, provided for Range.\n".format(len(vals))
-                )
+                raise AMIParamError("Insufficient number of values, {}, provided for Range.\n".format(len(vals)))
             if param_type in ("Float", "UI"):
                 try:
                     temp_vals = list(map(float, vals[:3]))

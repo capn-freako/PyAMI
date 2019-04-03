@@ -52,7 +52,7 @@ class AMIParamConfigurator:
 
     """
 
-    def __init__(self, ami_file_contents_str):
+    def __init__(self, ami_file_contents_str, gui=True):
         """
         Args:
             ami_file_contents_str (str): The unprocessed contents of
@@ -63,88 +63,6 @@ class AMIParamConfigurator:
         # to get all the Traits/UI machinery setup correctly.
         super(AMIParamConfigurator, self).__init__()
 
-        def make_gui_items(pname, param, first_call=False):
-            """Builds list of GUI items from AMI parameter dictionary."""
-
-            gui_items = []
-            new_traits = []
-            if isinstance(param, AMIParameter):
-                pusage = param.pusage
-                if pusage in ("In", "InOut"):
-                    if param.ptype == "Boolean":
-                        new_traits.append((pname, Bool(param.pvalue)))
-                        gui_items.append(Item(pname, tooltip=param.pdescription))
-                    else:
-                        pformat = param.pformat
-                        if pformat == "Range":
-                            new_traits.append((pname, Range(param.pmin, param.pmax, param.pvalue)))
-                            gui_items.append(Item(pname, tooltip=param.pdescription))
-                        elif pformat == "List":
-                            list_tips = param.plist_tip
-                            default = param.pdefault
-                            if list_tips:
-                                tmp_dict = {}
-                                tmp_dict.update(list(zip(list_tips, param.pvalue)))
-                                val = list(tmp_dict.keys())[0]
-                                if default:
-                                    for tip in tmp_dict:
-                                        if tmp_dict[tip] == default:
-                                            val = tip
-                                            break
-                                new_traits.append((pname, Trait(val, tmp_dict)))
-                            else:
-                                val = param.pvalue[0]
-                                if default:
-                                    val = default
-                                new_traits.append((pname, Enum([val] + param.pvalue)))
-                            gui_items.append(Item(pname, tooltip=param.pdescription))
-                        else:  # Value
-                            new_traits.append((pname, param.pvalue))
-                            gui_items.append(
-                                Item(pname, style="readonly", tooltip=param.pdescription)
-                            )
-            else:  # subparameter branch
-                subparam_names = list(param.keys())
-                subparam_names.sort()
-                sub_items = []
-                group_desc = ""
-
-                # Build GUI items for this branch.
-                for subparam_name in subparam_names:
-                    if subparam_name == "description":
-                        group_desc = param[subparam_name]
-                    else:
-                        tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
-                        sub_items.extend(tmp_items)
-                        new_traits.extend(tmp_traits)
-
-                # Put all top-level ungrouped parameters in a single VGroup.
-                top_lvl_params = []
-                sub_params = []
-                for item in sub_items:
-                    if isinstance(item, Item):
-                        top_lvl_params.append(item)
-                    else:
-                        sub_params.append(item)
-                sub_items = [Group(top_lvl_params)] + sub_params
-
-                # Make the top-level group an HGroup; all others VGroups (default).
-                if first_call:
-                    gui_items.append(
-                        Group(
-                            [Item(label=group_desc)] + sub_items,
-                            label=pname,
-                            show_border=True,
-                            orientation="horizontal",
-                        )
-                    )
-                else:
-                    gui_items.append(
-                        Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True)
-                    )
-
-            return gui_items, new_traits
-
         # Parse the AMI file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
@@ -153,41 +71,94 @@ class AMIParamConfigurator:
         try:
             params = param_dict["Model_Specific"]
         except KeyError:
-            print(err_str)
-            print(param_dict)
-            raise
-        gui_items, new_traits = make_gui_items(
-            "Model Specific In/InOut Parameters", params, first_call=True
-        )
-        gui_items[0].content[0].orientation = "horizontal"
-        trait_names = []
-        for trait in new_traits:
-            self.add_trait(trait[0], trait[1])
-            trait_names.append(trait[0])
-
+            print(f"Error: {err_str}\nParameters: {param_dict}")
+            raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
+        if gui:
+            gui_items, new_traits = make_gui_items("Model Specific In/InOut Parameters", params, first_call=True)
+            trait_names = []
+            for trait in new_traits:
+                self.add_trait(trait[0], trait[1])
+                trait_names.append(trait[0])
+                self._content = gui_items
+                self._param_trait_names = trait_names
         self._root_name = top_branch[0]
         self._ami_parsing_errors = err_str
-        self._content = gui_items
-        self._param_trait_names = trait_names
         self._param_dict = param_dict
 
-    def __call__(self):
-        """
-        Present a customized GUI to the user, for parameter
-        customization.
-        """
+    def make_gui_items(pname, param, first_call=False):
+        """Builds list of GUI items from AMI parameter dictionary."""
 
-        self.edit_traits()
+        gui_items = []
+        new_traits = []
+        if isinstance(param, AMIParameter):
+            pusage = param.pusage
+            if pusage in ("In", "InOut"):
+                if param.ptype == "Boolean":
+                    new_traits.append((pname, Bool(param.pvalue)))
+                    gui_items.append(Item(pname, tooltip=param.pdescription))
+                else:
+                    pformat = param.pformat
+                    if pformat == "Range":
+                        new_traits.append((pname, Range(param.pmin, param.pmax, param.pvalue)))
+                        gui_items.append(Item(pname, tooltip=param.pdescription))
+                    elif pformat == "List":
+                        list_tips = param.plist_tip
+                        default = param.pdefault
+                        if list_tips:
+                            tmp_dict = {}
+                            tmp_dict.update(list(zip(list_tips, param.pvalue)))
+                            val = list(tmp_dict.keys())[0]
+                            if default:
+                                for tip in tmp_dict:
+                                    if tmp_dict[tip] == default:
+                                        val = tip
+                                        break
+                            new_traits.append((pname, Trait(val, tmp_dict)))
+                        else:
+                            val = param.pvalue[0]
+                            if default:
+                                val = default
+                            new_traits.append((pname, Enum([val] + param.pvalue)))
+                        gui_items.append(Item(pname, tooltip=param.pdescription))
+                    else:  # Value
+                        new_traits.append((pname, param.pvalue))
+                        gui_items.append(Item(pname, style="readonly", tooltip=param.pdescription))
+        else:  # subparameter branch
+            subparam_names = list(param.keys())
+            subparam_names.sort()
+            sub_items = []
+            group_desc = ""
 
-    def default_traits_view(self):
-        view = View(
-            resizable=False,
-            buttons=ModalButtons,
-            title="PyBERT AMI Parameter Configurator",
-            id="pybert.pybert_ami.param_config",
-        )
-        view.set_content(self._content)
-        return view
+            # Build GUI items for this branch.
+            for subparam_name in subparam_names:
+                if subparam_name == "description":
+                    group_desc = param[subparam_name]
+                else:
+                    tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
+                    sub_items.extend(tmp_items)
+                    new_traits.extend(tmp_traits)
+
+            # Put all top-level ungrouped parameters in a single VGroup.
+            top_lvl_params = []
+            sub_params = []
+            for item in sub_items:
+                if isinstance(item, Item):
+                    top_lvl_params.append(item)
+                else:
+                    sub_params.append(item)
+            sub_items = [Group(top_lvl_params)] + sub_params
+
+            # Make the top-level group an HGroup; all others VGroups (default).
+            if first_call:
+                gui_items.append(
+                    Group(
+                        [Item(label=group_desc)] + sub_items, label=pname, show_border=True, orientation="horizontal"
+                    )
+                )
+            else:
+                gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
+
+        return gui_items, new_traits
 
     def fetch_param_val(self, branch_names):
         """Returns the value of the parameter found by traversing 'branch_names'
@@ -205,42 +176,34 @@ class AMIParamConfigurator:
             return param_dict.pvalue
         return None
 
-    # Properties
-
-    def _get_ami_parsing_errors(self):
-        """ami_parsing_errors"""
+    @property
+    def ami_parsing_errors(self):
+        """Any errors or warnings encountered, while parsing the AMI parameter definition file contents."""
         return self._ami_parsing_errors
 
-    ami_parsing_errors = property(
-        _get_ami_parsing_errors,
-        doc="Any errors or warnings encountered, while parsing the AMI parameter definition file contents.",
-    )
+    @property
+    def ami_param_defs(self):
+        """The entire AMI parameter definition dictionary. 
 
-    def _get_ami_param_defs(self):
-        """## ami_param_defs"""
+        Should NOT be passed to AMIModelInitializer constructor!
+        """
         return self._param_dict
 
-    ami_param_defs = property(
-        _get_ami_param_defs,
-        doc="The entire AMI parameter definition dictionary. Should NOT be passed to AMIModelInitializer constructor!",
-    )
+    @property
+    def input_ami_params(self):
+        """The dictionary of AMI parameters of type In or InOut, along with their user selected values. 
 
-    def _get_input_ami_params(self):
-        """input_ami_params"""
+        Should be passed to AMIModelInitializer constructor.
+        """
         res = {}
         res["root_name"] = self._root_name
         for pname in self._param_trait_names:
             # See the docs on the *HasTraits* class, if this is confusing.
-            try:  # Querry for a mapped trait, first, by trying to get '<trait_naem>_'. (Note the underscore.)
+            try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
                 res[pname] = self.get(pname + "_")[pname + "_"]
             except:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
                 res[pname] = self.get(pname)[pname]
         return res
-
-    input_ami_params = property(
-        _get_input_ami_params,
-        doc="The dictionary of AMI parameters of type In or InOut, along with their user selected values. Should be passed to AMIModelInitializer constructor.",
-    )
 
 
 #####

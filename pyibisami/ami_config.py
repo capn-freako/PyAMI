@@ -62,11 +62,11 @@ def print_param(indent, name, param):
             print(indent + "    ", "(Description {})".format(param["description"]))
     else:
         for (fld_name, fld_key) in [
-                ("Usage", "usage"),
-                ("Type", "type"),
-                ("Format", "format"),
-                ("Default", "default"),
-                ("Description", "description"),
+            ("Usage", "usage"),
+            ("Type", "type"),
+            ("Format", "format"),
+            ("Default", "default"),
+            ("Description", "description"),
         ]:
             # Trap the special cases.
             if fld_name == "Type":
@@ -162,7 +162,7 @@ def ami_config(py_file):
                 interpreter.shutdown()
 
 
-@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
 @click.version_option()
 def main(py_file):
