@@ -10,6 +10,9 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 import re
 
 from parsec import ParseError, generate, many, many1, regex, string
+from traits.api import Bool, Enum, HasTraits, Range, Trait
+from traitsui.api import Group, Item, View
+from traitsui.menu import ModalButtons
 
 from pyibisami.ami_parameter import AMIParamError, AMIParameter
 
@@ -18,7 +21,7 @@ from pyibisami.ami_parameter import AMIParamError, AMIParameter
 #####
 
 
-class AMIParamConfigurator:
+class AMIParamConfigurator(HasTraits):
     """
     Customizable IBIS-AMI model parameter configurator.
 
@@ -52,7 +55,7 @@ class AMIParamConfigurator:
 
     """
 
-    def __init__(self, ami_file_contents_str, gui=True):
+    def __init__(self, ami_file_contents_str):
         """
         Args:
             ami_file_contents_str (str): The unprocessed contents of
@@ -68,97 +71,36 @@ class AMIParamConfigurator:
         err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
         top_branch = list(param_dict.items())[0]
         param_dict = top_branch[1]
-        try:
-            params = param_dict["Model_Specific"]
-        except KeyError:
+        if "Model_Specific" not in param_dict:
             print(f"Error: {err_str}\nParameters: {param_dict}")
             raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
-        if gui:
-            gui_items, new_traits = make_gui_items("Model Specific In/InOut Parameters", params, first_call=True)
-            trait_names = []
-            for trait in new_traits:
-                self.add_trait(trait[0], trait[1])
-                trait_names.append(trait[0])
-                self._content = gui_items
-                self._param_trait_names = trait_names
+        gui_items, new_traits = make_gui_items(
+            "Model Specific In/InOut Parameters", param_dict["Model_Specific"], first_call=True
+        )
+        trait_names = []
+        for trait in new_traits:
+            self.add_trait(trait[0], trait[1])
+            trait_names.append(trait[0])
+            self._content = gui_items
+            self._param_trait_names = trait_names
         self._root_name = top_branch[0]
         self._ami_parsing_errors = err_str
+        self._content = gui_items
         self._param_dict = param_dict
 
-    def make_gui_items(pname, param, first_call=False):
-        """Builds list of GUI items from AMI parameter dictionary."""
+    def open_gui(self):
+        """Present a customized GUI to the user, for parameter customization."""
+        self.edit_traits()
 
-        gui_items = []
-        new_traits = []
-        if isinstance(param, AMIParameter):
-            pusage = param.pusage
-            if pusage in ("In", "InOut"):
-                if param.ptype == "Boolean":
-                    new_traits.append((pname, Bool(param.pvalue)))
-                    gui_items.append(Item(pname, tooltip=param.pdescription))
-                else:
-                    pformat = param.pformat
-                    if pformat == "Range":
-                        new_traits.append((pname, Range(param.pmin, param.pmax, param.pvalue)))
-                        gui_items.append(Item(pname, tooltip=param.pdescription))
-                    elif pformat == "List":
-                        list_tips = param.plist_tip
-                        default = param.pdefault
-                        if list_tips:
-                            tmp_dict = {}
-                            tmp_dict.update(list(zip(list_tips, param.pvalue)))
-                            val = list(tmp_dict.keys())[0]
-                            if default:
-                                for tip in tmp_dict:
-                                    if tmp_dict[tip] == default:
-                                        val = tip
-                                        break
-                            new_traits.append((pname, Trait(val, tmp_dict)))
-                        else:
-                            val = param.pvalue[0]
-                            if default:
-                                val = default
-                            new_traits.append((pname, Enum([val] + param.pvalue)))
-                        gui_items.append(Item(pname, tooltip=param.pdescription))
-                    else:  # Value
-                        new_traits.append((pname, param.pvalue))
-                        gui_items.append(Item(pname, style="readonly", tooltip=param.pdescription))
-        else:  # subparameter branch
-            subparam_names = list(param.keys())
-            subparam_names.sort()
-            sub_items = []
-            group_desc = ""
-
-            # Build GUI items for this branch.
-            for subparam_name in subparam_names:
-                if subparam_name == "description":
-                    group_desc = param[subparam_name]
-                else:
-                    tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
-                    sub_items.extend(tmp_items)
-                    new_traits.extend(tmp_traits)
-
-            # Put all top-level ungrouped parameters in a single VGroup.
-            top_lvl_params = []
-            sub_params = []
-            for item in sub_items:
-                if isinstance(item, Item):
-                    top_lvl_params.append(item)
-                else:
-                    sub_params.append(item)
-            sub_items = [Group(top_lvl_params)] + sub_params
-
-            # Make the top-level group an HGroup; all others VGroups (default).
-            if first_call:
-                gui_items.append(
-                    Group(
-                        [Item(label=group_desc)] + sub_items, label=pname, show_border=True, orientation="horizontal"
-                    )
-                )
-            else:
-                gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
-
-        return gui_items, new_traits
+    def default_traits_view(self):
+        view = View(
+            resizable=False,
+            buttons=ModalButtons,
+            title="PyBERT AMI Parameter Configurator",
+            id="pybert.pybert_ami.param_config",
+        )
+        view.set_content(self._content)
+        return view
 
     def fetch_param_val(self, branch_names):
         """Returns the value of the parameter found by traversing 'branch_names'
@@ -183,7 +125,7 @@ class AMIParamConfigurator:
 
     @property
     def ami_param_defs(self):
-        """The entire AMI parameter definition dictionary. 
+        """The entire AMI parameter definition dictionary.
 
         Should NOT be passed to AMIModelInitializer constructor!
         """
@@ -191,7 +133,7 @@ class AMIParamConfigurator:
 
     @property
     def input_ami_params(self):
-        """The dictionary of AMI parameters of type In or InOut, along with their user selected values. 
+        """The dictionary of AMI parameters of type In or InOut, along with their user selected values.
 
         Should be passed to AMIModelInitializer constructor.
         """
@@ -421,3 +363,77 @@ def parse_ami_param_defs(param_str):
         err_str += "WARNING: Model specific parameters section not found!"
 
     return (err_str, param_dict)
+
+
+def make_gui_items(pname, param, first_call=False):
+    """Builds list of GUI items from AMI parameter dictionary."""
+
+    gui_items = []
+    new_traits = []
+    if isinstance(param, AMIParameter):
+        pusage = param.pusage
+        if pusage in ("In", "InOut"):
+            if param.ptype == "Boolean":
+                new_traits.append((pname, Bool(param.pvalue)))
+                gui_items.append(Item(pname, tooltip=param.pdescription))
+            else:
+                pformat = param.pformat
+                if pformat == "Range":
+                    new_traits.append((pname, Range(param.pmin, param.pmax, param.pvalue)))
+                    gui_items.append(Item(pname, tooltip=param.pdescription))
+                elif pformat == "List":
+                    list_tips = param.plist_tip
+                    default = param.pdefault
+                    if list_tips:
+                        tmp_dict = {}
+                        tmp_dict.update(list(zip(list_tips, param.pvalue)))
+                        val = list(tmp_dict.keys())[0]
+                        if default:
+                            for tip in tmp_dict:
+                                if tmp_dict[tip] == default:
+                                    val = tip
+                                    break
+                        new_traits.append((pname, Trait(val, tmp_dict)))
+                    else:
+                        val = param.pvalue[0]
+                        if default:
+                            val = default
+                        new_traits.append((pname, Enum([val] + param.pvalue)))
+                    gui_items.append(Item(pname, tooltip=param.pdescription))
+                else:  # Value
+                    new_traits.append((pname, param.pvalue))
+                    gui_items.append(Item(pname, style="readonly", tooltip=param.pdescription))
+    else:  # subparameter branch
+        subparam_names = list(param.keys())
+        subparam_names.sort()
+        sub_items = []
+        group_desc = ""
+
+        # Build GUI items for this branch.
+        for subparam_name in subparam_names:
+            if subparam_name == "description":
+                group_desc = param[subparam_name]
+            else:
+                tmp_items, tmp_traits = make_gui_items(subparam_name, param[subparam_name])
+                sub_items.extend(tmp_items)
+                new_traits.extend(tmp_traits)
+
+        # Put all top-level ungrouped parameters in a single VGroup.
+        top_lvl_params = []
+        sub_params = []
+        for item in sub_items:
+            if isinstance(item, Item):
+                top_lvl_params.append(item)
+            else:
+                sub_params.append(item)
+        sub_items = [Group(top_lvl_params)] + sub_params
+
+        # Make the top-level group an HGroup; all others VGroups (default).
+        if first_call:
+            gui_items.append(
+                Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True, orientation="horizontal")
+            )
+        else:
+            gui_items.append(Group([Item(label=group_desc)] + sub_items, label=pname, show_border=True))
+
+    return gui_items, new_traits

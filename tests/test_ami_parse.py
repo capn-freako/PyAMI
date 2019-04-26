@@ -67,7 +67,7 @@ class TestAMIParse():
         assert param_defs["example_tx"]["description"] == "Example Tx model from ibisami package."
 
     def test_AMIParamConfigurator_without_GUI(self, test_ami_config):
-        ami = ami_parse.AMIParamConfigurator(test_ami_config, gui=False)
+        ami = ami_parse.AMIParamConfigurator(test_ami_config)
         assert ami._root_name == "example_tx"
         assert ami._ami_parsing_errors == ""
         test_keys = ("tx_tap_units", "tx_tap_np1", "tx_tap_nm1", "tx_tap_nm2")
@@ -75,12 +75,12 @@ class TestAMIParse():
         assert ami._param_dict["Model_Specific"]["tx_tap_units"].pvalue == 27
         assert ami._param_dict["Reserved_Parameters"]["AMI_Version"].pvalue == "5.1"
 
-    def test_AMIParamConfigurator_no_model_specific_key(self, test_ami_config):
+    def test_no_model_specific_key(self, test_ami_config):
         edited = test_ami_config.replace("Model_Specific", "whoops")
         with pytest.raises(KeyError):
             ami_parse.AMIParamConfigurator(edited)
 
     def test_fetch_param_val(self, test_ami_config):
-        ami = ami_parse.AMIParamConfigurator(test_ami_config, gui=False)
+        ami = ami_parse.AMIParamConfigurator(test_ami_config)
         assert ami.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"])
         assert not ami.fetch_param_val(["Reserved_Parameters", "Bad Name"])
