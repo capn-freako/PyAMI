@@ -3,7 +3,7 @@
 PyIBIS-AMI is a Python package of tools useful in the development and testing of IBIS-AMI models.
 This package provides two command line applications.
 
-It can be installed with `pip install PyIBIS-AMI` or via `conda`.
+It can be installed with `pip install PyIBIS-AMI` or via `conda`.  Due to the traits package, Numpy and Cython must be installed before installing with pip.  `pip install Cython numpy`
 
 ## AMI Config
 
