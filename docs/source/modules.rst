@@ -2,7 +2,7 @@ Modules in *pyibisami* package
 ------------------------------
 
 ami_model - IBIS-AMI model encapsulation.
-****************************************
+*****************************************
 
 .. automodule:: pyibisami.ami_model
    :members:
