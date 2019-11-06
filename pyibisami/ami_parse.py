@@ -37,8 +37,8 @@ class AMIParamConfigurator(HasTraits):
         it encounters, in its 'ami_parsing_errors' property.
 
      2. When you want to let the user change the AMI parameter
-        configuration, call the instance created, above, as if it were
-        a function. The instance will then present a GUI to the user,
+        configuration, call the *open_gui* member function.
+        The instance will then present a GUI to the user,
         allowing him to modify the values of any In or InOut parameters.
         The resultant AMI parameter dictionary, suitable for passing
         into the 'ami_params' parameter of the *AMIModelInitializer*
