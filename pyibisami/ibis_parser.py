@@ -434,11 +434,20 @@ def parse_ibis_file(ibis_file_contents_str):
                 Dictionary containing keyword definitions (empty upon failure).
     """
     try:
-        res = ibis_file.parse(ibis_file_contents_str)
+        nodes = ibis_file.parse(ibis_file_contents_str)
     except ParseError as pe:
         err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index :])
         return err_str, {}
-    return "Success!", res
+
+    kw_dict = {}
+    models  = {}    
+    for (kw, val) in nodes:
+        if kw == 'model':
+            models.update(val)
+        else:
+            kw_dict.update({kw: val})
+    kw_dict.update({'models': models})
+    return "Success!", kw_dict
 
     # err_str, param_dict = proc_branch(res)
     # if err_str:
