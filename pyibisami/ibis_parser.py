@@ -12,8 +12,9 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
 import re
-from parsec     import regex, eof, many1, many, string, generate, sepBy1, one_of, skip, none_of, times, ParseError
-from traits.api import HasTraits
+from parsec       import regex, eof, many1, many, string, generate, sepBy1, one_of, skip, none_of, times, ParseError
+from traits.api   import HasTraits, Trait
+from traitsui.api import Item
 
 class IBISModel(HasTraits):
     """
@@ -59,6 +60,10 @@ class IBISModel(HasTraits):
         # Parse the IBIS file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
+        models = model_dict['models']
+        self.add_trait('models', Trait(list(models)[0], models))
+        self._content = [Item('models')]
+
         if False:
             gui_items, new_traits = make_gui_items(
                 "Models", model_dict, first_call=True
@@ -123,8 +128,8 @@ true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
 quoted_string = lexeme(regex(r'"[^"]*"'))
 fail = one_of("")
-skip_keyword = many(none_of("[")) >> ignore  # Skip over everything until the next keyword begins.
-skip_line = many(none_of("\n")) >> many1(string("\n")) >> ignore
+skip_keyword = (many(none_of("[")) >> ignore).result('(Skipped.)')  # Skip over everything until the next keyword begins.
+skip_line = (many(none_of("\n\r")) >> ignore).result('(Skipped.)')
 
 IBIS_num_suf = {
     'T': 'e12',
@@ -152,6 +157,9 @@ def number():
     else:
         res = float(s)
     return res
+
+# Note: This doesn't catch the error of providing exactly 2 numbers!
+typminmax = times(number, 1, 3)
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."
@@ -236,13 +244,12 @@ def node(valid_keywords, stop_keywords, valid_parameters):
             if nmL == "end":  # Because `ibis_file` expects this to be the last thing it sees,
                 return fail   # we can't consume it here.
             else:
-                #print(nm)  # TEMP DEBUG
                 res = yield valid_keywords[nmL]  # Parse the sub-keyword.
-                return (nmL, res)
         elif nmL in stop_keywords:
             return fail                          # Stop parsing.
         else:
-            return skip_keyword
+            res = yield (typminmax ^ skip_keyword)
+        return (nmL, res)
 
     @generate("lbl")
     def lbl():
@@ -252,8 +259,9 @@ def node(valid_keywords, stop_keywords, valid_parameters):
         if nmL in valid_parameters:
             res = yield valid_parameters[nmL]  # Parse the sub-parameter.
             return (nmL, res)
-        else:
-            return skip_line
+        else:  # Note: Doesn't handle "<param_name>\n" lines properly!
+            res = yield (many(lexeme(string('='))) >> (typminmax ^ skip_line))
+            return (nmL, res)
 
     @generate("IBIS node")
     def fn():
@@ -338,79 +346,6 @@ def ibis_file():
 
 # Utility functions
 
-def proc_branch(branch):
-    """
-    Process a branch in a AMI parameter definition tree.
-
-    That is, build a dictionary from a pair containing:
-        - a parameter name, and
-        - a list of either:
-            - parameter definition tags, or
-            - subparameters.
-
-    We distinguish between the two possible kinds of payloads, by
-    peaking at the names of the first two items in the list and noting
-    whether they are keys of 'AMIParameter._param_def_tag_procs'.
-    We have to do this twice, due to the dual use of the 'Description'
-    tag and the fact that we have no guarantee of any particular
-    ordering of subparameter branch items.
-
-    Args:
-        p (str, list): A pair, as described above.
-
-    Returns:
-        (str, dict): A pair containing:
-
-            err_str:
-                String containing any errors or warnings encountered,
-                while building the parameter dictionary.
-            param_dict:
-                Resultant parameter dictionary.
-
-    """
-    results = ("", {})  # Empty Results
-    if len(branch) != 2:
-        if not branch:
-            err_str = "ERROR: Empty branch provided to proc_branch()!\n"
-        else:
-            err_str = "ERROR: Malformed item: {}\n".format(branch[0])
-        results = (err_str, {})
-
-    param_name = branch[0]
-    param_tags = branch[1]
-
-    if not param_tags:
-        err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
-        results = (err_str, {})
-
-    if (
-        (len(param_tags) > 1)
-        and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
-        and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
-    ):
-        try:
-            results = ("", {param_name: AMIParameter(param_name, param_tags)})
-        except AMIParamError as err:
-            results = (str(err), {})
-    elif param_name == "Description":
-        results = ("", {"description": param_tags[0].strip('"')})
-    else:
-        err_str = ""
-        param_dict = {}
-        param_dict[param_name] = {}
-        for param_tag in param_tags:
-            temp_str, temp_dict = proc_branch(param_tag)
-            param_dict[param_name].update(temp_dict)
-            if temp_str:
-                err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
-                    param_name, temp_str
-                )
-                results = (err_str, param_dict)
-
-        results = (err_str, param_dict)
-    return results
-
-
 def parse_ibis_file(ibis_file_contents_str):
     """
     Parse the contents of an IBIS file.
@@ -448,57 +383,6 @@ def parse_ibis_file(ibis_file_contents_str):
             kw_dict.update({kw: val})
     kw_dict.update({'models': models})
     return "Success!", kw_dict
-
-    # err_str, param_dict = proc_branch(res)
-    # if err_str:
-    #     return (err_str, {"res": res, "dict": param_dict})
-
-    # reserved_found = False
-    # init_returns_impulse_found = False
-    # getwave_exists_found = False
-    # model_spec_found = False
-    # params = list(param_dict.items())[0][1]
-    # for label in list(params.keys()):
-    #     if label == "Reserved_Parameters":
-    #         reserved_found = True
-    #         tmp_params = params[label]
-    #         for param_name in list(tmp_params.keys()):
-    #             if param_name not in AMIParameter.RESERVED_PARAM_NAMES:
-    #                 err_str += "WARNING: Unrecognized reserved parameter name, '{}', found in parameter definition string!\n".format(
-    #                     param_name
-    #                 )
-    #                 continue
-    #             param = tmp_params[param_name]
-    #             if param.pname == "AMI_Version":
-    #                 if param.pusage != "Info" or param.ptype != "String":
-    #                     err_str += "WARNING: Malformed 'AMI_Version' parameter.\n"
-    #             elif param.pname == "Init_Returns_Impulse":
-    #                 init_returns_impulse_found = True
-    #             elif param.pname == "GetWave_Exists":
-    #                 getwave_exists_found = True
-    #     elif label == "Model_Specific":
-    #         model_spec_found = True
-    #     elif label == "description":
-    #         pass
-    #     else:
-    #         err_str += "WARNING: Unrecognized group with label, '{}', found in parameter definition string!\n".format(
-    #             label
-    #         )
-
-    # if not reserved_found:
-    #     err_str += "ERROR: Reserved parameters section not found! It is required."
-
-    # if not init_returns_impulse_found:
-    #     err_str += "ERROR: Reserved parameter, 'Init_Returns_Impulse', not found! It is required."
-
-    # if not getwave_exists_found:
-    #     err_str += "ERROR: Reserved parameter, 'GetWave_Exists', not found! It is required."
-
-    # if not model_spec_found:
-    #     err_str += "WARNING: Model specific parameters section not found!"
-
-    # return (err_str, param_dict)
-
 
 def make_gui_items(pname, param, first_call=False):
     """Builds list of GUI items from AMI parameter dictionary."""
