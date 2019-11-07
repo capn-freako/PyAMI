@@ -160,6 +160,7 @@ def number():
 
 # Note: This doesn't catch the error of providing exactly 2 numbers!
 typminmax = times(number, 1, 3)
+vi_line   = number + typminmax
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."
@@ -288,24 +289,14 @@ def model():
     res = yield many1True(node(Model_keywords, IBIS_keywords, Model_params))
     return {nm: dict(res)}
 
-@generate("[Pulldown]")
-def model_pulldown():
-    yield skip_keyword
-    return
-
-@generate("[Pullup]")
-def model_pullup():
-    yield skip_keyword
-    return
-    
 @generate("[Ramp]")
 def model_ramp():
     yield skip_keyword
     return
     
 Model_keywords = {
-    "pulldown": model_pulldown,
-    "pullup": model_pullup,
+    "pulldown": many1(vi_line),
+    "pullup": many1(vi_line),
     "ramp": model_ramp,
 }
 
