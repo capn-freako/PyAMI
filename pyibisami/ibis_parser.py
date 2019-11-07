@@ -117,7 +117,6 @@ def lexeme(p):
     """Lexer for words."""
     return p << ignore  # Skip all ignored characters after word.
 
-number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([TknGmpMuf][a-zA-Z]*)?"))
 name = lexeme(regex(r"[_a-zA-Z0-9]+"))
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true = lexeme(string("True")).result(True)
@@ -126,6 +125,33 @@ quoted_string = lexeme(regex(r'"[^"]*"'))
 fail = one_of("")
 skip_keyword = many(none_of("[")) >> ignore  # Skip over everything until the next keyword begins.
 skip_line = many(none_of("\n")) >> many1(string("\n")) >> ignore
+
+IBIS_num_suf = {
+    'T': 'e12',
+    'k': 'e3',
+    'n': 'e-9',
+    'G': 'e9',
+    'm': 'e-3',
+    'p': 'e-12',
+    'M': 'e6',
+    'u': 'e-6',
+    'f': 'e-15',
+}
+@generate("number")
+def number():
+    "Parse an IBIS numerical value."
+    s = yield lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?"))
+    m = re.search('[^\d]+$', s)
+    if m:
+        ix = m.start()
+        c = s[ix]
+        if c in IBIS_num_suf:
+            res = float(s[:ix] + IBIS_num_suf[c])
+        else:
+            raise ParseError("IBIS numerical suffix", s[ix:], ix)
+    else:
+        res = float(s)
+    return res
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."
