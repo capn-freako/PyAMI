@@ -14,8 +14,8 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import re
 from parsec       import regex, eof, many1, many, string, generate, sepBy1, \
                          one_of, skip, none_of, times, ParseError, count, separated
-from traits.api   import HasTraits, Trait, String
-from traitsui.api import Item, View, ModalButtons
+from traits.api   import HasTraits, Trait, String, Float, List
+from traitsui.api import Item, View, ModalButtons, Group
 
 class IBISModel(HasTraits):
     """
@@ -63,8 +63,27 @@ class IBISModel(HasTraits):
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         if 'models' in model_dict:
             models = model_dict['models']
-            self.add_trait('_model', Trait(list(models)[0], models))
-            self._content = [Item('_model')]
+            self.add_trait('_model',    Trait(list(models)[0], models))
+            self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
+            self.add_trait('file_name', String(model_dict['file_name']))
+            self.add_trait('file_rev',  String(model_dict['file_rev']))
+            self.add_trait('date',      String(model_dict['date']))
+            self._content = [
+                Group(
+                    Group(
+                        Item('file_name', label='File name', style='readonly'),
+                        Item('file_rev', label='rev', style='readonly'),
+                        orientation="horizontal",
+                    ),
+                    Group(
+                        Item('ibis_ver', label='IBIS ver', style='readonly'),
+                        Item('date', label='Date', style='readonly'),
+                        orientation="horizontal",
+                    ),
+                    Item('_model'),
+                    label='Header', show_border=True,
+                ),
+                ]
 
         self._ibis_parsing_errors = err_str
         self._model_dict = model_dict
@@ -109,7 +128,6 @@ class IBISModel(HasTraits):
 
         Returns the first model parsed, if the user hasn't made a selection yet.
         """
-        # return self._model_dict[self.selectedModelName]
         return self._model_
 
 class Model(HasTraits):
@@ -141,8 +159,29 @@ class Model(HasTraits):
         self._trange = maybe('temperature_range')
         self._vrange = maybe('voltage_range')
         self.add_trait('model_type', String(self._mtype))
-        self._content = [Item('model_type')]
-
+        self.add_trait('c_comp', List(self._ccomp))
+        self.add_trait('cref',   List(self._cref))
+        self.add_trait('vref',   List(self._vref))
+        self.add_trait('vmeas',  List(self._vmeas))
+        self.add_trait('rref',   List(self._rref))
+        self.add_trait('trange', String(self._trange))
+        self.add_trait('vrange', String(self._vrange))
+        self._content = [
+            Group(
+                Item('model_type', label='Model type', style='readonly'),
+                Item('c_comp', label='Ccomp', style='readonly'),
+                Group(
+                    Item('cref', label='Cref', style='readonly'),
+                    Item('vref', label='Vref', style='readonly'),
+                    Item('vmeas', label='Vmeas', style='readonly'),
+                    Item('rref', label='Rref', style='readonly'),
+                    orientation="horizontal",
+                ),
+                Item('trange', label='Temperature Range', style='readonly'),
+                Item('vrange', label='Voltage Range', style='readonly'),
+                label='Model', show_border=True,
+            ),
+            ]
 
         # Separate AMI executables by OS.
         def is64(x):
