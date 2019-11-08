@@ -132,12 +132,27 @@ class Model(HasTraits):
         def maybe(name):
             return subDict[name] if name in subDict else '(n/a)'
         self._mtype = maybe('model_type')
-        self._execs = maybe('algorithmic_model')
+
+        # Separate AMI executables into 32 and 64-bit categories.
+        def is64(x):
+            ((_, b), _) = x
+            return int(b) == 64
+
+        def showExec(x):
+            ((os, _), fs) = x
+            return os + ': ' + str(fs)
+
+        if 'algorithmic_model' in subDict:
+            execs = subDict['algorithmic_model']
+            exec32s = filter(lambda x: not is64(x), execs)
+            exec64s = filter(lambda x: is64(x), execs)
+            self._exec32s = list(map(showExec, exec32s))
+            self._exec64s = list(map(showExec, exec64s))
 
     def __str__(self):
         res = "Model Type:\t" + self._mtype + '\n'
-        res += "Algorithmic Model:\n\t" + str(self._execs) + '\n'
-        res += "\n" + str(self._subDict)
+        res += "Algorithmic Model:\n\t" + str(self._exec32s) + '\n\t' + str(self._exec64s)
+        # res += "\n" + str(self._subDict)
         return res
 
 # Parser Definitions
