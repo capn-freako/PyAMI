@@ -14,8 +14,8 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import re
 from parsec       import regex, eof, many1, many, string, generate, sepBy1, \
                          one_of, skip, none_of, times, ParseError, count, separated
-from traits.api   import HasTraits, Trait
-from traitsui.api import Item
+from traits.api   import HasTraits, Trait, String
+from traitsui.api import Item, View, ModalButtons
 
 class IBISModel(HasTraits):
     """
@@ -63,8 +63,8 @@ class IBISModel(HasTraits):
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         if 'models' in model_dict:
             models = model_dict['models']
-            self.add_trait('models', Trait(list(models)[0], models))
-            self._content = [Item('models')]
+            self.add_trait('_model', Trait(list(models)[0], models))
+            self._content = [Item('_model')]
 
         self._ibis_parsing_errors = err_str
         self._model_dict = model_dict
@@ -79,8 +79,8 @@ class IBISModel(HasTraits):
             res += "\n" + m + ":\n" + "===\n" + str(self._model_dict['models'][m])
         return res
 
-    def open_gui(self):
-        """Present a customized GUI to the user, for parameter customization."""
+    def __call__(self):
+        """Present a customized GUI to the user, for model selection, etc."""
         self.edit_traits()
 
     def default_traits_view(self):
@@ -109,7 +109,8 @@ class IBISModel(HasTraits):
 
         Returns the first model parsed, if the user hasn't made a selection yet.
         """
-        return self._model_dict[self.selectedModelName]
+        # return self._model_dict[self.selectedModelName]
+        return self._model_
 
 class Model(HasTraits):
     """Encapsulation of a particular I/O model from an IBIS model file.
@@ -139,6 +140,9 @@ class Model(HasTraits):
         self._rref   = maybe('rref')
         self._trange = maybe('temperature_range')
         self._vrange = maybe('voltage_range')
+        self.add_trait('model_type', String(self._mtype))
+        self._content = [Item('model_type')]
+
 
         # Separate AMI executables by OS.
         def is64(x):
@@ -190,6 +194,16 @@ class Model(HasTraits):
 
     def __call__(self):
         self.edit_traits()
+
+    def default_traits_view(self):
+        view = View(
+            resizable=False,
+            buttons=ModalButtons,
+            title="PyBERT IBIS Model Viewer",
+            id="pyibisami.ibis_parser.Model",
+        )
+        view.set_content(self._content)
+        return view
 
 # Parser Definitions
 
