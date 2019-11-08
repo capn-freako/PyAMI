@@ -12,7 +12,8 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
 import re
-from parsec       import regex, eof, many1, many, string, generate, sepBy1, one_of, skip, none_of, times, ParseError
+from parsec       import regex, eof, many1, many, string, generate, sepBy1, \
+                         one_of, skip, none_of, times, ParseError, count, separated
 from traits.api   import HasTraits, Trait
 from traitsui.api import Item
 
@@ -60,24 +61,23 @@ class IBISModel(HasTraits):
         # Parse the IBIS file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
-        models = model_dict['models']
-        self.add_trait('models', Trait(list(models)[0], models))
-        self._content = [Item('models')]
+        if 'models' in model_dict:
+            models = model_dict['models']
+            self.add_trait('models', Trait(list(models)[0], models))
+            self._content = [Item('models')]
 
-        if False:
-            gui_items, new_traits = make_gui_items(
-                "Models", model_dict, first_call=True
-            )
-            trait_names = []
-            for trait in new_traits:
-                self.add_trait(trait[0], trait[1])
-                trait_names.append(trait[0])
-                self._content = gui_items
-                self._param_trait_names = trait_names
-        # self._root_name = top_branch[0]
         self._ibis_parsing_errors = err_str
-        # self._content = gui_items
         self._model_dict = model_dict
+
+    def __str__(self):
+        res = ""
+        for k in ['ibis_ver', 'file_name', 'file_rev']:
+            res += k + ':\t' + str(self._model_dict[k]) + '\n'
+        res += 'date' + ':\t\t' + str(self._model_dict['date']) + '\n'
+        res += "Models:\n"
+        for m in list(self._model_dict['models']):
+            res += "\n" + m + ":\n" + "===\n" + str(self._model_dict['models'][m])
+        return res
 
     def open_gui(self):
         """Present a customized GUI to the user, for parameter customization."""
@@ -100,10 +100,7 @@ class IBISModel(HasTraits):
 
     @property
     def model_dict(self):
-        """The entire AMI parameter definition dictionary.
-
-        Should NOT be passed to AMIModelInitializer constructor!
-        """
+        "Dictionary of all model keywords."
         return self._model_dict
 
     @property
@@ -114,6 +111,37 @@ class IBISModel(HasTraits):
         """
         return self._model_dict[self.selectedModelName]
 
+class Model(HasTraits):
+    """Encapsulation of a particular I/O model from an IBIS model file.
+    """
+
+    def __init__(self, subDict):
+        """
+        Args:
+            subDict (dict): Dictionary of sub-keywords/params.
+        """
+
+        # Super-class initialization is ABSOLUTELY NECESSARY, in order
+        # to get all the Traits/UI machinery setup correctly.
+        super(Model, self).__init__()
+
+        # Stash the sub-keywords/parameters.
+        self._subDict = subDict
+
+        # Fetch available keyword/parameter definitions.
+        def maybe(name):
+            return subDict[name] if name in subDict else '(n/a)'
+        self._mtype = maybe('model_type')
+        self._execs = maybe('algorithmic_model')
+
+    def __str__(self):
+        res = "Model Type:\t" + self._mtype + '\n'
+        res += "Algorithmic Model:\n\t" + str(self._execs) + '\n'
+        res += "\n" + str(self._subDict)
+        return res
+
+# Parser Definitions
+
 whitespace = regex(r"\s+", re.MULTILINE)
 comment = regex(r"\|.*")
 ignore = many((whitespace | comment))
@@ -122,7 +150,7 @@ def lexeme(p):
     """Lexer for words."""
     return p << ignore  # Skip all ignored characters after word.
 
-name = lexeme(regex(r"[_a-zA-Z0-9]+"))
+name = lexeme(regex(r"[_a-zA-Z0-9/\.-]+"))
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
@@ -161,6 +189,17 @@ def number():
 # Note: This doesn't catch the error of providing exactly 2 numbers!
 typminmax = times(number, 1, 3)
 vi_line   = number + typminmax
+
+@generate("ratio")
+def ratio():
+    [num, den] = yield separated(number, string("/"), 2, maxt=2, end=False)
+    return num/den
+
+ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(ratio, 1, 3)
+ex_line = lexeme(string("Executable")) \
+          >> ((string("linux") | string("Windows")) << string("_") << many(none_of("_")) << string("_")) \
+          + lexeme(string("32") | string("64")) \
+          + count(name, 2)
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."
@@ -212,7 +251,7 @@ def keyword(kywrd=""):
         return res
     return fn
 
-def node(valid_keywords, stop_keywords, valid_parameters):
+def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
     """Build a node-specific parser.
 
     Args:
@@ -241,6 +280,8 @@ def node(valid_keywords, stop_keywords, valid_parameters):
         "Parse keyword syntax."
         nm = yield keyword()
         nmL = nm.lower()
+        if debug:
+            print(nmL)
         if nmL in valid_keywords:
             if nmL == "end":  # Because `ibis_file` expects this to be the last thing it sees,
                 return fail   # we can't consume it here.
@@ -286,24 +327,25 @@ def end():
 def model():
     "Parse [Model]."
     nm = yield name
-    res = yield many1True(node(Model_keywords, IBIS_keywords, Model_params))
-    return {nm: dict(res)}
+    res = yield many1(node(Model_keywords, IBIS_keywords, Model_params))
+    return {nm: Model(dict(res))}
 
 @generate("[Ramp]")
-def model_ramp():
-    yield skip_keyword
-    return
-    
+def ramp():
+    "Parse [Ramp]."
+    lines = yield count(ramp_line, 2)
+    return dict(lines)
+
 Model_keywords = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
-    "ramp": model_ramp,
+    "ramp": ramp,
+    "algorithmic_model": many1(ex_line) << keyword('end_algorithmic_model')
 }
 
 Model_params = {
     "model_type": name,
     "c_comp": times(number, 1, 3),
-    #"c_comp": many1(number),
 }
 
 # Note: The following dictionary MUST have a complete set of keys,
@@ -311,11 +353,11 @@ Model_params = {
 IBIS_keywords = {
     "model": model,
     "end": end,
-    "ibis_ver": skip_keyword,
+    "ibis_ver": number,
     "comment_char": skip_keyword,
-    "file_name": skip_keyword,
-    "file_rev": skip_keyword,
-    "date": skip_keyword,
+    "file_name": name,
+    "file_rev": name,
+    "date": name,
     "source": skip_keyword,
     "notes": skip_keyword,
     "disclaimer": skip_keyword,
