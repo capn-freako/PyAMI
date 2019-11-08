@@ -131,29 +131,65 @@ class Model(HasTraits):
         # Fetch available keyword/parameter definitions.
         def maybe(name):
             return subDict[name] if name in subDict else '(n/a)'
-        self._mtype = maybe('model_type')
+        self._mtype  = maybe('model_type')
+        self._ccomp  = maybe('c_comp')
+        self._cref   = maybe('cref')
+        self._vref   = maybe('vref')
+        self._vmeas  = maybe('vmeas')
+        self._rref   = maybe('rref')
+        self._trange = maybe('temperature_range')
+        self._vrange = maybe('voltage_range')
 
-        # Separate AMI executables into 32 and 64-bit categories.
+        # Separate AMI executables by OS.
         def is64(x):
             ((_, b), _) = x
             return int(b) == 64
 
+        def isWin(x):
+            ((os, _), _) = x
+            return os == 'Windows'
+
         def showExec(x):
-            ((os, _), fs) = x
-            return os + ': ' + str(fs)
+            ((os, b), fs) = x
+            return os + str(b) + ': ' + str(fs)
+
+        def partition(p, xs):
+            ts, fs = [], []
+            for x in xs:
+                ts.append(x) if p(x) else fs.append(x)
+            return ts, fs
+
+        def getFiles(x):
+            ((_, _), fs) = x
+            return fs            
 
         if 'algorithmic_model' in subDict:
             execs = subDict['algorithmic_model']
-            exec32s = filter(lambda x: not is64(x), execs)
-            exec64s = filter(lambda x: is64(x), execs)
-            self._exec32s = list(map(showExec, exec32s))
-            self._exec64s = list(map(showExec, exec64s))
+            exec64s, exec32s = partition(is64, execs)
+            self._exec32Wins, self._exec32Lins = list(map(lambda x: list(map(getFiles, x)), partition(isWin, exec32s)))
+            self._exec64Wins, self._exec64Lins = list(map(lambda x: list(map(getFiles, x)), partition(isWin, exec64s)))
 
     def __str__(self):
         res = "Model Type:\t" + self._mtype + '\n'
-        res += "Algorithmic Model:\n\t" + str(self._exec32s) + '\n\t' + str(self._exec64s)
+        res += "C_comp:    \t" + str(self._ccomp) + '\n'
+        res += "Cref:      \t" + str(self._cref)  + '\n'
+        res += "Vref:      \t" + str(self._vref)  + '\n'
+        res += "Vmeas:     \t" + str(self._vmeas) + '\n'
+        res += "Rref:      \t" + str(self._rref)  + '\n'
+        res += "Temperature Range:\t" + str(self._trange) + '\n'
+        res += "Voltage Range:    \t" + str(self._vrange) + '\n'
+        res += "Algorithmic Model:\n" \
+               + "\t32-bit:\n" \
+               + "\t\tLinux: "   + str(self._exec32Lins) + '\n' \
+               + "\t\tWindows: " + str(self._exec32Wins) + '\n' \
+               + "\t64-bit:\n" \
+               + "\t\tLinux: "   + str(self._exec64Lins) + '\n' \
+               + "\t\tWindows: " + str(self._exec64Wins) + '\n' \
         # res += "\n" + str(self._subDict)
         return res
+
+    def __call__(self):
+        self.edit_traits()
 
 # Parser Definitions
 
