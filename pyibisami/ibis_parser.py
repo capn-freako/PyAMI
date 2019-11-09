@@ -15,7 +15,7 @@ import re
 from parsec       import regex, eof, many1, many, string, generate, sepBy1, \
                          one_of, skip, none_of, times, ParseError, count, separated
 from traits.api   import HasTraits, Trait, String, Float, List
-from traitsui.api import Item, View, ModalButtons, Group
+from traitsui.api import Item, View, ModalButtons, Group, spring
 
 class IBISModel(HasTraits):
     """
@@ -72,17 +72,19 @@ class IBISModel(HasTraits):
                 Group(
                     Group(
                         Item('file_name', label='File name', style='readonly'),
+                        spring,
                         Item('file_rev', label='rev', style='readonly'),
                         orientation="horizontal",
                     ),
                     Group(
                         Item('ibis_ver', label='IBIS ver', style='readonly'),
+                        spring,
                         Item('date', label='Date', style='readonly'),
                         orientation="horizontal",
                     ),
-                    Item('_model'),
-                    label='Header', show_border=True,
+                    label='Info', show_border=True,
                 ),
+                Item('_model'),
                 ]
 
         self._ibis_parsing_errors = err_str
@@ -159,17 +161,19 @@ class Model(HasTraits):
         self._trange = maybe('temperature_range')
         self._vrange = maybe('voltage_range')
         self.add_trait('model_type', String(self._mtype))
-        self.add_trait('c_comp', List(self._ccomp))
-        self.add_trait('cref',   List(self._cref))
-        self.add_trait('vref',   List(self._vref))
-        self.add_trait('vmeas',  List(self._vmeas))
-        self.add_trait('rref',   List(self._rref))
+        self.add_trait('c_comp', String(self._ccomp))
+        self.add_trait('cref',   String(self._cref))
+        self.add_trait('vref',   String(self._vref))
+        self.add_trait('vmeas',  String(self._vmeas))
+        self.add_trait('rref',   String(self._rref))
         self.add_trait('trange', String(self._trange))
         self.add_trait('vrange', String(self._vrange))
         self._content = [
             Group(
                 Item('model_type', label='Model type', style='readonly'),
                 Item('c_comp', label='Ccomp', style='readonly'),
+                Item('trange', label='Temperature Range', style='readonly'),
+                Item('vrange', label='Voltage Range', style='readonly'),
                 Group(
                     Item('cref', label='Cref', style='readonly'),
                     Item('vref', label='Vref', style='readonly'),
@@ -177,8 +181,6 @@ class Model(HasTraits):
                     Item('rref', label='Rref', style='readonly'),
                     orientation="horizontal",
                 ),
-                Item('trange', label='Temperature Range', style='readonly'),
-                Item('vrange', label='Voltage Range', style='readonly'),
                 label='Model', show_border=True,
             ),
             ]
