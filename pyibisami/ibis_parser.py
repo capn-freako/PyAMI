@@ -318,6 +318,21 @@ class Model(HasTraits):
         view.set_content(self._content)
         return view
 
+    @property
+    def zout(self):
+        "The driver impedance."
+        return self._zout
+
+    @property
+    def slew(self):
+        "The driver impedance."
+        return self._slew
+        
+    @property
+    def ccomp(self):
+        "The driver impedance."
+        return self._ccomp
+        
 # Parser Definitions
 
 whitespace = regex(r"\s+", re.MULTILINE)
