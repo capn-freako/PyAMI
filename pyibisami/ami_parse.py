@@ -88,6 +88,9 @@ class AMIParamConfigurator(HasTraits):
         self._content = gui_items
         self._param_dict = param_dict
 
+    def __call__(self):
+        self.open_gui()
+        
     def open_gui(self):
         """Present a customized GUI to the user, for parameter customization."""
         self.edit_traits()
