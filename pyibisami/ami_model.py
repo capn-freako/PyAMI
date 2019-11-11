@@ -241,8 +241,11 @@ class AMIModel:
         """ Load the dll and bind the 3 AMI functions."""
 
         self._ami_mem_handle = None
-        if isinstance(filename, str):
-            filename = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore")
+        # if(type(filename) is unicode):
+        #     filename = unicodedata.normalize('NFKD', filename).encode('ascii','ignore')
+        # if isinstance(filename, str):
+        #     filename = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore")
+        print(filename)
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
         try:
