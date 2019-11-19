@@ -165,8 +165,7 @@ def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
 
     Notes:
         1: Any keywords encountered that are _not_ found (via `in`) in
-            either `valid_keywords` or `stop_keywords` are scanned for Typ/Min/Max,
-            then ignored.
+            either `valid_keywords` or `stop_keywords` are ignored.
     """
     @generate("kywrd")
     def kywrd():
@@ -183,7 +182,7 @@ def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
         elif nmL in stop_keywords:
             return fail                          # Stop parsing.
         else:
-            res = yield (typminmax | skip_keyword)
+            res = yield skip_keyword
         if debug:
             print("  ", nmL + ":", res)
         return (nmL, res)
@@ -210,7 +209,11 @@ Model_keywords = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
-    "algorithmic_model": many1(ex_line) << keyword('end_algorithmic_model')
+    "algorithmic_model": many1(ex_line) << keyword('end_algorithmic_model'),
+    "voltage_range": typminmax,
+    "temperature_range": typminmax,
+    "ground_clamp": many1(vi_line),
+    "power_clamp": many1(vi_line),
 }
 
 Model_params = {
@@ -222,7 +225,7 @@ Model_params = {
 def model():
     "Parse [Model]."
     nm = yield name
-    res = yield many1(node(Model_keywords, IBIS_keywords, Model_params))
+    res = yield many1(node(Model_keywords, IBIS_keywords, Model_params, debug=DBG))
     return {nm: Model(dict(res))}
 
 # [Component]
@@ -297,48 +300,7 @@ IBIS_keywords = [
     "interconnect_model_set",
 ]
 
-# Default keyword parser
-# Note: Abandoning this attempt, for now.
-# def kywrd_dflt(kywrd_name, cstm_keywords={}, stop_keywords=IBIS_keywords, cstm_parameters={}, kywrd_class=None):
-#     """Default keyword parser.
-
-#     **Note:** Presumes the keyword has an associated label, as in:
-#     `[<kywrd>] <label>`
-
-#     Args:
-#         kywrd_name (str): Name of keyword being parsed.
-
-#     Keyword Args:
-#         cstm_keywords (dict): Maps from custom sub-keywords to their parsers.
-#             Note that "typical" keywords (i.e. - of the form: `[<name>] <typ> (<min> <max>)?`),
-#             or unimportant keywords that can be skipped, don't require custom parsers;
-#             they are handled correctly by default.
-#         stop_keywords (iterable): Contains a list of those keywords, which
-#             should cause parsing of this keyword to stop and pop us back up the
-#             parsing stack.
-#         cstm_parameters (dict): Maps from custom sub-parameters to their parsers.
-#             Note that "typical" parameters (i.e. - of the form: `<name> <typ> (<min> <max>)?`),
-#             or unimportant parameters that can be skipped, don't require custom parsers;
-#             they are handled correctly by default.
-#         kywrd_class (class): Class to instantiate for this keyword. The class
-#             initializer must take a single argument: the dictionary of sub-
-#             keywords and sub-parameters for this keyword.
-
-#     Returns:
-#         Parser: A custom parser for the keyword.
-#     """
-#     @generate("[" + kywrd_name + "]")
-#     def fn():
-#         nm = yield many1(param) | typminmax | to_next_keyword
-#         res = yield many1(node(cstm_keywords, stop_keywords, cstm_parameters, debug=DBG))
-#         if kywrd_class:
-#             return {nm: kywrd_class(dict(res))}
-#         else:
-#             return {nm: dict(res)}
-#     return fn
-
 IBIS_kywrd_parsers = dict(zip(IBIS_keywords, [skip_keyword]*len(IBIS_keywords)))
-# IBIS_kywrd_parsers = dict(zip(IBIS_keywords, [kywrd_dflt("Default")]*len(IBIS_keywords)))
 IBIS_kywrd_parsers.update({
     "model": model,
     "end": end,

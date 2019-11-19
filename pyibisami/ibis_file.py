@@ -15,7 +15,7 @@ avoid circular imports.
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
-from traits.api   import HasTraits, Trait, String, Float, List
+from traits.api   import HasTraits, Trait, String, Float, List, Property, cached_property, Dict
 from traitsui.api import Item, View, ModalButtons, Group, spring
 from chaco.api    import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
@@ -52,6 +52,19 @@ class IBISModel(HasTraits):
     via the *model_dict* property.
     """
 
+    pins   = Property(List, depends_on=["comp"])
+    models = Property(Dict, depends_on=["comp", "pin"])
+
+    @cached_property
+    def _get_pins(self):
+        return self.comp_.pins
+
+    @cached_property
+    def _get_models(self):
+        comp = self.comp_
+        (model, rlcs) = comp.pin
+        return {model: self._models[model]}
+
     def __init__(self, ibis_file_contents_str):
         """
         Args:
@@ -66,31 +79,44 @@ class IBISModel(HasTraits):
         # Parse the IBIS file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
-        if 'models' in model_dict and len(model_dict['models']) > 0:
-            models = model_dict['models']
-            self.add_trait('_model',    Trait(list(models)[0], models))
-            self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
-            self.add_trait('file_name', String(model_dict['file_name']))
-            self.add_trait('file_rev',  String(model_dict['file_rev']))
-            self.add_trait('date',      String(model_dict['date']))
-            self._content = [
+        if 'components' not in model_dict or not model_dict['components']:
+            print(err_str)
+            print(model_dict)
+            raise ValueError("This IBIS model has no components!")
+        if 'models' not in model_dict or not model_dict['models']:
+            raise ValueError("This IBIS model has no models!")
+        components = model_dict['components']
+        models     = model_dict['models']
+        self.add_trait('comp',      Trait(list(components)[0], components))
+        self.add_trait('pin',       Trait(list(self.pins)[0], self.pins))
+        self.add_trait('mod',       Trait(list(models)[0], models))
+        self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
+        self.add_trait('file_name', String(model_dict['file_name']))
+        self.add_trait('file_rev',  String(model_dict['file_rev']))
+        self.add_trait('date',      String(model_dict['date']))
+        self._content = [
+            Group(
                 Group(
-                    Group(
-                        Item('file_name', label='File name', style='readonly'),
-                        spring,
-                        Item('file_rev', label='rev', style='readonly'),
-                        orientation="horizontal",
-                    ),
-                    Group(
-                        Item('ibis_ver', label='IBIS ver', style='readonly'),
-                        spring,
-                        Item('date', label='Date', style='readonly'),
-                        orientation="horizontal",
-                    ),
-                    label='Info', show_border=True,
+                    Item('file_name', label='File name', style='readonly'),
+                    spring,
+                    Item('file_rev', label='rev', style='readonly'),
+                    orientation="horizontal",
                 ),
-                Item('_model'),
-                ]
+                Group(
+                    Item('ibis_ver', label='IBIS ver', style='readonly'),
+                    spring,
+                    Item('date', label='Date', style='readonly'),
+                    orientation="horizontal",
+                ),
+                label='Info', show_border=True,
+            ),
+            Group(
+                Item('comp', label='Component'),
+                Item('pin',  label='Pin'),
+                Item('mod',  label='Model'),
+                orientation="horizontal",
+            ),
+            ]
 
         self._ibis_parsing_errors = err_str
         self._model_dict = model_dict
@@ -144,4 +170,4 @@ class IBISModel(HasTraits):
 
         Returns the first model parsed, if the user hasn't made a selection yet.
         """
-        return self._model_
+        return self.mod_

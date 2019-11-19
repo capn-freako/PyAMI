@@ -38,10 +38,10 @@ class Component(HasTraits):
         # Fetch available keyword/parameter definitions.
         def maybe(name):
             return subDict[name] if name in subDict else None
-        self._mfr  = maybe('manufacturer')
-        self._pkg  = maybe('package')
-        self._pin  = maybe('pin')
-        self._diff = maybe('diff_pin')
+        self._mfr   = maybe('manufacturer')
+        self._pkg   = maybe('package')
+        self._pins  = maybe('pin')
+        self._diffs = maybe('diff_pin')
 
         # Check for the required keywords.
         if not self._mfr:
@@ -49,18 +49,18 @@ class Component(HasTraits):
         if not self._pkg:
             print(self._mfr)
             raise LookupError("Missing [Package]!")
-        if not self._pin:
+        if not self._pins:
             raise LookupError("Missing [Pin]!")
         
         # Set up the GUI.
         self.add_trait('manufacturer', String(self._mfr))
         self.add_trait('package',      String(self._pkg))
-        self.add_trait('pin',          List(self._pin))
+        self.add_trait('pin',          Trait(list(self._pins)[0], self._pins))
         self._content = [
             Group(
                 Item('manufacturer', label='Manufacturer', style='readonly'),
                 Item('package',      label='Package',      style='readonly'),
-                Item('pin',          label='Pin'),
+                Item('_pin',         label='Pin'),
                 label='Component', show_border=True,
             ),
         ]
@@ -69,8 +69,8 @@ class Component(HasTraits):
         res  = "Manufacturer:\t" + self._mfr       + '\n'
         res += "Package:     \t" + str(self._pkg)  + '\n'
         res += "Pins:\n"
-        for pname in self._pin:
-            res += "    " + pname + ":\t" + str(self._pin[pname]) + '\n'
+        for pname in self._pins:
+            res += "    " + pname + ":\t" + str(self._pins[pname]) + '\n'
         return res
 
     def __call__(self):
@@ -85,6 +85,19 @@ class Component(HasTraits):
         )
         view.set_content(self._content)
         return view
+
+    @property
+    def pin(self):
+        """The pin selected most recently by the user.
+
+        Returns the first pin in the list, if the user hasn't made a selection yet.
+        """
+        return self.pin_
+
+    @property
+    def pins(self):
+        "The list of component pins."
+        return self._pins
 
 class Model(HasTraits):
     """Encapsulation of a particular I/O model from an IBIS model file.
@@ -259,7 +272,6 @@ class Model(HasTraits):
                + "\t64-bit:\n" \
                + "\t\tLinux: "   + str(self._exec64Lins) + '\n' \
                + "\t\tWindows: " + str(self._exec64Wins) + '\n' \
-        # res += "\n" + str(self._subDict)
         return res
 
     def __call__(self):
