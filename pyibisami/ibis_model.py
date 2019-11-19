@@ -55,7 +55,7 @@ class Component(HasTraits):
         # Set up the GUI.
         self.add_trait('manufacturer', String(self._mfr))
         self.add_trait('package',      String(self._pkg))
-        self.add_trait('pin',          Trait(list(self._pins)[0], self._pins))
+        self.add_trait('_pin',         Trait(list(self._pins)[0], self._pins))
         self._content = [
             Group(
                 Item('manufacturer', label='Manufacturer', style='readonly'),
@@ -92,7 +92,7 @@ class Component(HasTraits):
 
         Returns the first pin in the list, if the user hasn't made a selection yet.
         """
-        return self.pin_
+        return self._pin_
 
     @property
     def pins(self):
@@ -271,7 +271,7 @@ class Model(HasTraits):
                + "\t\tWindows: " + str(self._exec32Wins) + '\n' \
                + "\t64-bit:\n" \
                + "\t\tLinux: "   + str(self._exec64Lins) + '\n' \
-               + "\t\tWindows: " + str(self._exec64Wins) + '\n' \
+               + "\t\tWindows: " + str(self._exec64Wins) + '\n'
         return res
 
     def __call__(self):

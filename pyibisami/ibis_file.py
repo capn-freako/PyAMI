@@ -27,7 +27,8 @@ class IBISModel(HasTraits):
     HasTraits subclass for wrapping and interacting with an IBIS model.
 
     This class can be configured to present a customized GUI to the user
-    for interacting with a particular IBIS model (i.e. - selecting models, etc.).
+    for interacting with a particular IBIS model (i.e. - selecting components,
+    pins, and models).
 
     The intended use model is as follows:
 
@@ -35,21 +36,22 @@ class IBISModel(HasTraits):
         When instantiating, provide the unprocessed contents of the IBIS
         file, as a single string. This class will take care of getting
         that string parsed properly, and report any errors or warnings
-        it encounters, in its 'ibis_parsing_errors' property.
+        it encounters, in its `ibis_parsing_errors` property.
 
-     2. When you want to let the user select a particular model,
-        call the *open_gui* member function.
+     2. When you want to let the user select a particular component/pin/model,
+        call the newly created instance, as if it were a function, passing
+        no arguments.
         The instance will then present a GUI to the user,
-        allowing him to select a particular model, which may then
-        be retrieved, via the *model* property.
+        allowing him to select a particular component/pin/model, which may then
+        be retrieved, via the `model` property.
         The latest user selections will be remembered,
         as long as the instance remains in scope.
 
     Any errors or warnings encountered while parsing are available, in
-    the *ibis_parsing_errors* property.
+    the `ibis_parsing_errors` property.
 
     The complete dictionary containing all parsed models may be retrieved,
-    via the *model_dict* property.
+    via the `model_dict` property.
     """
 
     pins   = Property(List, depends_on=["comp"])
@@ -120,6 +122,7 @@ class IBISModel(HasTraits):
 
         self._ibis_parsing_errors = err_str
         self._model_dict = model_dict
+        self._models = models
 
     def __str__(self):
         res = ""
@@ -171,3 +174,11 @@ class IBISModel(HasTraits):
         Returns the first model parsed, if the user hasn't made a selection yet.
         """
         return self.mod_
+
+    def _comp_changed(self, new_value):
+        self.remove_trait('pin')
+        self.add_trait('pin', Trait(list(self.pins)[0], self.pins))
+
+    def _pin_changed(self, new_value):
+        self.remove_trait('mod')
+        self.add_trait('mod', Trait(list(self.models)[0], self.models))
