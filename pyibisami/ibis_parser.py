@@ -18,7 +18,7 @@ from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
 
 from pyibisami.ibis_model import Component, Model
 
-DBG = False
+DBG = True
 
 # Parser Definitions
 
@@ -36,15 +36,16 @@ def rest_line():
     chars = yield (many(none_of("\n\r")) << ignore)  # So that we still function as a lexeme.
     return "".join(chars)
 
-name_only = regex(r"[_a-zA-Z0-9/\.()-]+")
+skip_line = lexeme(rest_line).result('(Skipped.)')
+name_only = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name      = lexeme(name_only)
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
 quoted_string = lexeme(regex(r'"[^"]*"'))
 fail = one_of("")
-skip_keyword = (many(none_of("[")) >> ignore).result('(Skipped.)')  # Skip over everything until the next keyword begins.
-skip_line = lexeme(rest_line).result('(Skipped.)')
+# skip_keyword = (many(none_of("[")) >> ignore).result('(Skipped.)')  # Skip over everything until the next keyword begins.
+skip_keyword = (skip_line >> many(none_of("[") >> skip_line)).result('(Skipped.)')  # Skip over everything until the next keyword begins.
 
 IBIS_num_suf = {
     'T': 'e12',
@@ -60,7 +61,7 @@ IBIS_num_suf = {
 @generate("number")
 def number():
     "Parse an IBIS numerical value."
-    s = yield lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?"))
+    s = yield lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()))
     m = re.search(r'[^\d]+$', s)
     if m:
         ix = m.start()
@@ -261,7 +262,7 @@ def pins():
     return dict(prs)
 
 Component_keywords = {
-    "manufacturer": name,
+    "manufacturer": rest_line,
     "package": package,
     "pin": pins,
     "diff_pin": skip_keyword,
@@ -307,7 +308,7 @@ IBIS_kywrd_parsers.update({
     "ibis_ver": number,
     "file_name": name,
     "file_rev": name,
-    "date": name,
+    "date": rest_line,
     "component": comp,
     })
 
@@ -345,7 +346,7 @@ def parse_ibis_file(ibis_file_contents_str):
         if DBG:
             print(nodes)
     except ParseError as pe:
-        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index :])
+        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index])
         return err_str, {}
 
     kw_dict = {}

@@ -222,6 +222,9 @@ class Model(HasTraits):
             exec64s, exec32s = partition(is64, execs)
             self._exec32Wins, self._exec32Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec32s)))
             self._exec64Wins, self._exec64Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec64s)))
+        else:
+            self._exec32Wins, self._exec32Lins = [], []
+            self._exec64Wins, self._exec64Lins = [], []
 
         # Set up the GUI.
         self.add_trait('model_type', String(self._mtype))
@@ -265,13 +268,18 @@ class Model(HasTraits):
         res += "Rref:      \t" + str(self._rref)  + '\n'
         res += "Temperature Range:\t" + str(self._trange) + '\n'
         res += "Voltage Range:    \t" + str(self._vrange) + '\n'
-        res += "Algorithmic Model:\n" \
-               + "\t32-bit:\n" \
-               + "\t\tLinux: "   + str(self._exec32Lins) + '\n' \
-               + "\t\tWindows: " + str(self._exec32Wins) + '\n' \
-               + "\t64-bit:\n" \
-               + "\t\tLinux: "   + str(self._exec64Lins) + '\n' \
-               + "\t\tWindows: " + str(self._exec64Wins) + '\n'
+        if 'algorithmic_model' in self._subDict:
+            res += "Algorithmic Model:\n" \
+                   + "\t32-bit:\n"
+            if self._exec32Lins:
+                res += "\t\tLinux: "   + str(self._exec32Lins) + '\n'
+            if self._exec32Wins:
+                res += "\t\tWindows: " + str(self._exec32Wins) + '\n'
+            res += "\t64-bit:\n"
+            if self._exec64Lins:
+                res += "\t\tLinux: "   + str(self._exec64Lins) + '\n'
+            if self._exec64Wins:
+                res += "\t\tWindows: " + str(self._exec64Wins) + '\n'
         return res
 
     def __call__(self):

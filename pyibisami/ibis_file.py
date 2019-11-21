@@ -16,7 +16,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
 from traits.api   import HasTraits, Trait, String, Float, List, Property, cached_property, Dict
-from traitsui.api import Item, View, ModalButtons, Group, spring
+from traitsui.api import Item, View, ModalButtons, Group, spring, VGroup, HGroup
 from chaco.api    import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
 
@@ -55,17 +55,7 @@ class IBISModel(HasTraits):
     """
 
     pins   = Property(List, depends_on=["comp"])
-    models = Property(Dict, depends_on=["comp", "pin"])
-
-    @cached_property
-    def _get_pins(self):
-        return self.comp_.pins
-
-    @cached_property
-    def _get_models(self):
-        comp = self.comp_
-        (model, rlcs) = comp.pin
-        return {model: self._models[model]}
+    models = Property(Dict, depends_on=["pin"])
 
     def __init__(self, ibis_file_contents_str):
         """
@@ -90,35 +80,12 @@ class IBISModel(HasTraits):
         components = model_dict['components']
         models     = model_dict['models']
         self.add_trait('comp',      Trait(list(components)[0], components))
-        self.add_trait('pin',       Trait(list(self.pins)[0], self.pins))
+        self.add_trait('pin',       Trait(list(self.pins)[0],   self.pins))
         self.add_trait('mod',       Trait(list(models)[0], models))
         self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
         self.add_trait('file_name', String(model_dict['file_name']))
         self.add_trait('file_rev',  String(model_dict['file_rev']))
         self.add_trait('date',      String(model_dict['date']))
-        self._content = [
-            Group(
-                Group(
-                    Item('file_name', label='File name', style='readonly'),
-                    spring,
-                    Item('file_rev', label='rev', style='readonly'),
-                    orientation="horizontal",
-                ),
-                Group(
-                    Item('ibis_ver', label='IBIS ver', style='readonly'),
-                    spring,
-                    Item('date', label='Date', style='readonly'),
-                    orientation="horizontal",
-                ),
-                label='Info', show_border=True,
-            ),
-            Group(
-                Item('comp', label='Component'),
-                Item('pin',  label='Pin'),
-                Item('mod',  label='Model'),
-                orientation="horizontal",
-            ),
-            ]
 
         self._ibis_parsing_errors = err_str
         self._model_dict = model_dict
@@ -149,13 +116,40 @@ class IBISModel(HasTraits):
 
     def default_traits_view(self):
         view = View(
+            VGroup(
+                HGroup(
+                    Item('file_name', label='File name', style='readonly'),
+                    spring,
+                    Item('file_rev', label='rev', style='readonly'),
+                ),
+                HGroup(
+                    Item('ibis_ver', label='IBIS ver', style='readonly'),
+                    spring,
+                    Item('date', label='Date', style='readonly'),
+                ),
+                HGroup(
+                    Item('comp', label='Component'),
+                    Item('pin',  label='Pin'),
+                    Item('mod',  label='Model'),
+                ),
+            ),
             resizable=False,
             buttons=ModalButtons,
             title="PyBERT IBIS Model Selector",
             id="pybert.pybert_ami.model_selector",
         )
-        view.set_content(self._content)
         return view
+
+    @cached_property
+    def _get_pins(self):
+        return self.comp_.pins
+
+    @cached_property
+    def _get_models(self):
+        # comp = self.comp_
+        # (model, rlcs) = comp.pin
+        (model, rlcs) = self.pin_
+        return {model: self._models[model]}
 
     @property
     def ibis_parsing_errors(self):
