@@ -283,7 +283,7 @@ class Model(HasTraits):
         return res
 
     def __call__(self):
-        self.edit_traits()
+        self.edit_traits(kind='livemodal')
 
     def default_traits_view(self):
         view = View(
