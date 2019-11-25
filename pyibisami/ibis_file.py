@@ -18,13 +18,14 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import platform
 
 from datetime     import datetime
-from traits.api   import HasTraits, Trait, String, Float, List, Property, cached_property, Dict
+from traits.api   import HasTraits, Trait, String, Float, List, Property, cached_property, Dict, Any, Enum
 from traitsui.api import Item, View, ModalButtons, Group, spring, VGroup, HGroup
 from chaco.api    import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
 from traitsui.message import message
 
 from pyibisami.ibis_parser import parse_ibis_file
+from pyibisami.ibis_model  import Model
 
 class IBISModel(HasTraits):
     """
@@ -60,8 +61,12 @@ class IBISModel(HasTraits):
 
     debug = False
 
-    pins   = Property(List, depends_on=["comp"])
-    models = Property(Dict, depends_on=["pin"])
+    pin_     = Property(Any,  depends_on=["pin"])
+    pin_rlcs = Property(Dict, depends_on=["pin"])
+    model    = Property(Any,  depends_on=["mod"])
+    comps  = List  # Always holds the list of valid component selections.
+    pins   = List  # Always holds the list of valid pin selections.
+    models = List  # Always holds the list of valid model selections.
 
     def __init__(self, ibis_file_contents_str):
         """
@@ -76,20 +81,26 @@ class IBISModel(HasTraits):
 
         self._log = "Initializing..."
 
-        # Parse the IBIS file contents, storing any errors or warnings.
+        # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         if 'components' not in model_dict or not model_dict['components']:
             raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
         if 'models' not in model_dict or not model_dict['models']:
             raise ValueError("This IBIS model has no models! Parser messages:\n" + err_str)
+        self.log("IBIS parsing errors/warnings:\n" + err_str)
+
+        # Set up instance attributes, as per parsed IBIS file.
         components = model_dict['components']
         models     = model_dict['models']
-        self.log("IBIS parsing errors/warnings:\n" + err_str)
+        self.comps = list(components)
+        self.pins  = list(components[self.comps[0]].pins)
+        (mname, rlc_dict) = list(components[self.comps[0]].pins[self.pins[0]])
+        self.models = [mname]
 
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait('comp',      Trait(list(components)[0], components))
-        self.add_trait('pin',       Trait(list(self.pins)[0],   self.pins))
-        self.add_trait('mod',       Trait(list(models)[0], models))
+        self.add_trait('pin',       Enum(self.pins[0],   values="pins"))
+        self.add_trait('mod',       Enum(self.models[0], values="models"))
         self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
         self.add_trait('file_name', String(model_dict['file_name']))
         self.add_trait('file_rev',  String(model_dict['file_rev']))
@@ -101,7 +112,7 @@ class IBISModel(HasTraits):
         self._os_type = platform.system()           # These 2 are used, to choose
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
-        self._mod_changed(list(models)[0])  # Wasn't be called at automatically.
+        self._mod_changed(list(models)[0])  # Wasn't being called automatically.
 
     def __str__(self):
         res = ""
@@ -164,15 +175,17 @@ class IBISModel(HasTraits):
         return view
 
     @cached_property
-    def _get_pins(self):
-        return self.comp_.pins
+    def _get_pin_(self):
+        return self.comp_.pins[self.pin]
 
     @cached_property
-    def _get_models(self):
-        # comp = self.comp_
-        # (model, rlcs) = comp.pin
-        (model, rlcs) = self.pin_
-        return {model: self._models[model]}
+    def _get_pin_rlcs(self):
+        (_, pin_rlcs) = self.pin_
+        return pin_rlcs
+
+    @cached_property
+    def _get_model(self):
+        return self._models[self.mod]
 
     @property
     def ibis_parsing_errors(self):
@@ -203,14 +216,13 @@ class IBISModel(HasTraits):
         return self._ami_file
 
     def _comp_changed(self, new_value):
-        self.remove_trait('pin')
-        self.add_trait('pin', Trait(list(self.pins)[0], self.pins))
+        self.pins = list(self.comp_.pins)
+        self.pin = self.pins[0]
 
     def _pin_changed(self, new_value):
-        self.mod = list(self.models)[0]
-        # models = self.models
-        # self.remove_trait('mod')
-        # self.add_trait('mod', Trait(list(models)[0], models))
+        (mname, rlc_dict) = self.pin_
+        self.models = [mname]
+        self.mod = self.models[0]
 
     def _mod_changed(self, new_value):
         model = self._models[new_value]
@@ -230,6 +242,11 @@ class IBISModel(HasTraits):
         if fnames:
             dll_file = fnames[0]
             ami_file = fnames[1]
+            self.log(
+                "There was an [Algorithmic Model] keyword in this model.\n \
+                If you wish to use the AMI model associated with this IBIS model,\n \
+                please, go the 'Equalization' tab and enable it now.",
+                alert=True)
         elif 'algorithmic_model' in model._subDict:
             self.log(f'There was an [Algorithmic Model] keyword for this model,\nbut no executable for your platform: {os_type}-{os_bits};\nPyBERT native equalization modeling being used instead.',
                 alert=True)

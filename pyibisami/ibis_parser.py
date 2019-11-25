@@ -18,7 +18,7 @@ from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
 
 from pyibisami.ibis_model import Component, Model
 
-DBG = True
+DBG = False
 
 # Parser Definitions
 
