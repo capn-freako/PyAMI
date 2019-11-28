@@ -18,6 +18,8 @@ from traitsui.api import Item, View, ModalButtons, Group, spring
 from chaco.api    import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
 
+DBG = False
+
 class Component(HasTraits):
     """Encapsulation of a particular component from an IBIS model file.
     """
@@ -25,7 +27,7 @@ class Component(HasTraits):
     def __init__(self, subDict):
         """
         Args:
-            subDict (dict): Dictionary of sub-keywords/params.
+            subDict (dict): Dictionary of [Component] sub-keywords/params.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -217,14 +219,15 @@ class Model(HasTraits):
             ((_, _), fs) = x
             return fs
 
+        self._exec32Wins, self._exec32Lins = [], []
+        self._exec64Wins, self._exec64Lins = [], []
         if 'algorithmic_model' in subDict:
             execs = subDict['algorithmic_model']
             exec64s, exec32s = partition(is64, execs)
-            self._exec32Wins, self._exec32Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec32s)))
-            self._exec64Wins, self._exec64Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec64s)))
-        else:
-            self._exec32Wins, self._exec32Lins = [], []
-            self._exec64Wins, self._exec64Lins = [], []
+            if exec32s:
+                self._exec32Wins, self._exec32Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec32s)))
+            if exec64s:
+                self._exec64Wins, self._exec64Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec64s)))
 
         # Set up the GUI.
         self.add_trait('model_type', String(self._mtype))

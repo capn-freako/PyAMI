@@ -22,13 +22,20 @@ DBG = False
 
 # Parser Definitions
 
+# TODO: Consider shifting to an exclusively line-oriented parsing strategy.
+
 whitespace = regex(r"\s+", re.MULTILINE)
-comment = regex(r"\|.*")
-ignore = many((whitespace | comment))
+# whitespace = regex(r"\s+")
+comment    = regex(r"\|.*")
+ignore     = many(whitespace | comment)
 
 def lexeme(p):
     """Lexer for words."""
-    return p << ignore  # Skip all ignored characters after word.
+    return p << ignore  # Skip all ignored characters after word, including newlines.
+
+def word(p):
+    """Line limited word lexer."""
+    return p << regex(r"\s*")  # Only skip space after words; don't skip comments or newlines.
 
 @generate("remainder of line")
 def rest_line():
@@ -36,16 +43,15 @@ def rest_line():
     chars = yield (many(none_of("\n\r")) << ignore)  # So that we still function as a lexeme.
     return "".join(chars)
 
-skip_line = lexeme(rest_line).result('(Skipped.)')
-name_only = regex(r"[_a-zA-Z0-9/\.()#-]+")
-name      = lexeme(name_only)
-symbol = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
-true = lexeme(string("True")).result(True)
-false = lexeme(string("False")).result(False)
+skip_line     = lexeme(rest_line).result('(Skipped.)')
+name_only     = regex(r"[_a-zA-Z0-9/\.()#-]+")
+name          = word(name_only)
+symbol        = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
+true          = lexeme(string("True")).result(True)
+false         = lexeme(string("False")).result(False)
 quoted_string = lexeme(regex(r'"[^"]*"'))
-fail = one_of("")
-# skip_keyword = (many(none_of("[")) >> ignore).result('(Skipped.)')  # Skip over everything until the next keyword begins.
-skip_keyword = (skip_line >> many(none_of("[") >> skip_line)).result('(Skipped.)')  # Skip over everything until the next keyword begins.
+fail          = one_of("")
+skip_keyword  = (skip_line >> many(none_of("[") >> skip_line)).result('(Skipped.)')  # Skip over everything until the next keyword begins.
 
 IBIS_num_suf = {
     'T': 'e12',
@@ -61,7 +67,7 @@ IBIS_num_suf = {
 @generate("number")
 def number():
     "Parse an IBIS numerical value."
-    s = yield lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()))
+    s = yield word(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()))
     m = re.search(r'[^\d]+$', s)
     if m:
         ix = m.start()
@@ -73,10 +79,23 @@ def number():
     else:
         res = float(s)
     return res
+na = word(string("NA") | string("na")).result(None)
 
-# Note: This doesn't catch the error of providing exactly 2 numbers!
-typminmax = times(number, 1, 3)
-vi_line   = number + typminmax
+@generate("typminmax")
+def typminmax():
+    "Parse Typ/Min/Max values."
+    typ    = yield number
+    if DBG:
+        print(f"Typ.: {typ}")
+    minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
+    if DBG:
+        print(f"Min./Max.: {minmax}")
+    yield ignore  # So that `typminmax` behaves as a lexeme.
+    res = [typ]
+    res.extend(minmax)
+    return res
+
+vi_line = (number + typminmax) << ignore
 
 @generate("ratio")
 def ratio():
@@ -84,10 +103,10 @@ def ratio():
     return num / den
 
 ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(ratio, 1, 3)
-ex_line = lexeme(string("Executable")) \
-          >> ((string("linux") | string("Windows")) << string("_") << many(none_of("_")) << string("_")) \
+ex_line = word(string("Executable")) \
+          >> ((string("Linux") | string("Windows")) << string("_") << many(none_of("_")) << string("_")) \
           + lexeme(string("32") | string("64")) \
-          + count(name, 2)
+          + count(name, 2) << ignore
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."
@@ -126,7 +145,7 @@ def keyword(kywrd=""):
     def fn():
         "Parse IBIS keyword."
         yield regex(r"^\[", re.MULTILINE)
-        wordlets = yield sepBy1(name_only, one_of(" _"))  # `name` gobbles up trailing space.
+        wordlets = yield sepBy1(name_only, one_of(" _"))  # `name` gobbles up trailing space, which we don't want.
         yield string("]")
         yield ignore                # So that `keyword` functions as a lexeme.
         res = ("_".join(wordlets))  # Canonicalize to: "<wordlet1>_<wordlet2>_...".
@@ -143,9 +162,13 @@ def keyword(kywrd=""):
 def param():
     "Parse IBIS parameter."
     pname = yield regex(r"^[a-zA-Z]\w*", re.MULTILINE)  # Parameters must begin with a letter in column 1.
-    res   = yield (regex(r"\s*") >> ((lexeme(string("=")) >> number) | typminmax | name))
+    if DBG:
+        print(pname)
+    res = yield (regex(r"\s*") >> ((word(string("=")) >> number) | typminmax | name | rest_line))
+    yield ignore  # So that `param` functions as a lexeme.
     return (pname.lower(), res)
 
+# TODO: Either use `valid_parameters`, or remove it from the `node` signature.
 def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
     """Build a node-specific parser.
 
@@ -184,6 +207,7 @@ def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
             return fail                          # Stop parsing.
         else:
             res = yield skip_keyword
+        yield ignore  # So that `kywrd` behaves as a lexeme.
         if debug:
             print("  ", nmL + ":", res)
         return (nmL, res)
@@ -218,14 +242,15 @@ Model_keywords = {
 }
 
 Model_params = {
-    "model_type": name,
-    "c_comp": times(number, 1, 3),
+    "model_type": name
 }
 
 @generate("[Model]")
 def model():
     "Parse [Model]."
     nm = yield name
+    if DBG:
+        print("    ", nm)
     res = yield many1(node(Model_keywords, IBIS_keywords, Model_params, debug=DBG))
     return {nm: Model(dict(res))}
 
@@ -236,6 +261,8 @@ rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
 def package():
     "Parse package RLC values."
     rlcs = yield many1(param)
+    if DBG:
+        print(f"rlcs: {rlcs}")
     return dict(rlcs)
 
 def pin(rlcs):
@@ -253,9 +280,9 @@ def pin(rlcs):
         return ((nm + "(" + sig + ")"), (mod, rlc_dict))
     return fn
 
-@generate("[Component]->[Pin]")
+@generate("[Component].[Pin]")
 def pins():
-    "Parse [Component]->[Pin]."
+    "Parse [Component].[Pin]."
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
     rlcs = yield count(rlc, 3)
     prs  = yield many1(pin(rlcs))
@@ -263,9 +290,9 @@ def pins():
 
 Component_keywords = {
     "manufacturer": rest_line,
-    "package": package,
-    "pin": pins,
-    "diff_pin": skip_keyword,
+    "package":      package,
+    "pin":          pins,
+    "diff_pin":     skip_keyword,
 }
 
 Component_params = {}
@@ -276,6 +303,14 @@ def comp():
     nm = yield name
     res = yield many1(node(Component_keywords, IBIS_keywords, Component_params, debug=DBG))
     return {nm: Component(dict(res))}
+
+# [Model Selector]
+@generate("[Model Selector]")
+def modsel():
+    "Parse [Model Selector]."
+    nm = yield name
+    res = yield many1(name + rest_line)
+    return {nm: res}
 
 # Note: The following list MUST have a complete set of keys,
 #       in order for the parsing logic to work correctly!
@@ -303,13 +338,14 @@ IBIS_keywords = [
 
 IBIS_kywrd_parsers = dict(zip(IBIS_keywords, [skip_keyword]*len(IBIS_keywords)))
 IBIS_kywrd_parsers.update({
-    "model": model,
-    "end": end,
-    "ibis_ver": number,
-    "file_name": name,
-    "file_rev": name,
-    "date": rest_line,
-    "component": comp,
+    "model":          model,
+    "end":            end,
+    "ibis_ver":       lexeme(number),
+    "file_name":      lexeme(name),
+    "file_rev":       lexeme(name),
+    "date":           rest_line,
+    "component":      comp,
+    "model_selector": modsel,
     })
 
 @generate("IBIS File")
@@ -351,16 +387,20 @@ def parse_ibis_file(ibis_file_contents_str):
 
     kw_dict = {}
     components = {}
-    models  = {}    
+    models  = {}
+    model_selectors = {}
     for (kw, val) in nodes:
         if kw == 'model':
             models.update(val)
         elif kw == 'component':
             components.update(val)
+        elif kw == 'model_selector':
+            model_selectors.update(val)
         else:
             kw_dict.update({kw: val})
     kw_dict.update({
         'components': components,
-        'models': models
+        'models': models,
+        'model_selectors': model_selectors,
         })
     return "Success!", kw_dict

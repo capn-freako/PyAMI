@@ -60,13 +60,14 @@ class IBISModel(HasTraits):
     """
 
     debug = False
+    
+    _log = ""
 
     pin_     = Property(Any,  depends_on=["pin"])
     pin_rlcs = Property(Dict, depends_on=["pin"])
     model    = Property(Any,  depends_on=["mod"])
-    comps  = List  # Always holds the list of valid component selections.
-    pins   = List  # Always holds the list of valid pin selections.
-    models = List  # Always holds the list of valid model selections.
+    pins   = List  # Always holds the list of valid pin selections, given a component selection.
+    models = List  # Always holds the list of valid model selections, given a pin selection.
 
     def __init__(self, ibis_file_contents_str):
         """
@@ -79,27 +80,27 @@ class IBISModel(HasTraits):
         # to get all the Traits/UI machinery setup correctly.
         super(IBISModel, self).__init__()
 
-        self._log = "Initializing..."
+        self.log("pyibisami.ibis_file.IBISModel initializing...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         if 'components' not in model_dict or not model_dict['components']:
             raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
+        components = model_dict['components']
         if 'models' not in model_dict or not model_dict['models']:
             raise ValueError("This IBIS model has no models! Parser messages:\n" + err_str)
+        models = model_dict['models']
         self.log("IBIS parsing errors/warnings:\n" + err_str)
 
-        # Set up instance attributes, as per parsed IBIS file.
-        components = model_dict['components']
-        models     = model_dict['models']
-        self.comps = list(components)
-        self.pins  = list(components[self.comps[0]].pins)
-        (mname, rlc_dict) = list(components[self.comps[0]].pins[self.pins[0]])
-        self.models = [mname]
-
         # Add Traits for various attributes found in the IBIS file.
-        self.add_trait('comp',      Trait(list(components)[0], components))
-        self.add_trait('pin',       Enum(self.pins[0],   values="pins"))
+        self.add_trait('comp', Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
+        self.pins = list(components[list(components)[0]].pins)          # the thing above it (file) can't change.
+        self.add_trait('pin', Enum(self.pins[0], values="pins"))
+        (mname, rlc_dict) = self.pin_
+        if 'model_selectors' in model_dict and mname in model_dict['model_selectors']:
+            self.models = list(map(lambda pr: pr[0], model_dict['model_selectors'][mname]))
+        else:
+            self.models = [mname]
         self.add_trait('mod',       Enum(self.models[0], values="models"))
         self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
         self.add_trait('file_name', String(model_dict['file_name']))
@@ -112,9 +113,15 @@ class IBISModel(HasTraits):
         self._os_type = platform.system()           # These 2 are used, to choose
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
-        self._mod_changed(list(models)[0])  # Wasn't being called automatically.
+        self._comp_changed(list(components)[0])     # Wasn't being called automatically.
+        self._pin_changed(self.pins[0])             # Wasn't being called automatically.
+
+        self.log("Done.")
 
     def __str__(self):
+        return(f"IBIS Model '{self._model_dict['file_name']}'")
+
+    def info(self):
         res = ""
         try:
             for k in ['ibis_ver', 'file_name', 'file_rev']:
@@ -127,6 +134,10 @@ class IBISModel(HasTraits):
         res += "\n=========="
         for c in list(self._model_dict['components']):
             res += "\n" + c + ":\n" + "---\n" + str(self._model_dict['components'][c]) + "\n"
+        res += "\nModel Selectors:"
+        res += "\n===============\n"
+        for s in list(self._model_dict['model_selectors']):
+            res += f"{s}\n"
         res += "\nModels:"
         res += "\n======"
         for m in list(self._model_dict['models']):
@@ -193,26 +204,21 @@ class IBISModel(HasTraits):
         return self._ibis_parsing_errors
 
     @property
+    def log_txt(self):
+        """The complete log since instantiation."""
+        return self._log
+
+    @property
     def model_dict(self):
         "Dictionary of all model keywords."
         return self._model_dict
 
     @property
-    def model(self):
-        """The model selected most recently by the user.
-
-        Returns the first model parsed, if the user hasn't made a selection yet.
-        """
-        return self.mod_
-
-    @property
     def dll_file(self):
-        """Any errors or warnings encountered, while parsing the IBIS file contents."""
         return self._dll_file
 
     @property
     def ami_file(self):
-        """Any errors or warnings encountered, while parsing the IBIS file contents."""
         return self._ami_file
 
     def _comp_changed(self, new_value):
@@ -220,22 +226,33 @@ class IBISModel(HasTraits):
         self.pin = self.pins[0]
 
     def _pin_changed(self, new_value):
-        (mname, rlc_dict) = self.pin_
-        self.models = [mname]
+        model_dict = self._model_dict
+        # (mname, rlc_dict) = self.pin_  # Doesn't work. Because `pin_` is a cached property and hasn't yet been marked "dirty"?
+        (mname, rlc_dict) = self.comp_.pins[new_value]
+        if 'model_selectors' in model_dict and mname in model_dict['model_selectors']:
+            self.models = list(map(lambda pr: pr[0], model_dict['model_selectors'][mname]))
+        else:
+            self.models = [mname]
         self.mod = self.models[0]
 
+    _mod_changed_visits = 0
     def _mod_changed(self, new_value):
+        self._mod_changed_visits += 1
+        # if self._mod_changed_visits == 2:
+        #     raise RuntimeError("Visit #{} to `_mod_changed()`.".format(self._mod_changed_visits))
         model = self._models[new_value]
+        os_type = self._os_type
+        os_bits = self._os_bits
         fnames = []
         dll_file = ""
         ami_file = ""
-        if self._os_type == 'Windows':
-            if self._os_bits == '64bit':
+        if os_type == 'Windows':
+            if os_bits == '64bit':
                 fnames = model._exec64Wins
             else:
                 fnames = model._exec32Wins
         else:
-            if self._os_bits == '64bit':
+            if os_bits == '64bit':
                 fnames = model._exec64Lins
             else:
                 fnames = model._exec32Lins
@@ -244,14 +261,17 @@ class IBISModel(HasTraits):
             ami_file = fnames[1]
             self.log(
                 "There was an [Algorithmic Model] keyword in this model.\n \
-                If you wish to use the AMI model associated with this IBIS model,\n \
-                please, go the 'Equalization' tab and enable it now.",
+If you wish to use the AMI model associated with this IBIS model,\n \
+please, go the 'Equalization' tab and enable it now.",
                 alert=True)
         elif 'algorithmic_model' in model._subDict:
-            self.log(f'There was an [Algorithmic Model] keyword for this model,\nbut no executable for your platform: {os_type}-{os_bits};\nPyBERT native equalization modeling being used instead.',
+            self.log(f"There was an [Algorithmic Model] keyword for this model,\n \
+but no executable for your platform: {os_type}-{os_bits};\n \
+PyBERT native equalization modeling being used instead.",
                 alert=True)
         else:
-            self.log('There was no [Algorithmic Model] keyword for this model;\nPyBERT native equalization modeling being used instead.',
+            self.log("There was no [Algorithmic Model] keyword for this model;\n \
+PyBERT native equalization modeling being used instead.",
                 alert=True)
         self._dll_file = dll_file
         self._ami_file = ami_file
