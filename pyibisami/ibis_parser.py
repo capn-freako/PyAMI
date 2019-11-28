@@ -18,7 +18,7 @@ from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
 
 from pyibisami.ibis_model import Component, Model
 
-DBG = False
+DBG = True
 
 # Parser Definitions
 
@@ -168,8 +168,7 @@ def param():
     yield ignore  # So that `param` functions as a lexeme.
     return (pname.lower(), res)
 
-# TODO: Either use `valid_parameters`, or remove it from the `node` signature.
-def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
+def node(valid_keywords, stop_keywords, debug=False):
     """Build a node-specific parser.
 
     Args:
@@ -180,9 +179,6 @@ def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
             tested by the `in` function) matching those keywords we want
             to stop the parsing of this node and pop us back up the
             parsing stack.
-        valid_parameters (dict): A dictionary with keys matching those
-            parameters we want parsed. The values are the parsers for
-            those keywords.
 
     Returns:
         Parser: A parser for this node.
@@ -207,7 +203,7 @@ def node(valid_keywords, stop_keywords, valid_parameters, debug=False):
             return fail                          # Stop parsing.
         else:
             res = yield skip_keyword
-        yield ignore  # So that `kywrd` behaves as a lexeme.
+        yield ignore                             # So that `kywrd` behaves as a lexeme.
         if debug:
             print("  ", nmL + ":", res)
         return (nmL, res)
@@ -241,17 +237,13 @@ Model_keywords = {
     "power_clamp": many1(vi_line),
 }
 
-Model_params = {
-    "model_type": name
-}
-
 @generate("[Model]")
 def model():
     "Parse [Model]."
     nm = yield name
     if DBG:
         print("    ", nm)
-    res = yield many1(node(Model_keywords, IBIS_keywords, Model_params, debug=DBG))
+    res = yield many1(node(Model_keywords, IBIS_keywords, debug=DBG))
     return {nm: Model(dict(res))}
 
 # [Component]
@@ -295,13 +287,11 @@ Component_keywords = {
     "diff_pin":     skip_keyword,
 }
 
-Component_params = {}
-
 @generate("[Component]")
 def comp():
     "Parse [Component]."
-    nm = yield name
-    res = yield many1(node(Component_keywords, IBIS_keywords, Component_params, debug=DBG))
+    nm = yield lexeme(name)
+    res = yield many1(node(Component_keywords, IBIS_keywords, debug=DBG))
     return {nm: Component(dict(res))}
 
 # [Model Selector]
@@ -350,10 +340,8 @@ IBIS_kywrd_parsers.update({
 
 @generate("IBIS File")
 def ibis_file():
-    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, {}, debug=DBG)) << end
+    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DBG)) << end
     return res
-
-# Utility functions
 
 def parse_ibis_file(ibis_file_contents_str):
     """
@@ -399,8 +387,8 @@ def parse_ibis_file(ibis_file_contents_str):
         else:
             kw_dict.update({kw: val})
     kw_dict.update({
-        'components': components,
-        'models': models,
+        'components':      components,
+        'models':          models,
         'model_selectors': model_selectors,
         })
     return "Success!", kw_dict
