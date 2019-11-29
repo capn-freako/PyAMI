@@ -69,11 +69,35 @@ class IBISModel(HasTraits):
     pins   = List  # Always holds the list of valid pin selections, given a component selection.
     models = List  # Always holds the list of valid model selections, given a pin selection.
 
-    def __init__(self, ibis_file_contents_str):
+    def get_models(self, mname):
+        """Return the list of models associated with a particular name."""
+        model_dict = self._model_dict
+        if 'model_selectors' in model_dict and mname in model_dict['model_selectors']:
+            return list(map(lambda pr: pr[0], model_dict['model_selectors'][mname]))
+        else:
+            return [mname]
+
+    def get_pins(self):
+        """Get the list of appropriate pins, given our type (i.e. - Tx or Rx)."""
+        pins = self.comp_.pins
+        def pin_ok(pname):
+            (mname, _) = pins[pname]
+            mods = self.get_models(mname)
+            mod = self._models[mods[0]]
+            mod_type = mod.mtype.lower()
+            tx_ok = (mod_type == "output") or (mod_type == "i/o")
+            if self._is_tx:
+                return(tx_ok)
+            else:
+                return(not tx_ok)
+        return(list(filter(pin_ok, list(pins))))
+
+    def __init__(self, ibis_file_contents_str, is_tx):
         """
         Args:
             ibis_file_contents_str (str): The unprocessed contents of
                 the IBIS file, as a single string.
+            is_tx (bool): True if this is a Tx model.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -90,17 +114,17 @@ class IBISModel(HasTraits):
         if 'models' not in model_dict or not model_dict['models']:
             raise ValueError("This IBIS model has no models! Parser messages:\n" + err_str)
         models = model_dict['models']
+        self._model_dict = model_dict
+        self._models = models
+        self._is_tx = is_tx
         self.log("IBIS parsing errors/warnings:\n" + err_str)
 
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait('comp', Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
-        self.pins = list(components[list(components)[0]].pins)          # the thing above it (file) can't change.
+        self.pins = self.get_pins()                                     # the thing above it (file) can't change.
         self.add_trait('pin', Enum(self.pins[0], values="pins"))
         (mname, rlc_dict) = self.pin_
-        if 'model_selectors' in model_dict and mname in model_dict['model_selectors']:
-            self.models = list(map(lambda pr: pr[0], model_dict['model_selectors'][mname]))
-        else:
-            self.models = [mname]
+        self.models = self.get_models(mname)
         self.add_trait('mod',       Enum(self.models[0], values="models"))
         self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
         self.add_trait('file_name', String(model_dict['file_name']))
@@ -108,8 +132,6 @@ class IBISModel(HasTraits):
         self.add_trait('date',      String(model_dict['date']))
 
         self._ibis_parsing_errors = err_str
-        self._model_dict = model_dict
-        self._models = models
         self._os_type = platform.system()           # These 2 are used, to choose
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
@@ -222,17 +244,14 @@ class IBISModel(HasTraits):
         return self._ami_file
 
     def _comp_changed(self, new_value):
-        self.pins = list(self.comp_.pins)
+        self.pins = self.get_pins()
         self.pin = self.pins[0]
 
     def _pin_changed(self, new_value):
         model_dict = self._model_dict
         # (mname, rlc_dict) = self.pin_  # Doesn't work. Because `pin_` is a cached property and hasn't yet been marked "dirty"?
         (mname, rlc_dict) = self.comp_.pins[new_value]
-        if 'model_selectors' in model_dict and mname in model_dict['model_selectors']:
-            self.models = list(map(lambda pr: pr[0], model_dict['model_selectors'][mname]))
-        else:
-            self.models = [mname]
+        self.models = self.get_models(mname)
         self.mod = self.models[0]
 
     _mod_changed_visits = 0
@@ -246,7 +265,7 @@ class IBISModel(HasTraits):
         fnames = []
         dll_file = ""
         ami_file = ""
-        if os_type == 'Windows':
+        if os_type.lower() == 'windows':
             if os_bits == '64bit':
                 fnames = model._exec64Wins
             else:

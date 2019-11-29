@@ -99,12 +99,16 @@ vi_line = (number + typminmax) << ignore
 
 @generate("ratio")
 def ratio():
-    [num, den] = yield separated(number, string("/"), 2, maxt=2, end=False)
-    return num / den
+    [num, den] = yield (separated(number, string("/"), 2, maxt=2, end=False) | na.result([0, 0]))
+    if den:
+        return num / den
+    else:
+        return None
 
 ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(ratio, 1, 3)
 ex_line = word(string("Executable")) \
-    >> ((((string("L") | string("l")) >> string("inux")) | ((string("W") | string("w")) >> string("indows"))) \
+    >> ((((string("L") | string("l")) >> string("inux")).result("linux") | \
+        ((string("W") | string("w")) >> string("indows")).result("windows")) \
     << string("_") << many(none_of("_")) << string("_")) \
     + lexeme(string("32") | string("64")) \
     + count(name, 2) << ignore

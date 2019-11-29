@@ -204,7 +204,7 @@ class Model(HasTraits):
 
         def isWin(x):
             ((os, _), _) = x
-            return os == 'Windows'
+            return os.lower() == 'windows'
 
         def showExec(x):
             ((os, b), fs) = x
@@ -239,7 +239,7 @@ class Model(HasTraits):
         self.add_trait('rref',   String(self._rref))
         self.add_trait('trange', String(self._trange))
         self.add_trait('vrange', String(self._vrange))
-        if self._mtype == 'Output':
+        if mtype == 'output' or mtype == 'i/o':
             self.add_trait('zout',   String(self._zout))
             self.add_trait('slew',   String(self._slew))
         self._content = [
@@ -258,7 +258,7 @@ class Model(HasTraits):
                 label='Model', show_border=True,
             ),
         ]
-        if self._mtype == 'Output':
+        if mtype == 'output' or mtype == 'i/o':
             self._content.append(Item('zout',       label='Impedance (Ohms)',      style='readonly', format_str='%4.1f'))
             self._content.append(Item('slew',       label='Slew Rate (V/ns)',      style='readonly', format_str='%4.1f'))
             self._content.append(Item('plot_iv', editor=ComponentEditor(), show_label=False))
@@ -314,3 +314,6 @@ class Model(HasTraits):
         "The driver impedance."
         return self._ccomp
         
+    @property
+    def mtype(self):
+        return self._mtype
