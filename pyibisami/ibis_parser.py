@@ -104,9 +104,10 @@ def ratio():
 
 ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(ratio, 1, 3)
 ex_line = word(string("Executable")) \
-          >> ((string("Linux") | string("Windows")) << string("_") << many(none_of("_")) << string("_")) \
-          + lexeme(string("32") | string("64")) \
-          + count(name, 2) << ignore
+    >> ((((string("L") | string("l")) >> string("inux")) | ((string("W") | string("w")) >> string("indows"))) \
+    << string("_") << many(none_of("_")) << string("_")) \
+    + lexeme(string("32") | string("64")) \
+    + count(name, 2) << ignore
 
 def manyTrue(p):
     "Run a parser multiple times, filtering `False` results."

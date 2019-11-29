@@ -138,7 +138,8 @@ class Model(HasTraits):
             raise LookupError("Missing [Voltage Range]!")
         
         # Infer impedance and rise/fall time for output models.
-        if self._mtype == 'Output':
+        mtype = self._mtype.lower()
+        if mtype == 'output' or mtype == 'i/o':
             if 'pulldown' not in subDict or 'pullup' not in subDict:
                 raise LookupError("Missing I-V curves!")
             plotdata = ArrayPlotData()
