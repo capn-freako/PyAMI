@@ -5,6 +5,8 @@ This package provides two command line applications.
 
 It can be installed with `pip install PyIBIS-AMI` or via `conda`.  Due to the traits package, Numpy and Cython must be installed before installing with pip.  `pip install Cython numpy`
 
+[View API/Developer's Documentation.](https://htmlpreview.github.io/?https://github.com/capn-freako/PyAMI/blob/master/docs/build/html/index.html)
+
 ## AMI Config
 
 ```
