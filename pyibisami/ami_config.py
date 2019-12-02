@@ -10,8 +10,8 @@ Original date:   February 26, 2016
 This script gets called from a makefile, when any of the following need rebuilding:
 
 * a C++ source code file
-* a *.AMI file
-* a *.IBS file
+* a ``*.AMI`` file
+* a ``*.IBS`` file
 
 All three will be rebuilt.
 (We rebuild all three, because it doesn't take very long, and we can
@@ -22,7 +22,7 @@ This gets triggered by one of two things:
 #. The common model configuration information has changed, or
 #. One of the EmPy template files was updated.
 
-The idea, here, is that the *.IBS file, the *.AMI file, and the
+The idea, here, is that the ``*.IBS`` file, the ``*.AMI`` file, and the
 C++ source file should be configured from a common model configuration
 file, so as to ensure consistency between the three.
 
@@ -124,7 +124,7 @@ def print_code(pname, param):
 
 
 def ami_config(py_file):
-    """Read in the `py_file` and cpp.em file then generate a ibis, ami and cpp."""
+    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and cpp."""
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.

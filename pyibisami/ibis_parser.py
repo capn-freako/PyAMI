@@ -90,7 +90,7 @@ def typminmax():
     minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
     if DBG:
         print(f"Min./Max.: {minmax}")
-    yield ignore  # So that `typminmax` behaves as a lexeme.
+    yield ignore  # So that ``typminmax`` behaves as a lexeme.
     res = [typ]
     res.extend(minmax)
     return res
@@ -114,7 +114,7 @@ ex_line = word(string("Executable")) \
     + count(name, 2) << ignore
 
 def manyTrue(p):
-    "Run a parser multiple times, filtering `False` results."
+    "Run a parser multiple times, filtering ``False`` results."
     @generate("manyTrue")
     def fn():
         "many(p) >> filter(True)"
@@ -124,7 +124,7 @@ def manyTrue(p):
     return fn
 
 def many1True(p):
-    "Run a parser at least once, filtering `False` results."
+    "Run a parser at least once, filtering ``False`` results."
     @generate("many1True")
     def fn():
         "many1(p) >> filter(True)"
@@ -140,7 +140,7 @@ def keyword(kywrd=""):
 
     Keyword Args:
         kywrd (str): The particular keyword to match; null for any keyword.
-            If provided, _must_ be in canonicalized form (i.e. - underscores,
+            If provided, *must* be in canonicalized form (i.e. - underscores,
             no spaces)!
 
     Returns:
@@ -150,9 +150,9 @@ def keyword(kywrd=""):
     def fn():
         "Parse IBIS keyword."
         yield regex(r"^\[", re.MULTILINE)
-        wordlets = yield sepBy1(name_only, one_of(" _"))  # `name` gobbles up trailing space, which we don't want.
+        wordlets = yield sepBy1(name_only, one_of(" _"))  # ``name`` gobbles up trailing space, which we don't want.
         yield string("]")
-        yield ignore                # So that `keyword` functions as a lexeme.
+        yield ignore                # So that ``keyword`` functions as a lexeme.
         res = ("_".join(wordlets))  # Canonicalize to: "<wordlet1>_<wordlet2>_...".
         if kywrd:
             # assert res.lower() == kywrd.lower(), f"Expecting: {kywrd}; got: {res}."  # Does not work!
@@ -170,7 +170,7 @@ def param():
     if DBG:
         print(pname)
     res = yield (regex(r"\s*") >> ((word(string("=")) >> number) | typminmax | name | rest_line))
-    yield ignore  # So that `param` functions as a lexeme.
+    yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
 
 def node(valid_keywords, stop_keywords, debug=False):
@@ -181,7 +181,7 @@ def node(valid_keywords, stop_keywords, debug=False):
             keywords we want parsed. The values are the parsers for
             those keywords.
         stop_keywords: Any iterable with primary values (i.e. - those
-            tested by the `in` function) matching those keywords we want
+            tested by the ``in`` function) matching those keywords we want
             to stop the parsing of this node and pop us back up the
             parsing stack.
 
@@ -189,8 +189,8 @@ def node(valid_keywords, stop_keywords, debug=False):
         Parser: A parser for this node.
 
     Notes:
-        1: Any keywords encountered that are _not_ found (via `in`) in
-            either `valid_keywords` or `stop_keywords` are ignored.
+        1: Any keywords encountered that are _not_ found (via ``in``) in
+            either ``valid_keywords`` or ``stop_keywords`` are ignored.
     """
     @generate("kywrd")
     def kywrd():
@@ -200,7 +200,7 @@ def node(valid_keywords, stop_keywords, debug=False):
         if debug:
             print(nmL)
         if nmL in valid_keywords:
-            if nmL == "end":  # Because `ibis_file` expects this to be the last thing it sees,
+            if nmL == "end":  # Because ``ibis_file`` expects this to be the last thing it sees,
                 return fail   # we can't consume it here.
             else:
                 res = yield valid_keywords[nmL]  # Parse the sub-keyword.
@@ -208,7 +208,7 @@ def node(valid_keywords, stop_keywords, debug=False):
             return fail                          # Stop parsing.
         else:
             res = yield skip_keyword
-        yield ignore                             # So that `kywrd` behaves as a lexeme.
+        yield ignore                             # So that ``kywrd`` behaves as a lexeme.
         if debug:
             print("  ", nmL + ":", res)
         return (nmL, res)

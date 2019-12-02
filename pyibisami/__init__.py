@@ -7,5 +7,5 @@ Original Author: David Banas <capn.freako@gmail.com>
 
 Original Date:   3 July 2012
 
-Copyright (c) 2019 by David Banas; All rights reserved World wide.
+Copyright (c) 2012 by David Banas; All rights reserved World wide.
 """

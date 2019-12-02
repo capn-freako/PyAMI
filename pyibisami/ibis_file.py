@@ -8,8 +8,8 @@ Original Date:   November 1, 2019
 For information regarding the IBIS modeling standard, visit:
 https://ibis.org/
 
-*Note:* The `IBISModel` class, defined here, needs to be kept separate from the
-other IBIS-related classes, defined in the `ibis_model` module, in order to
+*Note:* The ``IBISModel`` class, defined here, needs to be kept separate from the
+other IBIS-related classes, defined in the ``ibis_model`` module, in order to
 avoid circular imports.
 
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
@@ -41,22 +41,22 @@ class IBISModel(HasTraits):
         When instantiating, provide the unprocessed contents of the IBIS
         file, as a single string. This class will take care of getting
         that string parsed properly, and report any errors or warnings
-        it encounters, in its `ibis_parsing_errors` property.
+        it encounters, in its ``ibis_parsing_errors`` property.
 
      2. When you want to let the user select a particular component/pin/model,
         call the newly created instance, as if it were a function, passing
         no arguments.
         The instance will then present a GUI to the user,
         allowing him to select a particular component/pin/model, which may then
-        be retrieved, via the `model` property.
+        be retrieved, via the ``model`` property.
         The latest user selections will be remembered,
         as long as the instance remains in scope.
 
     Any errors or warnings encountered while parsing are available, in
-    the `ibis_parsing_errors` property.
+    the ``ibis_parsing_errors`` property.
 
     The complete dictionary containing all parsed models may be retrieved,
-    via the `model_dict` property.
+    via the ``model_dict`` property.
     """
 
     debug = False
@@ -249,7 +249,7 @@ class IBISModel(HasTraits):
 
     def _pin_changed(self, new_value):
         model_dict = self._model_dict
-        # (mname, rlc_dict) = self.pin_  # Doesn't work. Because `pin_` is a cached property and hasn't yet been marked "dirty"?
+        # (mname, rlc_dict) = self.pin_  # Doesn't work. Because ``pin_`` is a cached property and hasn't yet been marked "dirty"?
         (mname, rlc_dict) = self.comp_.pins[new_value]
         self.models = self.get_models(mname)
         self.mod = self.models[0]
@@ -258,7 +258,7 @@ class IBISModel(HasTraits):
     def _mod_changed(self, new_value):
         self._mod_changed_visits += 1
         # if self._mod_changed_visits == 2:
-        #     raise RuntimeError("Visit #{} to `_mod_changed()`.".format(self._mod_changed_visits))
+        #     raise RuntimeError("Visit #{} to ``_mod_changed()``.".format(self._mod_changed_visits))
         model = self._models[new_value]
         os_type = self._os_type
         os_bits = self._os_bits

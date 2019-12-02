@@ -25,13 +25,13 @@ def loadWave(filename):
     Assume the first line is a header, and discard it.
 
     Specifically, this function may be used to load in waveform files
-    saved from CosmosScope.
+    saved from *CosmosScope*.
 
     Args:
         filename (str): Name of waveform file to read in.
 
     Returns:
-        tuple ([float], [float]): A pair of NumPy arrays containing the time
+        ([float], [float]): A pair of *NumPy* arrays containing the time
             and voltage values, respectively.
     """
 
@@ -56,7 +56,7 @@ def interpFile(filename, sample_per):
         sample_per (float): New sample interval, in seconds.
 
     Returns:
-        res ([float]): A NumPy array containing the resampled waveform.
+        [float]: A *NumPy* array containing the resampled waveform.
     """
 
     impulse = loadWave(filename)
@@ -77,12 +77,12 @@ def interpFile(filename, sample_per):
 
 
 class AMIModelInitializer:
-    """ Class containing the initialization data for an instance of `AMIModel`.
+    """ Class containing the initialization data for an instance of ``AMIModel``.
 
         Created primarily to facilitate use of the PyAMI package at the
         pylab command prompt, this class can be used by the pylab user,
         in order to store all the data required to initialize an instance
-        of class `AMIModel`. In this way, the pylab user may assemble
+        of class ``AMIModel``. In this way, the pylab user may assemble
         the AMIModel initialization data just once, and modify it
         incrementally, as she experiments with different initialization
         settings. In this way, she can avoid having to type a lot of
@@ -108,7 +108,7 @@ class AMIModelInitializer:
             Valid names of optional initialization data overrides:
 
             - channel_response
-                a matrix of `c_double's` where the first row represents the
+                a matrix of ``c_double's`` where the first row represents the
                 impulse response of the analog channel, and the rest represent
                 the impulse responses of several aggressor-to-victim far end
                 crosstalk (FEXT) channels.
@@ -116,19 +116,19 @@ class AMIModelInitializer:
                 Default) a single 128 element vector containing an ideal impulse
 
             - row_size
-                integer giving the size of the rows in `channel_response`.
+                integer giving the size of the rows in ``channel_response``.
 
                 Default) 128
 
             - num_aggressors
-                integer giving the number or rows in `channel_response`, minus
+                integer giving the number or rows in ``channel_response``, minus
                 one.
 
                 Default) 0
 
             - sample_interval
                 c_double giving the time interval, in seconds, between
-                successive elements in any row of `channel_response`.
+                successive elements in any row of ``channel_response``.
 
                 Default) 25e-12 (40 GHz sampling rate)
 
@@ -142,9 +142,9 @@ class AMIModelInitializer:
         self.ami_params = {"root_name": ""}
         self.ami_params.update(ami_params)
 
-        # Need to reverse sort, in order to catch `sample_interval` and `row_size`,
-        # before `channel_response`, since `channel_response` depends upon `sample_interval`,
-        # when `h` is a file name, and overwrites `row_size`, in any case.
+        # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
+        # before ``channel_response``, since ``channel_response`` depends upon ``sample_interval``,
+        # when ``h`` is a file name, and overwrites ``row_size``, in any case.
         keys = list(optional_args.keys())
         keys.sort(reverse=True)
         if keys:
@@ -187,7 +187,7 @@ class AMIModelInitializer:
         self._init_data["num_aggressors"] = n
 
     num_aggressors = property(
-        _getNumAggressors, _setNumAggressors, doc="Number of vectors in `channel_response`, minus one."
+        _getNumAggressors, _setNumAggressors, doc="Number of vectors in ``channel_response``, minus one."
     )
 
     def _getSampleInterval(self):
@@ -214,38 +214,15 @@ class AMIModelInitializer:
 class AMIModel:
     """ Class defining the structure and behavior of a AMI Model.
 
-        Public Methods: (See individual docs.)
-          initialize()
-          getWave()
-
-        Properties: (See individual docs.)
-          initOut
-          channel_response
-          clock_times
-          row_size
-          num_aggressors
-          sample_interval
-          bit_time
-          ami_params_in
-          ami_params_out
-          ami_mem_handle
-          msg
-
-        Additional Features:
-
-          - Makes the calling of AMI_Close() automagic, by calling it
-            from the destructor.
+        Notes:
+            * Makes the calling of ``AMI_Close()`` automagic,
+              by calling it from the destructor.
     """
 
     def __init__(self, filename):
         """ Load the dll and bind the 3 AMI functions."""
 
         self._ami_mem_handle = None
-        # if(type(filename) is unicode):
-        #     filename = unicodedata.normalize('NFKD', filename).encode('ascii','ignore')
-        # if isinstance(filename, str):
-        #     filename = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore")
-        print(filename)
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
         try:
@@ -266,12 +243,16 @@ class AMIModel:
             self._amiClose(self._ami_mem_handle)
 
     def initialize(self, init_object):
-        """ Wraps the `AMI_Init` function.
+        """ Wraps the ``AMI_Init`` function.
 
-            Takes an instance of `AMIModelInitializer` as its only argument.
-            This allows model initialization data to be constructed once,
-            and modified incrementally in between multiple calls of
-            `initialize`. This is useful for PyLab command prompt testing.
+        Args:
+            init_object(AMIModelInitializer): The model initialization data.
+
+        Notes:
+            * Takes an instance of ``AMIModelInitializer`` as its only argument.
+              This allows model initialization data to be constructed once,
+              and modified incrementally in between multiple calls of
+              ``initialize``. This is useful for *PyLab* command prompt testing.
         """
 
         # Free any memory allocated by the previous initialization.
@@ -328,7 +309,7 @@ class AMIModel:
 
     def getWave(self, wave, bits_per_call=0):
         """
-        Performs time domain processing of input waveform, using the `AMI_GetWave` function.
+        Performs time domain processing of input waveform, using the ``AMI_GetWave`` function.
 
         Args:
             wave(array-like): Waveform to be processed.
@@ -336,8 +317,7 @@ class AMIModel:
                 (Optional; default = existing value.)
 
         Returns:
-            wave_out(NumPy 1D array): The processed waveform.
-            clock_times(NumPy 1D array): The recovered slicer sampling instants.
+            NumPy 1D array, NumPy 1D array: (The processed waveform, The recovered slicer sampling instants).
         """
 
         if bits_per_call:

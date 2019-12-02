@@ -1,0 +1,256 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyibisami.ami_config &#8212; PyIBIS-AMI Developer Guide 3.3.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">PyIBIS-AMI Developer Guide 3.3.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyibisami.ami_config</h1><div class="highlight"><pre>
+<span></span><span class="ch">#! /usr/bin/env python</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">IBIS-AMI model source code, AMI file, and IBIS file configuration utility.</span>
+
+<span class="sd">Original author: David Banas</span>
+
+<span class="sd">Original date:   February 26, 2016</span>
+
+<span class="sd">This script gets called from a makefile, when any of the following need rebuilding:</span>
+
+<span class="sd">* a C++ source code file</span>
+<span class="sd">* a ``*.AMI`` file</span>
+<span class="sd">* a ``*.IBS`` file</span>
+
+<span class="sd">All three will be rebuilt.</span>
+<span class="sd">(We rebuild all three, because it doesn&#39;t take very long, and we can</span>
+<span class="sd">insure consistency this way.)</span>
+
+<span class="sd">This gets triggered by one of two things:</span>
+
+<span class="sd">#. The common model configuration information has changed, or</span>
+<span class="sd">#. One of the EmPy template files was updated.</span>
+
+<span class="sd">The idea, here, is that the ``*.IBS`` file, the ``*.AMI`` file, and the</span>
+<span class="sd">C++ source file should be configured from a common model configuration</span>
+<span class="sd">file, so as to ensure consistency between the three.</span>
+
+<span class="sd">Copyright (c) 2019 David Banas; all rights reserved World wide.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">date</span>
+<span class="kn">import</span> <span class="nn">importlib.util</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="k">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span> <span class="nn">click</span>
+<span class="kn">import</span> <span class="nn">em</span>
+
+<span class="n">param_types</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;INT&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;c_type&quot;</span><span class="p">:</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="s2">&quot;ami_type&quot;</span><span class="p">:</span> <span class="s2">&quot;Integer&quot;</span><span class="p">,</span> <span class="s2">&quot;getter&quot;</span><span class="p">:</span> <span class="s2">&quot;get_param_int&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;FLOAT&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;c_type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="s2">&quot;ami_type&quot;</span><span class="p">:</span> <span class="s2">&quot;Float&quot;</span><span class="p">,</span> <span class="s2">&quot;getter&quot;</span><span class="p">:</span> <span class="s2">&quot;get_param_float&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;BOOL&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;c_type&quot;</span><span class="p">:</span> <span class="s2">&quot;bool&quot;</span><span class="p">,</span> <span class="s2">&quot;ami_type&quot;</span><span class="p">:</span> <span class="s2">&quot;Boolean&quot;</span><span class="p">,</span> <span class="s2">&quot;getter&quot;</span><span class="p">:</span> <span class="s2">&quot;get_param_bool&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;STRING&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;c_type&quot;</span><span class="p">:</span> <span class="s2">&quot;char *&quot;</span><span class="p">,</span> <span class="s2">&quot;ami_type&quot;</span><span class="p">:</span> <span class="s2">&quot;String&quot;</span><span class="p">,</span> <span class="s2">&quot;getter&quot;</span><span class="p">:</span> <span class="s2">&quot;get_param_str&quot;</span><span class="p">},</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="print_param"><a class="viewcode-back" href="../../modules.html#pyibisami.ami_config.print_param">[docs]</a><span class="k">def</span> <span class="nf">print_param</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Print AMI parameter specification. Handle nested parameters, via recursion.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        indent (str): String containing some number of spaces.</span>
+<span class="sd">        name (str): Parameter name.</span>
+<span class="sd">        param (dict): Dictionary containing parameter definition fields.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;(</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;subs&quot;</span> <span class="ow">in</span> <span class="n">param</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;subs&quot;</span><span class="p">]:</span>
+            <span class="n">print_param</span><span class="p">(</span><span class="n">indent</span> <span class="o">+</span> <span class="s2">&quot;    &quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;subs&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s2">&quot;description&quot;</span> <span class="ow">in</span> <span class="n">param</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">indent</span> <span class="o">+</span> <span class="s2">&quot;    &quot;</span><span class="p">,</span> <span class="s2">&quot;(Description </span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">fld_name</span><span class="p">,</span> <span class="n">fld_key</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span>
+            <span class="p">(</span><span class="s2">&quot;Usage&quot;</span><span class="p">,</span> <span class="s2">&quot;usage&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;Default&quot;</span><span class="p">,</span> <span class="s2">&quot;default&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;Description&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">),</span>
+        <span class="p">]:</span>
+            <span class="c1"># Trap the special cases.</span>
+            <span class="k">if</span> <span class="n">fld_name</span> <span class="o">==</span> <span class="s2">&quot;Type&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (Type&quot;</span><span class="p">,</span> <span class="n">param_types</span><span class="p">[</span><span class="n">param</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]][</span><span class="s2">&quot;ami_type&quot;</span><span class="p">],</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">fld_name</span> <span class="o">==</span> <span class="s2">&quot;Default&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Value&quot;</span><span class="p">:</span>
+                    <span class="k">pass</span>
+            <span class="k">elif</span> <span class="n">fld_name</span> <span class="o">==</span> <span class="s2">&quot;Format&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Value&quot;</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (Value&quot;</span><span class="p">,</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">],</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;List&quot;</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (List&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">]:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (List_Tip&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">]:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">],</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">],</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">],</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">],</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span>
+            <span class="c1"># Execute the default action.</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;    (</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">fld_name</span><span class="p">,</span> <span class="n">param</span><span class="p">[</span><span class="n">fld_key</span><span class="p">],</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">indent</span><span class="p">,</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="print_code"><a class="viewcode-back" href="../../modules.html#pyibisami.ami_config.print_code">[docs]</a><span class="k">def</span> <span class="nf">print_code</span><span class="p">(</span><span class="n">pname</span><span class="p">,</span> <span class="n">param</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Print C++ code needed to query AMI parameter tree for a particular leaf.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        pname (str): Parameter name.</span>
+<span class="sd">        param (dict): Dictionary containing parameter definition fields.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;       &quot;</span><span class="p">,</span> <span class="s1">&#39;node_names.push_back(&quot;</span><span class="si">%s</span><span class="s1">&quot;);&#39;</span> <span class="o">%</span> <span class="n">pname</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;subs&quot;</span> <span class="ow">in</span> <span class="n">param</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;subs&quot;</span><span class="p">]:</span>
+            <span class="n">print_code</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;subs&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;usage&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;In&quot;</span> <span class="ow">or</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;usage&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;InOut&quot;</span><span class="p">:</span>
+            <span class="n">ptype</span> <span class="o">=</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;        </span><span class="si">{}</span><span class="s2"> </span><span class="si">{}</span><span class="s2">;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param_types</span><span class="p">[</span><span class="n">ptype</span><span class="p">][</span><span class="s2">&quot;c_type&quot;</span><span class="p">],</span> <span class="n">pname</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">ptype</span> <span class="o">==</span> <span class="s2">&quot;BOOL&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span>
+                    <span class="s2">&quot;        </span><span class="si">{}</span><span class="s2"> = </span><span class="si">{}</span><span class="s2">(node_names, </span><span class="si">{}</span><span class="s2">);&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">pname</span><span class="p">,</span> <span class="n">param_types</span><span class="p">[</span><span class="n">ptype</span><span class="p">][</span><span class="s2">&quot;getter&quot;</span><span class="p">],</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;        </span><span class="si">{}</span><span class="s2"> = </span><span class="si">{}</span><span class="s2">(node_names, </span><span class="si">{}</span><span class="s2">);&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">pname</span><span class="p">,</span> <span class="n">param_types</span><span class="p">[</span><span class="n">ptype</span><span class="p">][</span><span class="s2">&quot;getter&quot;</span><span class="p">],</span> <span class="n">param</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">]))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;       &quot;</span><span class="p">,</span> <span class="s2">&quot;node_names.pop_back();&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ami_config"><a class="viewcode-back" href="../../modules.html#pyibisami.ami_config.ami_config">[docs]</a><span class="k">def</span> <span class="nf">ami_config</span><span class="p">(</span><span class="n">py_file</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read in the ``py_file`` and cpp.em file then generate a ibis, ami and cpp.&quot;&quot;&quot;</span>
+    <span class="n">file_base_name</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">py_file</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span>
+
+    <span class="c1"># Read model configuration information.</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reading model configuration information from file: </span><span class="si">%s</span><span class="s2">.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">py_file</span><span class="p">))</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">spec_from_file_location</span><span class="p">(</span><span class="n">file_base_name</span><span class="p">,</span> <span class="n">py_file</span><span class="p">)</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">module_from_spec</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">loader</span><span class="o">.</span><span class="n">exec_module</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+
+    <span class="c1"># Configure the 3 files.</span>
+    <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="s2">&quot;ami&quot;</span><span class="p">,</span> <span class="s2">&quot;ibs&quot;</span><span class="p">]:</span>
+        <span class="n">out_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">py_file</span><span class="p">)</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s2">&quot;.</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ext</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s2">&quot;ami&quot;</span><span class="p">:</span>
+            <span class="n">em_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">joinpath</span><span class="p">(</span><span class="s2">&quot;generic.ami.em&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">ext</span> <span class="o">==</span> <span class="s2">&quot;ibs&quot;</span><span class="p">:</span>
+            <span class="n">em_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">joinpath</span><span class="p">(</span><span class="s2">&quot;generic.ibs.em&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">em_file</span> <span class="o">=</span> <span class="n">out_file</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s2">&quot;.cpp.em&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Buidling &#39;</span><span class="si">{out_file}</span><span class="s2">&#39; from &#39;</span><span class="si">{em_file}</span><span class="s2">&#39;...&quot;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">out_file</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">out_file</span><span class="p">:</span>
+            <span class="n">interpreter</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">Interpreter</span><span class="p">(</span>
+                <span class="n">output</span><span class="o">=</span><span class="n">out_file</span><span class="p">,</span>
+                <span class="nb">globals</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;ami_params&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">ami_params</span><span class="p">,</span>
+                    <span class="s2">&quot;ibis_params&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">ibis_params</span><span class="p">,</span>
+                    <span class="s2">&quot;param_types&quot;</span><span class="p">:</span> <span class="n">param_types</span><span class="p">,</span>
+                    <span class="s2">&quot;model_name&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">kFileBaseName</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">kDescription</span><span class="p">,</span>
+                    <span class="s2">&quot;date&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">date</span><span class="o">.</span><span class="n">today</span><span class="p">()),</span>
+                <span class="p">},</span>
+            <span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">interpreter</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">em_file</span><span class="p">))</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">interpreter</span><span class="o">.</span><span class="n">shutdown</span><span class="p">()</span></div>
+
+
+<span class="nd">@click</span><span class="o">.</span><span class="n">command</span><span class="p">(</span><span class="n">context_settings</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">help_option_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;-h&quot;</span><span class="p">,</span> <span class="s2">&quot;--help&quot;</span><span class="p">]))</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">argument</span><span class="p">(</span><span class="s2">&quot;py_file&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">exists</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">resolve_path</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">version_option</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">py_file</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.</span>
+
+<span class="sd">    This command generates three files based off the input config file.</span>
+<span class="sd">    It expects a .cpp.em file to be located in the same directory so that it can</span>
+<span class="sd">    generate a cpp file from the config file and template file.</span>
+
+<span class="sd">       py_file: name of model configuration file (*.py)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ami_config</span><span class="p">(</span><span class="n">py_file</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">PyIBIS-AMI Developer Guide 3.3.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2015, David Banas.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.2.0.
+    </div>
+  </body>
+</html>

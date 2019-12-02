@@ -34,24 +34,25 @@ class AMIParamConfigurator(HasTraits):
         When instantiating, provide the unprocessed contents of the AMI
         file, as a single string. This class will take care of getting
         that string parsed properly, and report any errors or warnings
-        it encounters, in its 'ami_parsing_errors' property.
+        it encounters, in its ``ami_parsing_errors`` property.
 
      2. When you want to let the user change the AMI parameter
-        configuration, call the *open_gui* member function.
+        configuration, call the ``open_gui`` member function.
+        (Or, just call the instance as if it were executable.)
         The instance will then present a GUI to the user,
-        allowing him to modify the values of any In or InOut parameters.
+        allowing him to modify the values of any *In* or *InOut* parameters.
         The resultant AMI parameter dictionary, suitable for passing
-        into the 'ami_params' parameter of the *AMIModelInitializer*
+        into the ``ami_params`` parameter of the ``AMIModelInitializer``
         constructor, can be accessed, via the instance's
-        *input_ami_params* property. The latest user selections will be
+        ``input_ami_params`` property. The latest user selections will be
         remembered, as long as the instance remains in scope.
 
-    The entire AMI parameter definition dictionary, which should NOT be
-    passed to the AMIModelInitializer constructor, is available in the
-    instance's *ami_param_defs* property.
+    The entire AMI parameter definition dictionary, which should *not* be
+    passed to the ``AMIModelInitializer`` constructor, is available in the
+    instance's ``ami_param_defs`` property.
 
     Any errors or warnings encountered while parsing are available, in
-    the *ami_parsing_errors* property.
+    the ``ami_parsing_errors`` property.
 
     """
 
@@ -130,7 +131,7 @@ class AMIParamConfigurator(HasTraits):
     def ami_param_defs(self):
         """The entire AMI parameter definition dictionary.
 
-        Should NOT be passed to AMIModelInitializer constructor!
+        Should *not* be passed to ``AMIModelInitializer`` constructor!
         """
         return self._param_dict
 

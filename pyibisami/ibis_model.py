@@ -146,7 +146,7 @@ class Model(HasTraits):
             def proc_iv(xs):
                 if len(xs) < 2:
                     raise ValueError("Insufficient number of I-V data points!")
-                vs, iss = zip(*(xs))  # Idiomatic Python for `unzip`.
+                vs, iss = zip(*(xs))  # Idiomatic Python for ``unzip``.
                 ityps, imins, imaxs = zip(*iss)
                 vmeas = self._vmeas
                 def calcZ(x):
@@ -306,14 +306,15 @@ class Model(HasTraits):
 
     @property
     def slew(self):
-        "The driver impedance."
+        "The driver slew rate."
         return self._slew
         
     @property
     def ccomp(self):
-        "The driver impedance."
+        "The parasitic capacitance."
         return self._ccomp
         
     @property
     def mtype(self):
+        """Model type."""
         return self._mtype

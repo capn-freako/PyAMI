@@ -1,5 +1,5 @@
 """
-*AMIParameter* class definition, plus some helpers.
+``AMIParameter`` class definition, plus some helpers.
 
 Original author: David Banas <capn.freako@gmail.com>
 
