@@ -280,10 +280,16 @@ def pin(rlcs):
 @generate("[Component].[Pin]")
 def pins():
     "Parse [Component].[Pin]."
+    def filt(x):
+        (_, (mod, _)) = x
+        m = mod.upper()
+        return (not ((m == "POWER") or (m == "GND") or (m == "NC")))
+
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
-    rlcs = yield count(rlc, 3)
+    rlcs = yield optional(count(rlc, 3), [])
     prs  = yield many1(pin(rlcs))
-    return dict(prs)
+    prs_filt = list(filter(filt, prs))
+    return dict(prs_filt)
 
 Component_keywords = {
     "manufacturer": rest_line,
