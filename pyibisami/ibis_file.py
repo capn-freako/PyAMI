@@ -92,7 +92,7 @@ class IBISModel(HasTraits):
                 return(not tx_ok)
         return(list(filter(pin_ok, list(pins))))
 
-    def __init__(self, ibis_file_contents_str, is_tx):
+    def __init__(self, ibis_file_name, is_tx):
         """
         Args:
             ibis_file_contents_str (str): The unprocessed contents of
@@ -107,6 +107,8 @@ class IBISModel(HasTraits):
         self.log("pyibisami.ibis_file.IBISModel initializing...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
+        with open(ibis_file_name) as file:
+            ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         if 'components' not in model_dict or not model_dict['components']:
             raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
@@ -254,9 +256,9 @@ class IBISModel(HasTraits):
         self.models = self.get_models(mname)
         self.mod = self.models[0]
 
-    _mod_changed_visits = 0
+    # _mod_changed_visits = 0
     def _mod_changed(self, new_value):
-        self._mod_changed_visits += 1
+        # self._mod_changed_visits += 1
         # if self._mod_changed_visits == 2:
         #     raise RuntimeError("Visit #{} to ``_mod_changed()``.".format(self._mod_changed_visits))
         model = self._models[new_value]
