@@ -131,7 +131,10 @@ class IBISModel(HasTraits):
         self.add_trait('ibis_ver',  Float(model_dict['ibis_ver']))
         self.add_trait('file_name', String(model_dict['file_name']))
         self.add_trait('file_rev',  String(model_dict['file_rev']))
-        self.add_trait('date',      String(model_dict['date']))
+        if 'date' in model_dict:
+            self.add_trait('date',      String(model_dict['date']))
+        else:
+            self.add_trait('date',      String("(n/a)"))
 
         self._ibis_parsing_errors = err_str
         self._os_type = platform.system()           # These 2 are used, to choose
@@ -256,11 +259,7 @@ class IBISModel(HasTraits):
         self.models = self.get_models(mname)
         self.mod = self.models[0]
 
-    # _mod_changed_visits = 0
     def _mod_changed(self, new_value):
-        # self._mod_changed_visits += 1
-        # if self._mod_changed_visits == 2:
-        #     raise RuntimeError("Visit #{} to ``_mod_changed()``.".format(self._mod_changed_visits))
         model = self._models[new_value]
         os_type = self._os_type
         os_bits = self._os_bits

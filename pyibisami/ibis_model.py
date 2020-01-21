@@ -217,18 +217,23 @@ class Model(HasTraits):
             return ts, fs
 
         def getFiles(x):
-            ((_, _), fs) = x
-            return fs
+            if x:
+                ((_, _), fs) = x[0]
+                return fs
+            else:
+                return []
+
+        def splitExecs(fs):
+            wins, lins = partition(isWin, fs)
+            return (getFiles(wins), getFiles(lins))
 
         self._exec32Wins, self._exec32Lins = [], []
         self._exec64Wins, self._exec64Lins = [], []
         if 'algorithmic_model' in subDict:
             execs = subDict['algorithmic_model']
             exec64s, exec32s = partition(is64, execs)
-            if exec32s:
-                self._exec32Wins, self._exec32Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec32s)))
-            if exec64s:
-                self._exec64Wins, self._exec64Lins = list(map(lambda x: list(map(getFiles, x))[0], partition(isWin, exec64s)))
+            self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
+            self._exec64Wins, self._exec64Lins = splitExecs(exec64s)
 
         # Set up the GUI.
         self.add_trait('model_type', String(self._mtype))
