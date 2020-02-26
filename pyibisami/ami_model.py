@@ -321,7 +321,7 @@ class AMIModel:
         """
 
         if bits_per_call:
-            self._bits_per_call = bits_per_call
+            self._bits_per_call = int(bits_per_call)
         bits_per_call = self._bits_per_call
         samps_per_call = self._samps_per_bit * bits_per_call
 
