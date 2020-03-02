@@ -19,16 +19,11 @@ from numpy import floor
 
 from pyibisami.ami_model import AMIModel
 
-
-def plot_name(n=0):
+def plot_name(tst_name, n=0):
     """Plot name generator keeps multiple tests from overwriting eachother's plots."""
     while True:
         n += 1
-        yield "plot_{}.png".format(n)
-
-
-plot_names = plot_name()
-
+        yield f"{tst_name}_plot_{n}.png"
 
 def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     """Convert a HSV number to and RGB one."""
@@ -75,7 +70,7 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
         R = V
         G = p
         B = q
-    return (R, G, B)
+    return (int(R), int(G), int(B))
 
 
 def color_picker(num_hues=3, first_hue=0):
@@ -99,7 +94,7 @@ def expand_params(input_parameters):
     """
     if Path(input_parameters).exists():
         if Path(input_parameters).is_file():
-            cfg_files = [input_parameters]
+            cfg_files = [Path(input_parameters)]
         else:
             cfg_files = list(Path(input_parameters).glob("*.run"))
         params = []
@@ -121,6 +116,7 @@ def expand_params(input_parameters):
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:
+        # params = eval(compile(input_parameters, "cmd_line", "eval"))
         params = eval(input_parameters)
     return params
 
@@ -159,8 +155,9 @@ def run_tests(**kwargs):
     else:
         tests = list(test_dir.glob("*.em"))
     for test in tests:
-        print("Running test: {} ...".format(test.stem))
-        theModel = AMIModel(model)
+        # print("Running test: {} ...".format(test.stem))
+        print("Running test: {} ...".format(test))
+        theModel = AMIModel(model.__str__())
         for cfg_item in params:
             cfg_name = cfg_item[0]
             print("\tRunning test configuration: {} ...".format(cfg_name))
@@ -171,10 +168,10 @@ def run_tests(**kwargs):
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
-                        "name": "{} ({})".format(test.stem, cfg_name),
+                        "name": "{} ({})".format(test, cfg_name),
                         "model": theModel,
                         "data": param_list,
-                        "plot_names": plot_names,
+                        "plot_names": plot_name(xml_filename.stem),
                         "description": description,
                         "plot_colors": colors,
                         "ref_dir": ref_dir,
@@ -183,11 +180,11 @@ def run_tests(**kwargs):
                 try:
                     cwd = Path().cwd()
                     chdir(out_dir)  # So that the images are saved in the output directory.
-                    interpreter.file(open(test))
+                    interpreter.file(open(Path(test_dir, test)))
                     chdir(cwd)
                 finally:
                     interpreter.shutdown()
-        print("Test:", test.stem, "complete.")
+        print("Test:", test, "complete.")
     with open(xml_filename, "a") as xml_file:
         xml_file.write("</tests>\n")
 
@@ -253,5 +250,8 @@ def main(**kwargs):
     working directory, in order to avoid file loading errors in your
     Web browser.
     """
-    print(kwargs)
+    # print(kwargs)
     run_tests(**kwargs)
+
+if __name__ == "__main__":
+    main()

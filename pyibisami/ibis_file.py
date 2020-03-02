@@ -59,8 +59,6 @@ class IBISModel(HasTraits):
     via the ``model_dict`` property.
     """
 
-    debug = False
-    
     _log = ""
 
     pin_     = Property(Any,  depends_on=["pin"])
@@ -92,24 +90,29 @@ class IBISModel(HasTraits):
                 return(not tx_ok)
         return(list(filter(pin_ok, list(pins))))
 
-    def __init__(self, ibis_file_name, is_tx):
+    def __init__(self, ibis_file_name, is_tx, debug=False):
         """
         Args:
             ibis_file_contents_str (str): The unprocessed contents of
                 the IBIS file, as a single string.
             is_tx (bool): True if this is a Tx model.
+
+        KeywordArgs:
+            debug (bool): Output debugging info to console when true.
+                Default = False
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
         # to get all the Traits/UI machinery setup correctly.
         super(IBISModel, self).__init__()
 
+        self.debug = debug
         self.log("pyibisami.ibis_file.IBISModel initializing...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         with open(ibis_file_name) as file:
             ibis_file_contents_str = file.read()
-        err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
+        err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
         if 'components' not in model_dict or not model_dict['components']:
             raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
         components = model_dict['components']

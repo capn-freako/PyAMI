@@ -18,7 +18,7 @@ from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
 
 from pyibisami.ibis_model import Component, Model
 
-DBG = True
+DBG = False
 
 # Parser Definitions
 
@@ -354,12 +354,16 @@ def ibis_file():
     res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DBG)) << end
     return res
 
-def parse_ibis_file(ibis_file_contents_str):
+def parse_ibis_file(ibis_file_contents_str, debug=False):
     """
     Parse the contents of an IBIS file.
 
     Args:
         ibis_file_contents_str (str): The contents of the IBIS file, as a single string.
+
+    KeywordArgs:
+        debug (bool): Output debugging info to console when true.
+        Default = False
 
     Example:
         ::
@@ -376,6 +380,8 @@ def parse_ibis_file(ibis_file_contents_str):
             model_dict:
                 Dictionary containing keyword definitions (empty upon failure).
     """
+    DBG = debug
+    
     try:
         nodes = ibis_file.parse(ibis_file_contents_str)
         if DBG:

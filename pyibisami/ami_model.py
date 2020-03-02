@@ -152,10 +152,6 @@ class AMIModelInitializer:
                 if key in self._init_data:
                     self._init_data[key] = optional_args[key]
 
-        # Perform some sanity checks.
-        # if((self.bit_time / self.sample_interval) != int(self.bit_time / self.sample_interval)):
-        # raise ValueError("bit_time must be an integral multiple of sample_interval.")
-
     def _getChannelResponse(self):
         return list(map(float, self._init_data["channel_response"]))
 
@@ -254,7 +250,6 @@ class AMIModel:
               and modified incrementally in between multiple calls of
               ``initialize``. This is useful for *PyLab* command prompt testing.
         """
-
         # Free any memory allocated by the previous initialization.
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
@@ -268,12 +263,24 @@ class AMIModel:
         self._num_aggressors = init_object._init_data["num_aggressors"]
         self._sample_interval = init_object._init_data["sample_interval"]
         self._bit_time = init_object._init_data["bit_time"]
-
+        
         # Construct the AMI parameters string.
+        def sexpr(pname, pval):
+            """Create an S-expression from a parameter name/value pair,
+            calling recursively as needed to elaborate sub-parameter
+            dictionaries.
+            """
+            if isinstance(pval, dict):
+                subs = []
+                for sname in pval:
+                    subs.append(sexpr(sname, pval[sname]))
+                return sexpr(pname, " ".join(subs))
+            else:
+                return f"({pname} {pval})"
         ami_params_in = "({} ".format(init_object.ami_params["root_name"])
         for item in list(init_object.ami_params.items()):
             if not item[0] == "root_name":
-                ami_params_in += "({} {})".format(str(item[0]), str(item[1]))
+                ami_params_in += sexpr(item[0], item[1])
         ami_params_in += ")"
         self._ami_params_in = ami_params_in.encode("utf-8")
 
@@ -295,8 +302,21 @@ class AMIModel:
                 byref(self._ami_mem_handle),
                 byref(self._msg),
             )
-        except OSError as error:
-            raise error
+        except OSError as err:
+            print(f"pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
+            print(err)
+            print(f"AMI_Init() address = {self._amiInit}")
+            print(f"Values sent into AMI_Init():")
+            print(f"&initOut = {byref(self._initOut)}")
+            print(f"row_size = {self._row_size}")
+            print(f"num_aggressors = {self._num_aggressors}")
+            print(f"sample_interval = {self._sample_interval}")
+            print(f"bit_time = {self._bit_time}")
+            print(f"ami_params_in = {self._ami_params_in}")
+            print(f"&ami_params_out = {byref(self._ami_params_out)}")
+            print(f"&ami_mem_handle = {byref(self._ami_mem_handle)}")
+            print(f"&msg = {byref(self._msg)}")
+            raise err
 
         # Initialize attributes used by getWave().
         bit_time = self._bit_time.value

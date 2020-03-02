@@ -10,7 +10,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 import re
 
 from parsec import ParseError, generate, many, many1, regex, string
-from traits.api import Bool, Enum, HasTraits, Range, Trait
+from traits.api import Bool, Enum, HasTraits, Range, Trait, List
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
 
@@ -82,8 +82,8 @@ class AMIParamConfigurator(HasTraits):
         for trait in new_traits:
             self.add_trait(trait[0], trait[1])
             trait_names.append(trait[0])
-            self._content = gui_items
-            self._param_trait_names = trait_names
+        self._content = gui_items
+        self._param_trait_names = trait_names
         self._root_name = top_branch[0]
         self._ami_parsing_errors = err_str
         self._content = gui_items
@@ -137,20 +137,36 @@ class AMIParamConfigurator(HasTraits):
 
     @property
     def input_ami_params(self):
-        """The dictionary of AMI parameters of type In or InOut, along with their user selected values.
+        """The dictionary of *Model Specific* AMI parameters of type
+        'In' or 'InOut', along with their user selected values.
 
-        Should be passed to AMIModelInitializer constructor.
+        Should be passed to ``AMIModelInitializer`` constructor.
         """
         res = {}
         res["root_name"] = self._root_name
-        for pname in self._param_trait_names:
-            # See the docs on the *HasTraits* class, if this is confusing.
-            try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
-                res[pname] = self.get(pname + "_")[pname + "_"]
-            except:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
-                res[pname] = self.get(pname)[pname]
+        params = self.ami_param_defs["Model_Specific"]
+        for pname in params:
+            res.update(self.input_ami_param(params, pname))
         return res
 
+    def input_ami_param(self, params, pname):
+        """Retrieve one AMI parameter, or dictionary of subparameters.
+        """
+        res = {}
+        param = params[pname]
+        if isinstance(param, AMIParameter):
+            if pname in self._param_trait_names:  # If model specific and In or InOut...
+                # See the docs on the *HasTraits* class, if this is confusing.
+                try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
+                    res[pname] = self.get(pname + "_")[pname + "_"]
+                except:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
+                    res[pname] = self.get(pname)[pname]
+        elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
+            subs = {}
+            for sname in param.keys():
+                subs.update(self.input_ami_param(param, sname))
+            res[pname] = subs
+        return res
 
 #####
 # AMI file parser.
@@ -170,7 +186,6 @@ def lexeme(p):
 lparen = lexeme(string("("))
 rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
-# symbol = lexeme(regex(r'[\d\w_-\[\]]+'))
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
