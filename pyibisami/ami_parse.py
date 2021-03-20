@@ -9,7 +9,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 import re
 
-from parsec import ParseError, generate, many, many1, regex, string
+from parsec import ParseError, generate, many, many1, regex, string, parsecmap
 from traits.api import Bool, Enum, HasTraits, Range, Trait, List
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
@@ -70,6 +70,10 @@ class AMIParamConfigurator(HasTraits):
         # Parse the AMI file contents, storing any errors or warnings,
         # and customize the view accordingly.
         err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
+        if not param_dict:
+            print("Empty dictionary returned by parse_ami_param_defs()!")
+            print(f"Error message:\n{err_str}")
+            raise KeyError("Failed to parse AMI file; see console for more detail.")
         top_branch = list(param_dict.items())[0]
         param_dict = top_branch[1]
         if "Model_Specific" not in param_dict:
@@ -182,23 +186,34 @@ def lexeme(p):
     """Lexer for words."""
     return p << ignore  # skip all ignored characters.
 
+def int2tap(x):
+    """Convert integer to tap position."""
+    if (x[0] == '-'):
+        res = ("pre" + x[1:])
+    else:
+        res = ("post" + x)
+    return res
+
 
 lparen = lexeme(string("("))
 rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
+integ  = lexeme(regex(r"[-+]?[0-9]+"))
+nat    = lexeme(regex(r"[0-9]+"))
+tap_ix = integ.parsecmap(int2tap)
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
 ami_string = lexeme(regex(r'"[^"]*"'))
 
 atom = number | symbol | ami_string | (true | false)
-
+node_name = symbol | tap_ix  # `tap_ix` is new and gives the tap position; negative positions are allowed.
 
 @generate("AMI node")
 def node():
     "Parse AMI node."
     yield lparen
-    label = yield symbol
+    label = yield node_name
     values = yield many1(expr)
     yield rparen
     return (label, values)
@@ -253,31 +268,34 @@ def proc_branch(branch):
         err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
         results = (err_str, {})
 
-    if (
-        (len(param_tags) > 1)
-        and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
-        and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
-    ):
-        try:
-            results = ("", {param_name: AMIParameter(param_name, param_tags)})
-        except AMIParamError as err:
-            results = (str(err), {})
-    elif param_name == "Description":
-        results = ("", {"description": param_tags[0].strip('"')})
-    else:
-        err_str = ""
-        param_dict = {}
-        param_dict[param_name] = {}
-        for param_tag in param_tags:
-            temp_str, temp_dict = proc_branch(param_tag)
-            param_dict[param_name].update(temp_dict)
-            if temp_str:
-                err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
-                    param_name, temp_str
-                )
-                results = (err_str, param_dict)
+    try:
+        if (
+            (len(param_tags) > 1)
+            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
+            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
+        ):
+            try:
+                results = ("", {param_name: AMIParameter(param_name, param_tags)})
+            except AMIParamError as err:
+                results = (str(err), {})
+        elif param_name == "Description":
+            results = ("", {"description": param_tags[0].strip('"')})
+        else:
+            err_str = ""
+            param_dict = {}
+            param_dict[param_name] = {}
+            for param_tag in param_tags:
+                temp_str, temp_dict = proc_branch(param_tag)
+                param_dict[param_name].update(temp_dict)
+                if temp_str:
+                    err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
+                        param_name, temp_str
+                    )
+                    results = (err_str, param_dict)
 
-        results = (err_str, param_dict)
+            results = (err_str, param_dict)
+    except:
+        print(f"Error processing branch:\n{param_tags}")
     return results
 
 
@@ -330,7 +348,7 @@ def parse_ami_param_defs(param_str):
     try:
         res = ami_defs.parse(param_str)
     except ParseError as pe:
-        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index :])
+        err_str = "Expected {} at {} in:\n{}".format(pe.expected, pe.loc(), pe.text[pe.index :])
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)

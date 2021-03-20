@@ -37,6 +37,7 @@ class AMIParameter:
         "Rx_Receiver_Sensitivity",
         "Max_Init_Aggressors",
         "Use_Init_Output",
+        "Modulation",
     ]
 
     # Properties.
@@ -75,7 +76,7 @@ class AMIParameter:
         "Process *Type* tag."
 
         val = values[0]
-        if val in ("Float", "Integer", "String", "Boolean", "UI"):
+        if val in ("Float", "Integer", "String", "Boolean", "UI", "Tap"):
             self._type = val
         else:
             raise AMIParamError("Unrecognized type value: '{}'.".format(val))
@@ -290,7 +291,7 @@ class AMIParameter:
             else:
                 self._value = value_str.strip('"')
         elif param_format == "Range":
-            if param_type not in ("Float", "Integer", "UI"):
+            if param_type not in ("Float", "Integer", "UI", "Tap"):
                 raise AMIParamError("Illegal type, '{}', for use with Range.\n".format(param_type))
             if len(vals) < 3:
                 raise AMIParamError("Insufficient number of values, {}, provided for Range.\n".format(len(vals)))
@@ -313,7 +314,7 @@ class AMIParameter:
                     temp_vals = list(map(float, vals))
                 except (ValueError, TypeError):
                     raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals))
-            elif param_type == "Integer":
+            elif param_type in ("Integer", "Tap"):
                 try:
                     temp_vals = list(map(int, vals))
                 except (ValueError, TypeError):
