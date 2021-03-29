@@ -295,7 +295,7 @@ class AMIParameter:
                 raise AMIParamError("Illegal type, '{}', for use with Range.\n".format(param_type))
             if len(vals) < 3:
                 raise AMIParamError("Insufficient number of values, {}, provided for Range.\n".format(len(vals)))
-            if param_type in ("Float", "UI"):
+            if param_type in ("Float", "UI", "Tap"):
                 try:
                     temp_vals = list(map(float, vals[:3]))
                 except (ValueError, TypeError):
@@ -314,7 +314,7 @@ class AMIParameter:
                     temp_vals = list(map(float, vals))
                 except (ValueError, TypeError):
                     raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals))
-            elif param_type in ("Integer", "Tap"):
+            elif param_type in ("Integer"):
                 try:
                     temp_vals = list(map(int, vals))
                 except (ValueError, TypeError):
