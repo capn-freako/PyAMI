@@ -185,22 +185,13 @@ ignore = many((whitespace | comment))
 def lexeme(p):
     """Lexer for words."""
     return p << ignore  # skip all ignored characters.
-
-def int2tap(x):
-    """Convert integer to tap position."""
-    if (x[0] == '-'):
-        res = ("pre" + x[1:])
-    else:
-        res = ("post" + x)
-    return res
-
-
+    
 lparen = lexeme(string("("))
 rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 integ  = lexeme(regex(r"[-+]?[0-9]+"))
 nat    = lexeme(regex(r"[0-9]+"))
-tap_ix = integ.parsecmap(int2tap)
+tap_ix = integ
 symbol = lexeme(regex(r"[a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
