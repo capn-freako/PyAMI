@@ -38,6 +38,14 @@ class AMIParameter:
         "Max_Init_Aggressors",
         "Use_Init_Output",
         "Modulation",
+        "Tx_V",
+        "Tx_R",
+        "Rx_R",
+        "Ts4file",
+        "PAM4_Mapping",
+        "PAM4_UpperThreshold",
+        "PAM4_CenterThreshold",
+        "PAM4_LowerThreshold",
     ]
 
     # Properties.

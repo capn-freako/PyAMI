@@ -113,6 +113,7 @@ class AMIParamConfigurator(HasTraits):
     def fetch_param_val(self, branch_names):
         """Returns the value of the parameter found by traversing 'branch_names'
         or None if not found.
+        Note: 'branch_names' should *not* begin with 'root_name'.
         """
 
         param_dict = self.ami_param_defs
