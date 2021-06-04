@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="PyIBIS-AMI",
-    version="3.3.5",
+    version="3.3.6",
     packages=find_packages(exclude=["docs", "tests"]),
     include_package_data=True,
     description="Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.",
