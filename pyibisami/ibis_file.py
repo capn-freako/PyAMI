@@ -90,7 +90,7 @@ class IBISModel(HasTraits):
                 return(not tx_ok)
         return(list(filter(pin_ok, list(pins))))
 
-    def __init__(self, ibis_file_name, is_tx, debug=False):
+    def __init__(self, ibis_file_name, is_tx, debug=False, gui=True):
         """
         Args:
             ibis_file_contents_str (str): The unprocessed contents of
@@ -107,6 +107,7 @@ class IBISModel(HasTraits):
         super(IBISModel, self).__init__()
 
         self.debug = debug
+        self.GUI   = gui
         self.log("pyibisami.ibis_file.IBISModel initializing...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
@@ -186,7 +187,7 @@ class IBISModel(HasTraits):
         self._log += txt
         if self.debug:
             print(txt)
-        if alert:
+        if alert and self.GUI:
             message(_msg, "PyAMI Alert")
 
     def default_traits_view(self):

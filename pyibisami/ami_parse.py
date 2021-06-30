@@ -127,6 +127,29 @@ class AMIParamConfigurator(HasTraits):
             return param_dict.pvalue
         return None
 
+    def set_param_val(self, branch_names, new_val):
+        """Sets the value of the parameter found by traversing 'branch_names'
+        or raises an exception if not found.
+        Note: 'branch_names' should *not* begin with 'root_name'.
+        Note: Be careful! There is no checking done here!
+        """
+
+        param_dict = self.ami_param_defs
+        while branch_names:
+            branch_name = branch_names.pop(0)
+            if branch_name in param_dict:
+                param_dict = param_dict[branch_name]
+            else:
+                raise ValueError(f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}")
+        if isinstance(param_dict, AMIParameter):
+            param_dict.pvalue = new_val
+            try:
+                eval(f"self.set({branch_name}_={new_val})")  # mapped trait; see below
+            except:
+                eval(f"self.set({branch_name}={new_val})")
+        else:
+            raise TypeError(f"{param_dict} is not of type: AMIParameter!")
+
     @property
     def ami_parsing_errors(self):
         """Any errors or warnings encountered, while parsing the AMI parameter definition file contents."""

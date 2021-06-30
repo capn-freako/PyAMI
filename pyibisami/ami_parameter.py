@@ -53,6 +53,9 @@ class AMIParameter:
     # Note: They are read-only, despite the presence of apparent setters.
     #       (The idea is that, once initialized, parameter definitions
     #        are immutable.)
+    #       The only exception to this is pvalue, which has been made
+    #       writable, for scripted non-GUI use cases.
+    #       Be very careful w/ this; there is NO CHECKING!
 
     # Note that the setters, below, are only intended for use by
     # __init__(). They may raise an *AMIParamError* exception. This is
@@ -115,7 +118,10 @@ class AMIParameter:
     def _get_value(self):
         return self._value
 
-    pvalue = property(_get_value, doc="Value of AMI parameter.")
+    def _set_val(self, new_val):
+        self._value = new_val
+        
+    pvalue = property(_get_value, _set_val, doc="Value of AMI parameter.")
 
     # pmin
     def _get_min(self):
