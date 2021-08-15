@@ -26,7 +26,7 @@ The idea, here, is that the ``*.IBS`` file, the ``*.AMI`` file, and the
 C++ source file should be configured from a common model configuration
 file, so as to ensure consistency between the three.
 
-Copyright (c) 2019 David Banas; all rights reserved World wide.
+Copyright (c) 2016 David Banas; all rights reserved World wide.
 """
 from datetime import date
 import importlib.util
@@ -175,3 +175,6 @@ def main(py_file):
        py_file: name of model configuration file (*.py)
     """
     ami_config(py_file)
+
+if __name__ == "__main__":
+    main()
