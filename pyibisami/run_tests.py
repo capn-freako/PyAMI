@@ -41,11 +41,11 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     H = float(hue)
     S = float(saturation)
     V = float(value)
-    H_i = floor(H / 60)
-    f = (H / 60) - H_i
-    p = V * (1 - S)
-    q = V * (1 - f * S)
-    t = V * (1 - (1 - f) * S)
+    H_i = floor(H / 60.)
+    f = (H / 60.) - H_i
+    p = V * (1. - S)
+    q = V * (1. - f * S)
+    t = V * (1. - (1. - f) * S)
     if H_i == 0:
         R = V
         G = t
@@ -70,7 +70,8 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
         R = V
         G = p
         B = q
-    return (int(R), int(G), int(B))
+    # return (int(R), int(G), int(B))
+    return (R, G, B)
 
 
 def color_picker(num_hues=3, first_hue=0):
@@ -84,7 +85,7 @@ def color_picker(num_hues=3, first_hue=0):
     hue = first_hue
     while True:
         yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.75, 0.75))
-        hue += 360 / num_hues
+        hue += 360 // num_hues
 
 
 def expand_params(input_parameters):
@@ -157,7 +158,8 @@ def run_tests(**kwargs):
     for test in tests:
         # print("Running test: {} ...".format(test.stem))
         print("Running test: {} ...".format(test))
-        theModel = AMIModel(model.__str__())
+        theModel   = AMIModel(model.__str__())
+        plot_names = plot_name(xml_filename.stem)
         for cfg_item in params:
             cfg_name = cfg_item[0]
             print("\tRunning test configuration: {} ...".format(cfg_name))
@@ -171,7 +173,8 @@ def run_tests(**kwargs):
                         "name": "{} ({})".format(test, cfg_name),
                         "model": theModel,
                         "data": param_list,
-                        "plot_names": plot_name(xml_filename.stem),
+                        # "plot_names": plot_name(xml_filename.stem),
+                        "plot_names": plot_names,
                         "description": description,
                         "plot_colors": colors,
                         "ref_dir": ref_dir,
@@ -182,6 +185,8 @@ def run_tests(**kwargs):
                     chdir(out_dir)  # So that the images are saved in the output directory.
                     interpreter.file(open(Path(test_dir, test)))
                     chdir(cwd)
+                except:
+                    print("Something went wrong.")
                 finally:
                     interpreter.shutdown()
         print("Test:", test, "complete.")
