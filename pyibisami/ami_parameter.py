@@ -46,6 +46,12 @@ class AMIParameter:
         "PAM4_UpperThreshold",
         "PAM4_CenterThreshold",
         "PAM4_LowerThreshold",
+        "Rx_Rj",
+        "Rx_Dj",
+        "Rx_DCD",
+        "Tx_Rj",
+        "Tx_Dj",
+        "Tx_DCD",
     ]
 
     # Properties.
