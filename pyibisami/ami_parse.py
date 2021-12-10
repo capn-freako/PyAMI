@@ -76,11 +76,19 @@ class AMIParamConfigurator(HasTraits):
             raise KeyError("Failed to parse AMI file; see console for more detail.")
         top_branch = list(param_dict.items())[0]
         param_dict = top_branch[1]
+        if "Reserved_Parameters" not in param_dict:
+            print(f"Error: {err_str}\nParameters: {param_dict}")
+            raise KeyError("Unable to get 'Reserved_Parameters' from the parameter set.")
         if "Model_Specific" not in param_dict:
             print(f"Error: {err_str}\nParameters: {param_dict}")
             raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
+        pdict = param_dict["Reserved_Parameters"]
+        pdict.update(param_dict["Model_Specific"])
         gui_items, new_traits = make_gui_items(
-            "Model Specific In/InOut Parameters", param_dict["Model_Specific"], first_call=True
+            # "Model Specific In/InOut Parameters", param_dict["Model_Specific"], first_call=True
+            "Model In/InOut Parameters",
+            pdict,
+            first_call=True
         )
         trait_names = []
         for trait in new_traits:
