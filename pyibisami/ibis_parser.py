@@ -238,7 +238,7 @@ Model_keywords = {
     "algorithmic_model": many1(ex_line) << keyword('end_algorithmic_model'),
     "voltage_range": typminmax,
     "temperature_range": typminmax,
-    "ground_clamp": many1(vi_line),
+    "gnd_clamp": many1(vi_line),
     "power_clamp": many1(vi_line),
 }
 
@@ -381,14 +381,15 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
                 Dictionary containing keyword definitions (empty upon failure).
     """
     DBG = debug
-    
     try:
         nodes = ibis_file.parse(ibis_file_contents_str)
         if DBG:
-            print(nodes)
+            print("Parsed nodes:\n", nodes)
     except ParseError as pe:
         err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index])
         return err_str, {}
+    except:
+        raise
 
     kw_dict = {}
     components = {}

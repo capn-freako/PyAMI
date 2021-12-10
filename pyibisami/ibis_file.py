@@ -108,12 +108,16 @@ class IBISModel(HasTraits):
 
         self.debug = debug
         self.GUI   = gui
-        self.log("pyibisami.ibis_file.IBISModel initializing...")
+        if debug:
+            self.log("pyibisami.ibis_file.IBISModel initializing in debug mode...")
+        else:
+            self.log("pyibisami.ibis_file.IBISModel initializing in non-debug mode...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         with open(ibis_file_name) as file:
             ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
+        self.log("IBIS parsing errors/warnings:\n" + err_str)
         if 'components' not in model_dict or not model_dict['components']:
             raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
         components = model_dict['components']
@@ -123,7 +127,6 @@ class IBISModel(HasTraits):
         self._model_dict = model_dict
         self._models = models
         self._is_tx = is_tx
-        self.log("IBIS parsing errors/warnings:\n" + err_str)
 
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait('comp', Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
@@ -183,7 +186,7 @@ class IBISModel(HasTraits):
     def log(self, msg, alert=False):
         """Log a message to the console and, optionally, to terminal and/or pop-up dialog."""
         _msg = msg.strip()
-        txt = "\n[{}]: {}\n".format(datetime.now(), _msg)
+        txt = "\n[{}]: IBISModel: {}\n".format(datetime.now(), _msg)
         self._log += txt
         if self.debug:
             print(txt)

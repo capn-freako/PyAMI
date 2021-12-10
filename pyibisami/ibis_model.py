@@ -137,27 +137,40 @@ class Model(HasTraits):
         if not self._vrange:
             raise LookupError("Missing [Voltage Range]!")
         
-        # Infer impedance and rise/fall time for output models.
+        def proc_iv(xs):
+            """Process an I/V table.
+            """
+            if len(xs) < 2:
+                raise ValueError("Insufficient number of I-V data points!")
+            try:
+                vs, iss = zip(*(xs))  # Idiomatic Python for ``unzip``.
+            except:
+                raise ValueError(f"xs: {xs}")
+            ityps, imins, imaxs = zip(*iss)
+            vmeas = self._vmeas
+
+            def calcZ(x):
+                (vs, ivals) = x
+                if vmeas:
+                    ix = np.where(np.array(vs) >= vmeas)[0][0]
+                else:
+                    ix = np.where(np.array(vs) >= max(vs)/2)[0][0]
+                try:
+                    return abs((vs[ix] - vs[ix-1])/(ivals[ix] - ivals[ix-1]))
+                except ZeroDivisionError:
+                    return 1e7  # Use 10 MOhms in place of infinity.
+                except:
+                    raise
+
+            zs = map(calcZ, zip([vs, vs, vs], [ityps, imins, imaxs]))
+            return vs, ityps, imins, imaxs, zs
+
+        # Infer impedance and/or rise/fall time, as per model type.
         mtype = self._mtype.lower()
         if mtype == 'output' or mtype == 'i/o':
             if 'pulldown' not in subDict or 'pullup' not in subDict:
                 raise LookupError("Missing I-V curves!")
             plotdata = ArrayPlotData()
-            def proc_iv(xs):
-                if len(xs) < 2:
-                    raise ValueError("Insufficient number of I-V data points!")
-                vs, iss = zip(*(xs))  # Idiomatic Python for ``unzip``.
-                ityps, imins, imaxs = zip(*iss)
-                vmeas = self._vmeas
-                def calcZ(x):
-                    (vs, ivals) = x
-                    if vmeas:
-                        ix = np.where(np.array(vs) >= vmeas)[0][0]
-                    else:
-                        ix = np.where(np.array(vs) >= max(vs)/2)[0][0]
-                    return abs((vs[ix] - vs[ix-1])/(ivals[ix] - ivals[ix-1]))
-                zs = map(calcZ, zip([vs, vs, vs], [ityps, imins, imaxs]))
-                return vs, ityps, imins, imaxs, zs
             pd_vs, pd_ityps, pd_imins, pd_imaxs, pd_zs = proc_iv(subDict['pulldown'])
             pu_vs, pu_ityps, pu_imins, pu_imaxs, pu_zs = proc_iv(subDict['pullup'])
             pu_vs = self._vrange[0] - np.array(pu_vs)  # Correct for Vdd-relative pull-up voltages.
@@ -196,6 +209,45 @@ class Model(HasTraits):
                 raise LookupError("Missing [Ramp]!")
             ramp = subDict['ramp']
             self._slew = (ramp['rising'][0] + ramp['falling'][0])/2e9  # (V/ns)
+        elif mtype == 'input':
+            if 'gnd_clamp' not in subDict or 'power_clamp' not in subDict:
+                raise LookupError("Missing clamp curves!")
+            plotdata = ArrayPlotData()
+            gc_vs, gc_ityps, gc_imins, gc_imaxs, gc_zs = proc_iv(subDict['gnd_clamp'])
+            pc_vs, pc_ityps, pc_imins, pc_imaxs, pc_zs = proc_iv(subDict['power_clamp'])
+            pc_vs = self._vrange[0] - np.array(pc_vs)  # Correct for Vdd-relative pull-up voltages.
+            pc_ityps = -np.array(pc_ityps)             # Correct for current sense, for nicer plot.
+            pc_imins = -np.array(pc_imins)
+            pc_imaxs = -np.array(pc_imaxs)
+            gc_z = list(gc_zs)[0]                      # Use typical value for Zin calc.
+            pc_z = list(pc_zs)[0]
+            self._zin = (gc_z * pc_z) / (gc_z + pc_z)  # Parallel combination, as both clamps are always active.
+            plotdata.set_data("gc_vs",    gc_vs)
+            plotdata.set_data("gc_ityps", gc_ityps)
+            plotdata.set_data("gc_imins", gc_imins)
+            plotdata.set_data("gc_imaxs", gc_imaxs)
+            plotdata.set_data("pc_vs",    pc_vs)
+            plotdata.set_data("pc_ityps", pc_ityps)
+            plotdata.set_data("pc_imins", pc_imins)
+            plotdata.set_data("pc_imaxs", pc_imaxs)
+            plot_iv = Plot(plotdata)  # , padding_left=75)
+            # The 'line_style' trait of a LinePlot instance must be 'dash' or 'dot dash' or 'dot' or 'long dash' or 'solid'.
+            plot_iv.plot(("gc_vs", "gc_ityps"), type="line", color="blue", line_style="solid", name="PD-Typ")
+            plot_iv.plot(("gc_vs", "gc_imins"), type="line", color="blue", line_style="dot",   name="PD-Min")
+            plot_iv.plot(("gc_vs", "gc_imaxs"), type="line", color="blue", line_style="dash",  name="PD-Max")
+            plot_iv.plot(("pc_vs", "pc_ityps"), type="line", color="red",  line_style="solid", name="PU-Typ")
+            plot_iv.plot(("pc_vs", "pc_imins"), type="line", color="red",  line_style="dot",   name="PU-Min")
+            plot_iv.plot(("pc_vs", "pc_imaxs"), type="line", color="red",  line_style="dash",  name="PU-Max")
+            plot_iv.title = "Power/GND Clamp I-V Curves"
+            plot_iv.index_axis.title = "Vin (V)"
+            plot_iv.value_axis.title = "Iin (A)"
+            plot_iv.index_range.low_setting  = 0
+            plot_iv.index_range.high_setting = self._vrange[0]
+            plot_iv.value_range.low_setting  = 0
+            plot_iv.value_range.high_setting = 0.1
+            plot_iv.legend.visible = True
+            plot_iv.legend.align = "ul"
+            self.plot_iv = plot_iv
 
         # Separate AMI executables by OS.
         def is64(x):
@@ -247,6 +299,8 @@ class Model(HasTraits):
         if mtype == 'output' or mtype == 'i/o':
             self.add_trait('zout',   String(self._zout))
             self.add_trait('slew',   String(self._slew))
+        elif mtype == 'input':
+            self.add_trait('zin',    String(self._zin))
         self._content = [
             Group(
                 Item('model_type', label='Model type',            style='readonly'),
@@ -266,6 +320,9 @@ class Model(HasTraits):
         if mtype == 'output' or mtype == 'i/o':
             self._content.append(Item('zout',       label='Impedance (Ohms)',      style='readonly', format_str='%4.1f'))
             self._content.append(Item('slew',       label='Slew Rate (V/ns)',      style='readonly', format_str='%4.1f'))
+            self._content.append(Item('plot_iv', editor=ComponentEditor(), show_label=False))
+        elif mtype == 'input':
+            self._content.append(Item('zin',        label='Impedance (Ohms)',      style='readonly', format_str='%4.1f'))
             self._content.append(Item('plot_iv', editor=ComponentEditor(), show_label=False))
 
     def __str__(self):
@@ -314,6 +371,11 @@ class Model(HasTraits):
         "The driver slew rate."
         return self._slew
         
+    @property
+    def zin(self):
+        "The input impedance."
+        return self._zin
+
     @property
     def ccomp(self):
         "The parasitic capacitance."
