@@ -93,13 +93,14 @@ class IBISModel(HasTraits):
     def __init__(self, ibis_file_name, is_tx, debug=False, gui=True):
         """
         Args:
-            ibis_file_contents_str (str): The unprocessed contents of
-                the IBIS file, as a single string.
+            ibis_file_name (str): The name of the IBIS file.
             is_tx (bool): True if this is a Tx model.
 
         KeywordArgs:
             debug (bool): Output debugging info to console when true.
                 Default = False
+            gui (bool): Set to `False` for command line and/or script usage.
+                Default = True.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
