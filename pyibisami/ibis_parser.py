@@ -14,30 +14,35 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import re
 from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
                     one_of, skip, none_of, times, ParseError, count, \
-                    separated, letter, digit, optional, Parser, Value
+                    separated, letter, digit, optional, Parser, Value, \
+                    choice, fail_with, exclude
 
 from pyibisami.ibis_model import Component, Model
 
-DBG = True
+DBG = False
 
 # Parser Definitions
-
-# TODO: Consider shifting to an exclusively line-oriented parsing strategy.
 
 whitespace = regex(r"\s+", re.MULTILINE)
 comment    = regex(r"\|.*")
 ignore     = many(whitespace | comment)
 
-def logf(goal):
+def logf(p, preStr=""):
     """Logs failure at point of occurence.
 
-    Example:
-        p | logf(<goal desc.>:str)
+    Args:
+        p (Parser): The original parser.
+
+    KeywordArgs:
+        preStr (str): A prefix string to use in failure message.
+                      (Default = <empty string>)
     """
     @Parser
-    def fn(str, ix):
-        print(f"Failed to find {goal} in: {str[ix:]}")
-        return Value.failure(ix, goal)
+    def fn(txt, ix):
+        res = p(txt, ix)
+        if not res.status:
+            print(f"{preStr}: Expected {res.expected} in '{txt[res.index : res.index+5]}' at {ParseError.loc_info(txt, res.index)}.") 
+        return res
     return fn
 
 def lexeme(p):
@@ -68,7 +73,6 @@ symbol        = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true          = lexeme(string("True")).result(True)
 false         = lexeme(string("False")).result(False)
 quoted_string = lexeme(regex(r'"[^"]*"'))
-fail          = one_of("")
 skip_keyword  = (skip_line >> many(none_of("[") >> skip_line)).result('(Skipped.)')  # Skip over everything until the next keyword begins.
 
 IBIS_num_suf = {
@@ -86,7 +90,7 @@ IBIS_num_suf = {
 @generate("number")
 def number():
     "Parse an IBIS numerical value."
-    s = yield word(regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()))
+    s = yield (regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()) << ignore)
     m = re.search(r'[^\d]+$', s)
     if m:
         ix = m.start()
@@ -104,11 +108,7 @@ na = word(string("NA") | string("na")).result(None)
 def typminmax():
     "Parse Typ/Min/Max values."
     typ    = yield number
-    # if DBG:
-    #     print(f"Typ.: {typ}")
     minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
-    # if DBG:
-    #     print(f"Min./Max.: {minmax}")
     yield ignore  # So that ``typminmax`` behaves as a lexeme.
     res = [typ]
     res.extend(minmax)
@@ -177,7 +177,7 @@ def keyword(kywrd=""):
             if res.lower() == kywrd.lower():
                 return res
             else:
-                return fail.desc(f"Expecting: {kywrd}; got: {res}.")
+                return fail_with(f"Expecting: {kywrd}; got: {res}.")
         return res
     return fn
 
@@ -185,9 +185,7 @@ def keyword(kywrd=""):
 def param():
     "Parse IBIS parameter."
     # Parameters must begin with a letter in column 1.
-    pname = yield ( word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
-                  | logf("parameter name")
-                  )
+    pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
     if DBG:
         print(f"Parsing parameter {pname}...", end='')
     res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
@@ -223,23 +221,17 @@ def node(valid_keywords, stop_keywords, debug=False):
         if debug:
             print(f"Parsing keyword: [{nm}]...")
         if nmL in valid_keywords:
-            if nmL == "end":  # Because ``ibis_file`` expects this to be the last thing it sees,
-                return fail   # we can't consume it here.
+            if nmL == "end":           # Because ``ibis_file`` expects this to be the last thing it sees,
+                return fail_with("")   # we can't consume it here.
             else:
-                res = yield valid_keywords[nmL]  # Parse the sub-keyword.
-                # try:
-                #     res = yield valid_keywords[nmL]  # Parse the sub-keyword.
-                # except ParseError as pe:
-                #     err_str = f"Expected {pe.expected} at {pe.loc()} in {pe.text[pe.index]}"
-                #     print(err_str)
-                #     return fail
+                res = yield logf(valid_keywords[nmL], f"[{nm}]")  # Parse the sub-keyword.
         elif nmL in stop_keywords:
-            return fail                          # Stop parsing.
+            return fail_with("")       # Stop parsing.
         else:
             res = yield skip_keyword
-        yield ignore                             # So that ``kywrd`` behaves as a lexeme.
+        yield ignore                   # So that ``kywrd`` behaves as a lexeme.
         if debug:
-            print("  ", nmL + ":", res)
+            print(f"Finished parsing keyword: [{nm}].")
         return (nmL, res)
 
     return (kywrd | param)
@@ -257,26 +249,14 @@ def end():
 @generate("[Ramp]")
 def ramp():
     "Parse [Ramp]."
-    # params = yield many(param)
-    param1 = yield param
-    print(f"param1: {param1}")
-    param2 = yield param
-    print(f"param2: {param2}")
-    # lines = yield count(ramp_line, 2).desc("Two ramp_lines")
-    # if lines is :
-    #     err_str = f"Expected {pe.expected} at {pe.loc()} in {pe.text[pe.index]}"
-    #     print(err_str)
-    #     return fail
-    # lines = yield dbg_p(ramp_line)
-    # print(f"lines: {lines}")
-    # return dict(lines).update(dict(params))
-    return dict(params)
+    params = yield many(exclude(param, ramp_line))
+    lines = yield count(ramp_line, 2).desc("Two ramp_lines")
+    return dict(lines) #.update(dict(params))
 
 Model_keywords = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
-    # "ramp": dbg_p(ramp),
     "algorithmic_model": many1(ex_line) << keyword('end_algorithmic_model'),
     "voltage_range": typminmax,
     "temperature_range": typminmax,
@@ -293,7 +273,13 @@ def model():
     res = yield many1(node(Model_keywords, IBIS_keywords, debug=DBG))
     if DBG:
         print(f"[Model] {nm} contains: {dict(res).keys()}")
-    return {nm: Model(dict(res))}
+    try:
+        theModel = Model(dict(res))
+    except LookupError as le:
+        return fail_with(f"[Model] {nm}: {str(le)}")
+    except Exception as err:
+        return fail_with(f"[Model] {nm}: {str(err)}")
+    return {nm: theModel}
 
 # [Component]
 rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
@@ -346,7 +332,15 @@ Component_keywords = {
 def comp():
     "Parse [Component]."
     nm = yield lexeme(name)
+    if DBG:
+        print(f"Parsing component: {nm}")
     res = yield many1(node(Component_keywords, IBIS_keywords, debug=DBG))
+    try:
+        theComp = Component(dict(res))
+    except LookupError as le:
+        return fail_with(f"[Component] {nm}: {str(le)}")
+    except Exception as err:
+        return fail_with(f"[Component] {nm}: {str(err)}")
     return {nm: Component(dict(res))}
 
 @generate("[Model Selector]")
@@ -425,12 +419,11 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
     """
     DBG = debug
     try:
-        nodes = ibis_file.parse(ibis_file_contents_str)
+        nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
         if DBG:
             print("Parsed nodes:\n", nodes)
     except ParseError as pe:
-        err_str = "Expected {} at {} in {}".format(pe.expected, pe.loc(), pe.text[pe.index])
-        return err_str, {}
+        return str(pe), {}
     except:
         raise
 

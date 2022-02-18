@@ -120,10 +120,10 @@ class IBISModel(HasTraits):
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
         self.log("IBIS parsing errors/warnings:\n" + err_str)
         if 'components' not in model_dict or not model_dict['components']:
-            raise ValueError("This IBIS model has no components! Parser messages:\n" + err_str)
+            raise ValueError("This IBIS model has no components!")
         components = model_dict['components']
         if 'models' not in model_dict or not model_dict['models']:
-            raise ValueError("This IBIS model has no models! Parser messages:\n" + err_str)
+            raise ValueError("This IBIS model has no models!")
         models = model_dict['models']
         self._model_dict = model_dict
         self._models = models

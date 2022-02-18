@@ -253,7 +253,6 @@ class AMIModel:
         # Free any memory allocated by the previous initialization.
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
-            self._ami_mem_handle = c_char_p(None)
 
         # Set up the AMI_Init() arguments.
         self._channel_response = init_object._init_data["channel_response"]

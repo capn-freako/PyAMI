@@ -106,7 +106,8 @@ class AMIParamConfigurator(HasTraits):
         
     def open_gui(self):
         """Present a customized GUI to the user, for parameter customization."""
-        self.edit_traits()
+        # self.edit_traits()
+        self.configure_traits()
 
     def default_traits_view(self):
         view = View(
@@ -220,6 +221,7 @@ def lexeme(p):
 
 def int2tap(x):
     """Convert integer to tap position."""
+    x = x.strip()
     if (x[0] == '-'):
         res = ("pre" + x[1:])
     else:
@@ -232,14 +234,14 @@ rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 integ  = lexeme(regex(r"[-+]?[0-9]+"))
 nat    = lexeme(regex(r"[0-9]+"))
-tap_ix = integ.parsecmap(int2tap)
-symbol = lexeme(regex(r"[a-zA-Z_][^\s()]*"))
+tap_ix = (integ << whitespace).parsecmap(int2tap)
+symbol = lexeme(regex(r"[0-9a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
 ami_string = lexeme(regex(r'"[^"]*"'))
 
 atom = number | symbol | ami_string | (true | false)
-node_name = symbol | tap_ix  # `tap_ix` is new and gives the tap position; negative positions are allowed.
+node_name = tap_ix ^ symbol  # `tap_ix` is new and gives the tap position; negative positions are allowed.
 
 @generate("AMI node")
 def node():
