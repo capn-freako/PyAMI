@@ -190,7 +190,7 @@ class IBISModel(HasTraits):
         txt = "\n[{}]: IBISModel: {}\n".format(datetime.now(), _msg)
         self._log += txt
         if self.debug:
-            print(txt)
+            print(txt, flush=True)
         if alert and self.GUI:
             message(_msg, "PyAMI Alert")
 
