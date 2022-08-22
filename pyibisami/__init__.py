@@ -9,7 +9,7 @@ Original Date:   3 July 2012
 
 Copyright (c) 2012 by David Banas; All rights reserved World wide.
 """
-__version__ = "3.5.5"
-__date__    = "February 13, 2022"
+__version__ = "3.5.6"
+__date__    = "August 20, 2022"
 __authors__ = "David Banas"
 __copy__    = "Copyright (c) 2014 David Banas"
