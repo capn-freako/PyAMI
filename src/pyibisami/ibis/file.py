@@ -197,7 +197,7 @@ class IBISModel(HasTraits):
         """Log a message to the console and, optionally, to terminal and/or
         pop-up dialog."""
         _msg = msg.strip()
-        txt = "\n[{}]: IBISModel: {}\n".format(datetime.now(), _msg)
+        txt = f"\n[{datetime.now()}]: IBISModel: {_msg}\n"
         self._log += txt
         if self.debug:
             print(txt, flush=True)

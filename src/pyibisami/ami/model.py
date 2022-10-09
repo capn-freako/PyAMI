@@ -272,7 +272,7 @@ class AMIModel:
             else:
                 return f"({pname} {pval})"
 
-        ami_params_in = "({} ".format(init_object.ami_params["root_name"])
+        ami_params_in = f"({init_object.ami_params['root_name']} "
         for item in list(init_object.ami_params.items()):
             if not item[0] == "root_name":
                 ami_params_in += sexpr(item[0], item[1])

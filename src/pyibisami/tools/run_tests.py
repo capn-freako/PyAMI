@@ -144,12 +144,12 @@ def run_tests(**kwargs):
     # someone, whom may not have the PyIBIS-AMI package installed.
     shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
 
-    print("Testing model: {}".format(model))
-    print("Using tests in: {}".format(test_dir))
+    print(f"Testing model: {model}")
+    print(f"Using tests in: {test_dir}")
     params = expand_params(kwargs["params"])
 
     # Run the tests.
-    print("Sending XHTML output to: {}".format(xml_filename))
+    print(f"Sending XHTML output to: {xml_filename}")
     with open(xml_filename, "w") as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
@@ -160,12 +160,12 @@ def run_tests(**kwargs):
         tests = list(test_dir.glob("*.em"))
     for test in tests:
         # print("Running test: {} ...".format(test.stem))
-        print("Running test: {} ...".format(test))
+        print(f"Running test: {test} ...")
         theModel = AMIModel(model.__str__())
         plot_names = plot_name(xml_filename.stem)
         for cfg_item in params:
             cfg_name = cfg_item[0]
-            print("\tRunning test configuration: {} ...".format(cfg_name))
+            print(f"\tRunning test configuration: {cfg_name} ...")
             description = cfg_item[1]
             param_list = cfg_item[2]
             colors = color_picker(num_hues=len(param_list))
@@ -173,7 +173,7 @@ def run_tests(**kwargs):
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
-                        "name": "{} ({})".format(test, cfg_name),
+                        "name": f"{test} ({cfg_name})",
                         "model": theModel,
                         "data": param_list,
                         # "plot_names": plot_name(xml_filename.stem),
@@ -196,7 +196,7 @@ def run_tests(**kwargs):
     with open(xml_filename, "a") as xml_file:
         xml_file.write("</tests>\n")
 
-    print("Please, open file, `{}` in a Web browser, in order to view the test results.".format(xml_filename))
+    print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True, help_option_names=["-h", "--help"]))

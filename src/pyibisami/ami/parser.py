@@ -290,14 +290,14 @@ def proc_branch(branch):
         if not branch:
             err_str = "ERROR: Empty branch provided to proc_branch()!\n"
         else:
-            err_str = "ERROR: Malformed item: {}\n".format(branch[0])
+            err_str = f"ERROR: Malformed item: {branch[0]}\n"
         results = (err_str, {})
 
     param_name = branch[0]
     param_tags = branch[1]
 
     if not param_tags:
-        err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
+        err_str = f"ERROR: No tags/subparameters provided for parameter, '{param_name}'\n"
         results = (err_str, {})
 
     try:
@@ -378,7 +378,7 @@ def parse_ami_param_defs(param_str):
     try:
         res = ami_defs.parse(param_str)
     except ParseError as pe:
-        err_str = "Expected {} at {} in:\n{}".format(pe.expected, pe.loc(), pe.text[pe.index :])
+        err_str = f"Expected {pe.expected} at {pe.loc()} in:\n{pe.text[pe.index:]}"
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)

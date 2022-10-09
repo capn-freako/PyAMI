@@ -52,12 +52,12 @@ def print_param(indent, name, param):
         param (dict): Dictionary containing parameter definition fields.
     """
 
-    print(indent, "(%s" % name)
+    print(indent, f"({name}")
     if "subs" in param:
         for key in param["subs"]:
             print_param(indent + "    ", key, param["subs"][key])
         if "description" in param:
-            print(indent + "    ", "(Description {})".format(param["description"]))
+            print(indent + "    ", f"(Description {param['description']})")
     else:
         for (fld_name, fld_key) in [
             ("Usage", "usage"),
@@ -85,10 +85,10 @@ def print_param(indent, name, param):
                         print(item, end=" ")
                     print(")")
                 else:
-                    print(indent, "    (%s" % param["format"], param["default"], param["min"], param["max"], ")")
+                    print(indent, f"    ({param['format']}", param["default"], param["min"], param["max"], ")")
             # Execute the default action.
             else:
-                print(indent, "    (%s" % fld_name, param[fld_key], ")")
+                print(indent, f"    ({fld_name}", param[fld_key], ")")
     print(indent, ")")
 
 
@@ -100,14 +100,14 @@ def print_code(pname, param):
         param (dict): Dictionary containing parameter definition fields.
     """
 
-    print("       ", 'node_names.push_back("%s");' % pname)
+    print("       ", f'node_names.push_back("{pname}");')
     if "subs" in param:
         for key in param["subs"]:
             print_code(key, param["subs"][key])
     else:
         if param["usage"] == "In" or param["usage"] == "InOut":
             ptype = param["type"]
-            print("        {} {};".format(param_types[ptype]["c_type"], pname))
+            print(f"        {param_types[ptype]['c_type']} {pname};")
             if ptype == "BOOL":
                 print(
                     "        {} = {}(node_names, {});".format(
@@ -115,7 +115,7 @@ def print_code(pname, param):
                     )
                 )
             else:
-                print("        {} = {}(node_names, {});".format(pname, param_types[ptype]["getter"], param["default"]))
+                print(f"        {pname} = {param_types[ptype]['getter']}(node_names, {param['default']});")
     print("       ", "node_names.pop_back();")
 
 
@@ -125,14 +125,14 @@ def ami_config(py_file):
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
-    print("Reading model configuration information from file: %s." % (py_file))
+    print(f"Reading model configuration information from file: {py_file}.")
     spec = importlib.util.spec_from_file_location(file_base_name, py_file)
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)
 
     # Configure the 3 files.
     for ext in ["cpp", "ami", "ibs"]:
-        out_file = Path(py_file).with_suffix(".{}".format(ext))
+        out_file = Path(py_file).with_suffix(f".{ext}")
         if ext == "ami":
             em_file = Path(__file__).parent.joinpath("generic.ami.em")
         elif ext == "ibs":
