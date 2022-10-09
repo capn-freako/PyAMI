@@ -61,6 +61,10 @@ xfail_strict=true
 fail-under = 9.0
 
 [tool.pylint.messages_control]
+disable = [
+    "invalid-name",
+    "line-too-long",
+]
 
 [tool.pylint.format]
 max-line-length = 119
