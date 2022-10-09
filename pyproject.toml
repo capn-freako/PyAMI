@@ -74,6 +74,3 @@ ignore = [
     "D105", # Missing docstring in magic method
     "D107", # Missing docstring in __init__
 ]
-
-[[tool.mypy.overrides]]
-ignore_missing_imports = true
