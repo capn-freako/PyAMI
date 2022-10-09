@@ -1,23 +1,22 @@
-# Replace the individual build scripts with one Makefile to provide the same functionality.
-.PHONY: tox clean test lint
+.PHONY: tox format lint check test tests clean
 
-# If you don't want to use pipenv, remove "pipenv run".  Tox must be installed first.
 tox:
-	pipenv run tox
+	tox -p all
+
+format:
+	tox -e format
 
 lint:
-	pipenv run tox -e pylint,flake8
+	tox -e lint
+
+check:
+	tox -e type-check
 
 test:
-	pipenv run tox -e py37
+	tox -e py310
+
+test:
+	tox -e py310
 
 clean:
-	rm -rf .tox docs/build/ __pycache__/ tests/__pycache__ .pytest_cache/ *.egg-info \
-		Pipfile Pipfile.lock .venv
-
-docker-build:
-	docker build -t pyami .
-
-# Update ~/git/PyAMI to match your local path.
-docker-shell:
-	docker run -v ~/git/PyAMI:/data/PyAMI:rw -it pyami /bin/bash
+	rm -rf .tox .pytest_cache htmlcov *.egg-info .coverage
