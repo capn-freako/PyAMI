@@ -109,11 +109,7 @@ def print_code(pname, param):
             ptype = param["type"]
             print(f"        {param_types[ptype]['c_type']} {pname};")
             if ptype == "BOOL":
-                print(
-                    "        {} = {}(node_names, {});".format(
-                        pname, param_types[ptype]["getter"], param["default"].lower()
-                    )
-                )
+                print(f"        {pname} = {param_types[ptype]['getter']}(node_names, {param['default'].lower()});")
             else:
                 print(f"        {pname} = {param_types[ptype]['getter']}(node_names, {param['default']});")
     print("       ", "node_names.pop_back();")
@@ -141,7 +137,7 @@ def ami_config(py_file):
             em_file = out_file.with_suffix(".cpp.em")
 
         print(f"Building '{out_file}' from '{em_file}'...")
-        with open(out_file, "w") as out_file:
+        with open(out_file, "w", encoding="utf-8") as out_file:
             interpreter = em.Interpreter(
                 output=out_file,
                 globals={
@@ -175,4 +171,4 @@ def main(py_file):
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter

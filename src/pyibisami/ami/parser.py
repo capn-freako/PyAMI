@@ -62,7 +62,7 @@ class AMIParamConfigurator(HasTraits):
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
         # to get all the Traits/UI machinery setup correctly.
-        super(AMIParamConfigurator, self).__init__()
+        super().__init__()
 
         # Parse the AMI file contents, storing any errors or warnings,
         # and customize the view accordingly.
@@ -210,7 +210,7 @@ class AMIParamConfigurator(HasTraits):
 # ignore cases.
 whitespace = regex(r"\s+", re.MULTILINE)
 comment = regex(r"\|.*")
-ignore = many((whitespace | comment))
+ignore = many(whitespace | comment)
 
 
 def lexeme(p):
@@ -320,8 +320,8 @@ def proc_branch(branch):
                 temp_str, temp_dict = proc_branch(param_tag)
                 param_dict[param_name].update(temp_dict)
                 if temp_str:
-                    err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
-                        param_name, temp_str
+                    err_str = (
+                        f"Error returned by recursive call, while processing parameter, '{param_name}':\n{temp_str}"
                     )
                     results = (err_str, param_dict)
 
@@ -396,9 +396,7 @@ def parse_ami_param_defs(param_str):
             tmp_params = params[label]
             for param_name in list(tmp_params.keys()):
                 if param_name not in AMIParameter.RESERVED_PARAM_NAMES:
-                    err_str += "WARNING: Unrecognized reserved parameter name, '{}', found in parameter definition string!\n".format(
-                        param_name
-                    )
+                    err_str += f"WARNING: Unrecognized reserved parameter name, '{param_name}', found in parameter definition string!\n"
                     continue
                 param = tmp_params[param_name]
                 if param.pname == "AMI_Version":
@@ -413,9 +411,7 @@ def parse_ami_param_defs(param_str):
         elif label == "description":
             pass
         else:
-            err_str += "WARNING: Unrecognized group with label, '{}', found in parameter definition string!\n".format(
-                label
-            )
+            err_str += f"WARNING: Unrecognized group with label, '{label}', found in parameter definition string!\n"
 
     if not reserved_found:
         err_str += "ERROR: Reserved parameters section not found! It is required."
@@ -456,8 +452,8 @@ def make_gui_items(pname, param, first_call=False):
                         tmp_dict.update(list(zip(list_tips, param.pvalue)))
                         val = list(tmp_dict.keys())[0]
                         if default:
-                            for tip in tmp_dict:
-                                if tmp_dict[tip] == default:
+                            for tip in tmp_dict.items():
+                                if tip == default:
                                     val = tip
                                     break
                         new_traits.append((pname, Trait(val, tmp_dict)))

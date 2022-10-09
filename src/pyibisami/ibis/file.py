@@ -79,8 +79,7 @@ class IBISModel(HasTraits):
         model_dict = self._model_dict
         if "model_selectors" in model_dict and mname in model_dict["model_selectors"]:
             return list(map(lambda pr: pr[0], model_dict["model_selectors"][mname]))
-        else:
-            return [mname]
+        return [mname]
 
     def get_pins(self):
         """Get the list of appropriate pins, given our type (i.e. - Tx or Rx)."""
@@ -91,11 +90,10 @@ class IBISModel(HasTraits):
             mods = self.get_models(mname)
             mod = self._models[mods[0]]
             mod_type = mod.mtype.lower()
-            tx_ok = (mod_type == "output") or (mod_type == "i/o")
+            tx_ok = mod_type in ("output", "i/o")
             if self._is_tx:
                 return tx_ok
-            else:
-                return not tx_ok
+            return not tx_ok
 
         return list(filter(pin_ok, list(pins)))
 
@@ -114,7 +112,7 @@ class IBISModel(HasTraits):
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
         # to get all the Traits/UI machinery setup correctly.
-        super(IBISModel, self).__init__()
+        super().__init__()
 
         self.debug = debug
         self.GUI = gui
@@ -124,7 +122,7 @@ class IBISModel(HasTraits):
             self.log("pyibisami.ibis_file.IBISModel initializing in non-debug mode...")
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
-        with open(ibis_file_name) as file:
+        with open(ibis_file_name, "r", encoding="utf-8") as file:
             ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
         self.log("IBIS parsing errors/warnings:\n" + err_str)
@@ -268,13 +266,13 @@ class IBISModel(HasTraits):
         return self._ami_file
 
     def _comp_changed(self, new_value):
+        del new_value
         self.pins = self.get_pins()
         self.pin = self.pins[0]
 
     def _pin_changed(self, new_value):
-        model_dict = self._model_dict
         # (mname, rlc_dict) = self.pin_  # Doesn't work. Because ``pin_`` is a cached property and hasn't yet been marked "dirty"?
-        (mname, rlc_dict) = self.comp_.pins[new_value]
+        (mname, _) = self.comp_.pins[new_value]
         self.models = self.get_models(mname)
         self.mod = self.models[0]
 

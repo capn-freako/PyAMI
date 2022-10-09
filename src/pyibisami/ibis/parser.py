@@ -87,7 +87,7 @@ def word(p):
 @generate("remainder of line")
 def rest_line():
     "Parse remainder of line."
-    chars = yield (many(none_of("\n\r")) << ignore)  # So that we still function as a lexeme.
+    chars = yield many(none_of("\n\r")) << ignore  # So that we still function as a lexeme.
     return "".join(chars)
 
 
@@ -154,8 +154,7 @@ def ratio():
     [num, den] = yield (separated(number, string("/"), 2, maxt=2, end=False) | na.result([0, 0]))
     if den:
         return num / den
-    else:
-        return None
+    return None
 
 
 ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
@@ -230,8 +229,7 @@ def keyword(kywrd=""):
         if kywrd:
             if res.lower() == kywrd.lower():
                 return res
-            else:
-                return fail_with(f"Expecting: {kywrd}; got: {res}.")
+            return fail_with(f"Expecting: {kywrd}; got: {res}.")
         return res
 
     return fn
@@ -281,8 +279,7 @@ def node(valid_keywords, stop_keywords, debug=False):
         if nmL in valid_keywords:
             if nmL == "end":  # Because ``ibis_file`` expects this to be the last thing it sees,
                 return fail_with("")  # we can't consume it here.
-            else:
-                res = yield logf(valid_keywords[nmL], f"[{nm}]")  # Parse the sub-keyword.
+            res = yield logf(valid_keywords[nmL], f"[{nm}]")  # Parse the sub-keyword.
         elif nmL in stop_keywords:
             return fail_with("")  # Stop parsing.
         else:
@@ -382,7 +379,7 @@ def pins():
     def filt(x):
         (_, (mod, _)) = x
         m = mod.upper()
-        return not ((m == "POWER") or (m == "GND") or (m == "NC"))
+        return not m in ("POWER", "GND", "NC")
 
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
     rlcs = yield optional(count(rlc, 3), [])
@@ -407,7 +404,7 @@ def comp():
         print(f"Parsing component: {nm}")
     res = yield many1(node(Component_keywords, IBIS_keywords, debug=DBG))
     try:
-        theComp = Component(dict(res))
+        Component(dict(res))
     except LookupError as le:
         return fail_with(f"[Component] {nm}: {str(le)}")
     except Exception as err:

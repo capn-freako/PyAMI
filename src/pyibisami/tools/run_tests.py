@@ -14,7 +14,7 @@ from pathlib import Path
 
 import click
 import em
-from numpy import floor
+import numpy as np
 
 from pyibisami.ami.model import AMIModel
 
@@ -43,7 +43,7 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     H = float(hue)
     S = float(saturation)
     V = float(value)
-    H_i = floor(H / 60.0)
+    H_i = np.floor(H / 60.0)
     f = (H / 60.0) - H_i
     p = V * (1.0 - S)
     q = V * (1.0 - f * S)
@@ -104,7 +104,7 @@ def expand_params(input_parameters):
         for cfg_filename in cfg_files:
             cfg_name = cfg_filename.stem
             param_list = []
-            with open(cfg_filename, "rt") as cfg_file:
+            with open(cfg_filename, "rt", encoding="utf-8") as cfg_file:
                 description = cfg_file.readline()
                 expr = ""
                 for line in cfg_file:
@@ -150,7 +150,7 @@ def run_tests(**kwargs):
 
     # Run the tests.
     print(f"Sending XHTML output to: {xml_filename}")
-    with open(xml_filename, "w") as xml_file:
+    with open(xml_filename, "w", encoding="utf-8") as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
         xml_file.write("<tests>\n")
@@ -161,7 +161,7 @@ def run_tests(**kwargs):
     for test in tests:
         # print("Running test: {} ...".format(test.stem))
         print(f"Running test: {test} ...")
-        theModel = AMIModel(model.__str__())
+        theModel = AMIModel(str(model))
         plot_names = plot_name(xml_filename.stem)
         for cfg_item in params:
             cfg_name = cfg_item[0]
@@ -169,7 +169,7 @@ def run_tests(**kwargs):
             description = cfg_item[1]
             param_list = cfg_item[2]
             colors = color_picker(num_hues=len(param_list))
-            with open(xml_filename, "a") as xml_file:
+            with open(xml_filename, "a", encoding="utf-8") as xml_file:
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
@@ -193,7 +193,7 @@ def run_tests(**kwargs):
                 finally:
                     interpreter.shutdown()
         print("Test:", test, "complete.")
-    with open(xml_filename, "a") as xml_file:
+    with open(xml_filename, "a", encoding="utf-8") as xml_file:
         xml_file.write("</tests>\n")
 
     print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
@@ -262,4 +262,4 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter

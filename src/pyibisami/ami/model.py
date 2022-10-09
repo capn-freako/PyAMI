@@ -32,7 +32,7 @@ def loadWave(filename):
             and voltage values, respectively.
     """
 
-    with open(filename, "r") as theFile:
+    with open(filename, "r", encoding="utf-8") as theFile:
         theFile.readline()  # Consume the header line.
         time = []
         voltage = []
@@ -85,6 +85,8 @@ class AMIModelInitializer:
     way, she can avoid having to type a lot of redundant constants every
     time she invokes the AMIModel constructor.
     """
+
+    # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
     ami_params = {"root_name": ""}
 
@@ -269,8 +271,7 @@ class AMIModel:
                 for sname in pval:
                     subs.append(sexpr(sname, pval[sname]))
                 return sexpr(pname, " ".join(subs))
-            else:
-                return f"({pname} {pval})"
+            return f"({pname} {pval})"
 
         ami_params_in = f"({init_object.ami_params['root_name']} "
         for item in list(init_object.ami_params.items()):
@@ -298,10 +299,10 @@ class AMIModel:
                 byref(self._msg),
             )
         except OSError as err:
-            print(f"pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
+            print("pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
             print(err)
             print(f"AMI_Init() address = {self._amiInit}")
-            print(f"Values sent into AMI_Init():")
+            print("Values sent into AMI_Init():")
             print(f"&initOut = {byref(self._initOut)}")
             print(f"row_size = {self._row_size}")
             print(f"num_aggressors = {self._num_aggressors}")
