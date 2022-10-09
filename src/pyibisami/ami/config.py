@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
-"""
-IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
+"""IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
 
 Original author: David Banas
 
@@ -28,8 +27,8 @@ file, so as to ensure consistency between the three.
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
 """
-from datetime import date
 import importlib.util
+from datetime import date
 from pathlib import Path
 
 import click
@@ -44,14 +43,13 @@ param_types = {
 
 
 def print_param(indent, name, param):
-    """
-    Print AMI parameter specification. Handle nested parameters, via recursion.
+    """Print AMI parameter specification. Handle nested parameters, via
+    recursion.
 
     Args:
         indent (str): String containing some number of spaces.
         name (str): Parameter name.
         param (dict): Dictionary containing parameter definition fields.
-
     """
 
     print(indent, "(%s" % name)
@@ -95,13 +93,11 @@ def print_param(indent, name, param):
 
 
 def print_code(pname, param):
-    """
-    Print C++ code needed to query AMI parameter tree for a particular leaf.
+    """Print C++ code needed to query AMI parameter tree for a particular leaf.
 
     Args:
         pname (str): Parameter name.
         param (dict): Dictionary containing parameter definition fields.
-
     """
 
     print("       ", 'node_names.push_back("%s");' % pname)
@@ -124,7 +120,8 @@ def print_code(pname, param):
 
 
 def ami_config(py_file):
-    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and cpp."""
+    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and
+    cpp."""
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
@@ -175,6 +172,7 @@ def main(py_file):
        py_file: name of model configuration file (*.py)
     """
     ami_config(py_file)
+
 
 if __name__ == "__main__":
     main()

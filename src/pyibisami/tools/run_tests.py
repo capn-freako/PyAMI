@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
-"""
-Python tool for running several EmPy encoded tests on a IBIS-AMI model.
+"""Python tool for running several EmPy encoded tests on a IBIS-AMI model.
 
 Original Author: David Banas
 Original Date:   July 20, 2012
@@ -19,11 +18,14 @@ from numpy import floor
 
 from pyibisami.ami.model import AMIModel
 
+
 def plot_name(tst_name, n=0):
-    """Plot name generator keeps multiple tests from overwriting each other's plots."""
+    """Plot name generator keeps multiple tests from overwriting each other's
+    plots."""
     while True:
         n += 1
         yield f"{tst_name}_plot_{n}.png"
+
 
 def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     """Convert a HSV number to and RGB one."""
@@ -41,11 +43,11 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     H = float(hue)
     S = float(saturation)
     V = float(value)
-    H_i = floor(H / 60.)
-    f = (H / 60.) - H_i
-    p = V * (1. - S)
-    q = V * (1. - f * S)
-    t = V * (1. - (1. - f) * S)
+    H_i = floor(H / 60.0)
+    f = (H / 60.0) - H_i
+    p = V * (1.0 - S)
+    q = V * (1.0 - f * S)
+    t = V * (1.0 - (1.0 - f) * S)
     if H_i == 0:
         R = V
         G = t
@@ -75,8 +77,7 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
 
 
 def color_picker(num_hues=3, first_hue=0):
-    """
-    Yields pairs of colors having the same hue, but different intensities.
+    """Yields pairs of colors having the same hue, but different intensities.
 
     The first color is fully bright and saturated, and the second is
     half bright and half saturated. Originally, the intent was to have
@@ -91,7 +92,8 @@ def color_picker(num_hues=3, first_hue=0):
 def expand_params(input_parameters):
     """Take the command line input and convert it into usable parameters.
 
-    We can pass in a file, directory or raw string here. Handle all three cases.
+    We can pass in a file, directory or raw string here. Handle all
+    three cases.
     """
     if Path(input_parameters).exists():
         if Path(input_parameters).is_file():
@@ -123,7 +125,8 @@ def expand_params(input_parameters):
 
 
 def run_tests(**kwargs):
-    """Provide a thin wrapper around the click interface so that we can test the operation."""
+    """Provide a thin wrapper around the click interface so that we can test
+    the operation."""
 
     # Fetch options and cast into local independent variables.
     test_dir = Path(kwargs["test_dir"]).resolve()
@@ -158,7 +161,7 @@ def run_tests(**kwargs):
     for test in tests:
         # print("Running test: {} ...".format(test.stem))
         print("Running test: {} ...".format(test))
-        theModel   = AMIModel(model.__str__())
+        theModel = AMIModel(model.__str__())
         plot_names = plot_name(xml_filename.stem)
         for cfg_item in params:
             cfg_name = cfg_item[0]
@@ -236,8 +239,7 @@ def run_tests(**kwargs):
 @click.argument("tests", nargs=-1, type=click.UNPROCESSED)
 @click.version_option()
 def main(**kwargs):
-    """
-    Run a series of tests on a AMI model DLL file.
+    """Run a series of tests on a AMI model DLL file.
 
     If no tests are specified on the command line, run all tests found
     in `test_dir'. (See `-t' option.)
@@ -257,6 +259,7 @@ def main(**kwargs):
     """
     # print(kwargs)
     run_tests(**kwargs)
+
 
 if __name__ == "__main__":
     main()

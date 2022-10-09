@@ -1,12 +1,10 @@
-"""
-``AMIParameter`` class definition, plus some helpers.
+"""``AMIParameter`` class definition, plus some helpers.
 
 Original author: David Banas <capn.freako@gmail.com>
 
 Original date:   December 24, 2016
 
 Copyright (c) 2019 David Banas; all rights reserved World wide.
-
 """
 
 #####
@@ -17,16 +15,12 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 class AMIParamError(Exception):
     """Base Exception for all AMI Parameter Errors."""
 
-    pass
-
 
 class AMIParameter:
-    """
-    IBIS-AMI model parameter.
+    """IBIS-AMI model parameter.
 
     This class encapsulates the attributes and behavior of a AMI
     parameter.
-
     """
 
     RESERVED_PARAM_NAMES = [
@@ -102,7 +96,7 @@ class AMIParameter:
     # to ensure that a malformed instance never be created.
 
     def _get_name(self):
-        """pname"""
+        """pname."""
         return self._name
 
     pname = property(_get_name, doc="Name of AMI parameter.")
@@ -160,7 +154,7 @@ class AMIParameter:
 
     def _set_val(self, new_val):
         self._value = new_val
-        
+
     pvalue = property(_get_value, _set_val, doc="Value of AMI parameter.")
 
     # pmin
