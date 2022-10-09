@@ -143,7 +143,7 @@ def ami_config(py_file):
         else:
             em_file = out_file.with_suffix(".cpp.em")
 
-        print(f"Buidling '{out_file}' from '{em_file}'...")
+        print(f"Building '{out_file}' from '{em_file}'...")
         with open(out_file, "w") as out_file:
             interpreter = em.Interpreter(
                 output=out_file,
