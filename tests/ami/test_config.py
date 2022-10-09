@@ -1,20 +1,20 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import pyibisami.ami.config as ami_config
+import pyibisami.ami.config as config
 
 
 class TestAMIConfig(object):
 
-    @patch.object(ami_config, "date", autospec=True)
+    @patch.object(config, "date", autospec=True)
     def test_ami_config(self, mock_date):
         """Using the example_tx.py and supporting cpp.em file verify the output."""
 
         mock_date.today.return_value = "2019-02-10"
-        from pyibisami.ami.config import ami_config
-        ami_config(Path(__file__).parent.joinpath("examples", "example_tx.py"))
+        configurator = config.ami_config
+        configurator(Path(__file__).parents[1].joinpath("examples", "example_tx.py"))
 
-        with open(Path(__file__).parent.joinpath("examples", "example_tx.ami")) as ami_file:
+        with open(Path(__file__).parents[1].joinpath("examples", "example_tx.ami")) as ami_file:
             ami = ami_file.read()
             assert ami == r"""(example_tx
 
@@ -68,107 +68,10 @@ class TestAMIConfig(object):
     )
 
 )
-
 """
 
-        with open(Path(__file__).parent.joinpath("examples", "example_tx.ibs")) as ibis_file:
-            ibis = ibis_file.read()
-            assert ibis == r"""[IBIS Ver]   5.1
 
-
-
-[File Name]  example_tx.ibs
-[File Rev]   v0.1
-
-[Date]       2019-02-10
-
-[Source]     ibisami, a public domain IBIS-AMI model creation infrastructure
-
-[Disclaimer]
-THIS MODEL IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS MODEL, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-[Notes]
-This IBIS file was generated, using the template file,
-"example_tx.ibs.em", from ibisami, a public domain IBIS-AMI model
-creation infrastructure. To learn more, visit:
-
-https://github.com/capn-freako/ibisami/wiki
-
-[Copyright]    Copyright (c) 2016 David Banas; all rights reserved World wide.
-[Component]    Example_Tx
-[Manufacturer] (n/a)
-
-[Package]
-
-R_pkg     0.10     0.00     0.50
-L_pkg    10.00n    0.10n   50.00n
-C_pkg     1.00p    0.01p    5.00p
-
-
-[Pin]  signal_name        model_name            R_pin  L_pin  C_pin
-1p     Tx_1_P             example_tx
-1n     Tx_1_N             example_tx
-2p     Tx_2_P             example_tx
-2n     Tx_2_N             example_tx
-3p     Tx_3_P             example_tx
-3n     Tx_3_N             example_tx
-
-[Diff_Pin] inv_pin vdiff tdelay_typ tdelay_min tdelay_max
-1p           1n     0.1V     NA         NA         NA
-2p           2n     0.1V     NA         NA         NA
-3p           3n     0.1V     NA         NA         NA
-
-[Model]   example_tx
-Model_type   Output
-
-C_comp     1.00p    0.01p    5.00p
-Cref  = 0
-Vref  = 0.5
-Vmeas = 0.5
-Rref  = 50
-
-
-[Algorithmic Model]
-Executable linux_gcc4.1.2_32          example_tx_x86.so         example_tx.ami
-Executable linux_gcc4.1.2_64          example_tx_x86_amd64.so   example_tx.ami
-Executable Windows_VisualStudio_32    example_tx_x86.dll        example_tx.ami
-Executable Windows_VisualStudio_64    example_tx_x86_amd64.dll  example_tx.ami
-[End Algorithmic Model]
-
-[Temperature_Range]     25.0      0.0    100.0
-[Voltage_Range]         1.80     1.62     1.98
-
-
-[Pulldown]
--1.80    -1.000e+01    -1.000e+01    -1.000e+01
-0.00     0.000e+00     0.000e+00     0.000e+00
-1.80     3.600e-02     4.000e-02     3.273e-02
-3.60     1.000e+01     1.000e+01     1.000e+01
-[Pullup]
--1.80    1.000e+01     1.000e+01     1.000e+01
-0.00     -0.000e+00    -0.000e+00    -0.000e+00
-1.80     -3.600e-02    -4.000e-02    -3.273e-02
-3.60     -1.000e+01    -1.000e+01    -1.000e+01
-[Ramp]
-dV/dt_r    0.540/108.00p    0.512/511.58p    0.566/56.57p
-dV/dt_f    0.540/108.00p    0.512/511.58p    0.566/56.57p
-
-
-
-[END]
-
-"""
-
-        with open(Path(__file__).parent.joinpath("examples", "example_tx.cpp")) as cpp_file:
+        with open(Path(__file__).parents[1].joinpath("examples", "example_tx.cpp")) as cpp_file:
             cpp = cpp_file.read()
             assert cpp == r"""/** \file example_tx.cpp
  *  \brief Example of using ibisami to build a Tx model.
@@ -259,6 +162,6 @@ class MyTx : public AmiTx {
 AMIModel *ami_model = &my_tx;  ///< The pointer required by the API implementation.
 
 """
-        Path(__file__).parent.joinpath("examples", "example_tx.ami").unlink()
-        Path(__file__).parent.joinpath("examples", "example_tx.ibs").unlink()
-        Path(__file__).parent.joinpath("examples", "example_tx.cpp").unlink()
+        Path(__file__).parents[1].joinpath("examples", "example_tx.ami").unlink()
+        Path(__file__).parents[1].joinpath("examples", "example_tx.ibs").unlink()
+        Path(__file__).parents[1].joinpath("examples", "example_tx.cpp").unlink()
