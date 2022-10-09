@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import pyibisami.ami_config as ami_config
+import pyibisami.ami.config as ami_config
 
 
 class TestAMIConfig(object):
@@ -11,7 +11,7 @@ class TestAMIConfig(object):
         """Using the example_tx.py and supporting cpp.em file verify the output."""
 
         mock_date.today.return_value = "2019-02-10"
-        from pyibisami.ami_config import ami_config
+        from pyibisami.ami.config import ami_config
         ami_config(Path(__file__).parent.joinpath("examples", "example_tx.py"))
 
         with open(Path(__file__).parent.joinpath("examples", "example_tx.ami")) as ami_file:
@@ -150,11 +150,11 @@ Executable Windows_VisualStudio_64    example_tx_x86_amd64.dll  example_tx.ami
 
 [Pulldown]
 -1.80    -1.000e+01    -1.000e+01    -1.000e+01
-0.00     0.000e+00     0.000e+00     0.000e+00 
-1.80     3.600e-02     4.000e-02     3.273e-02 
-3.60     1.000e+01     1.000e+01     1.000e+01 
+0.00     0.000e+00     0.000e+00     0.000e+00
+1.80     3.600e-02     4.000e-02     3.273e-02
+3.60     1.000e+01     1.000e+01     1.000e+01
 [Pullup]
--1.80    1.000e+01     1.000e+01     1.000e+01 
+-1.80    1.000e+01     1.000e+01     1.000e+01
 0.00     -0.000e+00    -0.000e+00    -0.000e+00
 1.80     -3.600e-02    -4.000e-02    -3.273e-02
 3.60     -1.000e+01    -1.000e+01    -1.000e+01

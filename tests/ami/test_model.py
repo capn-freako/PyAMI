@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from pyibisami.ami_model import loadWave, AMIModelInitializer, AMIModel
+from pyibisami.ami.model import loadWave, AMIModelInitializer, AMIModel
 
 
 def test_loadWave(tmp_path):

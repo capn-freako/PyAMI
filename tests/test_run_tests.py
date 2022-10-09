@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from pyibisami.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
+from pyibisami.tools.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
 
 
 class TestRunTests(object):
@@ -20,8 +20,8 @@ class TestRunTests(object):
         assert hsv2rgb(240, 1, 1) == (0.0, 0.0, 1.0)
 
     def test_plot_name(self):
-        image_filename = plot_name()
-        assert next(image_filename) == "plot_1.png"
+        image_filename = plot_name("pytest")
+        assert next(image_filename) == "pytest_plot_1.png"
 
     def test_color_picker(self):
         color = color_picker()
