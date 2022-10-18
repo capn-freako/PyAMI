@@ -36,7 +36,7 @@ class Test_AMIModel(object):
         else:  # darwin aka OS X
             example_so = Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64_osx.so")
 
-        the_model = AMIModel(example_so)
+        the_model = AMIModel(str(example_so))
 
         initializer = AMIModelInitializer({'root_name': "exampleTx"})
 
