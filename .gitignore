@@ -117,6 +117,7 @@ empy_exec_test.*
 
 # Temporary files
 .*
+!.pre-commit-config.yaml
 
 tests/examples/out
 tests/examples/test_results

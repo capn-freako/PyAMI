@@ -20,8 +20,8 @@ class TestRunTests(object):
         assert hsv2rgb(240, 1, 1) == (0.0, 0.0, 1.0)
 
     def test_plot_name(self):
-        image_filename = plot_name("pytest")
-        assert next(image_filename) == "pytest_plot_1.png"
+        image_filename = plot_name("dummy")
+        assert next(image_filename) == "dummy_plot_1.png"
 
     def test_color_picker(self):
         color = color_picker()
