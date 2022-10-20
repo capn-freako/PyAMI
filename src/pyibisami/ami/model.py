@@ -1,5 +1,4 @@
-"""
-Class definitions for working with IBIS-AMI models
+"""Class definitions for working with IBIS-AMI models.
 
 Original Author: David Banas
 
@@ -7,18 +6,16 @@ Original Date:   July 3, 2012
 
 Copyright (c) 2019 David Banas; All rights reserved World wide.
 """
+import copy as cp
+from ctypes import CDLL, byref, c_char_p, c_double
 from pathlib import Path
 from typing import Dict
 
-import copy as cp
-import unicodedata
-from ctypes import CDLL, byref, c_char_p, c_double
 import numpy as np
 
 
 def loadWave(filename):
-    """
-    Load a waveform file.
+    """Load a waveform file.
 
     The file should consist of any number of lines, where each line
     contains, first, a time value and, second, a voltage value.
@@ -35,7 +32,7 @@ def loadWave(filename):
             and voltage values, respectively.
     """
 
-    with open(filename, "r") as theFile:
+    with open(filename, "r", encoding="utf-8") as theFile:
         theFile.readline()  # Consume the header line.
         time = []
         voltage = []
@@ -47,9 +44,8 @@ def loadWave(filename):
 
 
 def interpFile(filename, sample_per):
-    """
-    Read in a waveform from a file, and convert it to the given sample
-    rate, using linear interpolation.
+    """Read in a waveform from a file, and convert it to the given sample rate,
+    using linear interpolation.
 
     Args:
         filename (str): Name of waveform file to read in.
@@ -77,17 +73,20 @@ def interpFile(filename, sample_per):
 
 
 class AMIModelInitializer:
-    """ Class containing the initialization data for an instance of ``AMIModel``.
+    """Class containing the initialization data for an instance of
+    ``AMIModel``.
 
-        Created primarily to facilitate use of the PyAMI package at the
-        pylab command prompt, this class can be used by the pylab user,
-        in order to store all the data required to initialize an instance
-        of class ``AMIModel``. In this way, the pylab user may assemble
-        the AMIModel initialization data just once, and modify it
-        incrementally, as she experiments with different initialization
-        settings. In this way, she can avoid having to type a lot of
-        redundant constants every time she invokes the AMIModel constructor.
+    Created primarily to facilitate use of the PyAMI package at the
+    pylab command prompt, this class can be used by the pylab user, in
+    order to store all the data required to initialize an instance of
+    class ``AMIModel``. In this way, the pylab user may assemble the
+    AMIModel initialization data just once, and modify it incrementally,
+    as she experiments with different initialization settings. In this
+    way, she can avoid having to type a lot of redundant constants every
+    time she invokes the AMIModel constructor.
     """
+
+    # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
     ami_params = {"root_name": ""}
 
@@ -100,43 +99,43 @@ class AMIModelInitializer:
     }
 
     def __init__(self, ami_params: Dict, **optional_args):
-        """ Constructor accepts a mandatory dictionary containing the
-            AMI parameters, as well as optional initialization
-            data overrides and validates them, before using them to
-            update the local initialization data structures.
+        """Constructor accepts a mandatory dictionary containing the AMI
+        parameters, as well as optional initialization data overrides and
+        validates them, before using them to update the local initialization
+        data structures.
 
-            Valid names of optional initialization data overrides:
+        Valid names of optional initialization data overrides:
 
-            - channel_response
-                a matrix of ``c_double's`` where the first row represents the
-                impulse response of the analog channel, and the rest represent
-                the impulse responses of several aggressor-to-victim far end
-                crosstalk (FEXT) channels.
+        - channel_response
+            a matrix of ``c_double's`` where the first row represents the
+            impulse response of the analog channel, and the rest represent
+            the impulse responses of several aggressor-to-victim far end
+            crosstalk (FEXT) channels.
 
-                Default) a single 128 element vector containing an ideal impulse
+            Default) a single 128 element vector containing an ideal impulse
 
-            - row_size
-                integer giving the size of the rows in ``channel_response``.
+        - row_size
+            integer giving the size of the rows in ``channel_response``.
 
-                Default) 128
+            Default) 128
 
-            - num_aggressors
-                integer giving the number or rows in ``channel_response``, minus
-                one.
+        - num_aggressors
+            integer giving the number or rows in ``channel_response``, minus
+            one.
 
-                Default) 0
+            Default) 0
 
-            - sample_interval
-                c_double giving the time interval, in seconds, between
-                successive elements in any row of ``channel_response``.
+        - sample_interval
+            c_double giving the time interval, in seconds, between
+            successive elements in any row of ``channel_response``.
 
-                Default) 25e-12 (40 GHz sampling rate)
+            Default) 25e-12 (40 GHz sampling rate)
 
-            - bit_time
-                c_double giving the bit period (i.e. - unit interval) of the
-                link, in seconds.
+        - bit_time
+            c_double giving the bit period (i.e. - unit interval) of the
+            link, in seconds.
 
-                Default) 100e-12 (10 Gbits/s)
+            Default) 100e-12 (10 Gbits/s)
         """
 
         self.ami_params = {"root_name": ""}
@@ -208,15 +207,15 @@ class AMIModelInitializer:
 
 
 class AMIModel:
-    """ Class defining the structure and behavior of a AMI Model.
+    """Class defining the structure and behavior of a AMI Model.
 
-        Notes:
-            * Makes the calling of ``AMI_Close()`` automagic,
-              by calling it from the destructor.
+    Notes:
+        * Makes the calling of ``AMI_Close()`` automagic,
+          by calling it from the destructor.
     """
 
     def __init__(self, filename):
-        """ Load the dll and bind the 3 AMI functions."""
+        """Load the dll and bind the 3 AMI functions."""
 
         self._ami_mem_handle = None
         my_dll = CDLL(filename)
@@ -228,18 +227,18 @@ class AMIModel:
         self._amiClose = my_dll.AMI_Close
 
     def __del__(self):
-        """ Destructor - Calls AMI_Close with handle to AMI model memory.
+        """Destructor - Calls AMI_Close with handle to AMI model memory.
 
-            This obviates the need for the user to call the AMI_Close
-            function explicitly, and guards against memory leaks, during
-            PyLab command prompt operation, by ensuring that AMI_Close
-            gets called automagically when the model goes out of scope.
+        This obviates the need for the user to call the AMI_Close
+        function explicitly, and guards against memory leaks, during
+        PyLab command prompt operation, by ensuring that AMI_Close
+        gets called automagically when the model goes out of scope.
         """
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
 
     def initialize(self, init_object):
-        """ Wraps the ``AMI_Init`` function.
+        """Wraps the ``AMI_Init`` function.
 
         Args:
             init_object(AMIModelInitializer): The model initialization data.
@@ -262,21 +261,19 @@ class AMIModel:
         self._num_aggressors = init_object._init_data["num_aggressors"]
         self._sample_interval = init_object._init_data["sample_interval"]
         self._bit_time = init_object._init_data["bit_time"]
-        
+
         # Construct the AMI parameters string.
         def sexpr(pname, pval):
-            """Create an S-expression from a parameter name/value pair,
-            calling recursively as needed to elaborate sub-parameter
-            dictionaries.
-            """
+            """Create an S-expression from a parameter name/value pair, calling
+            recursively as needed to elaborate sub-parameter dictionaries."""
             if isinstance(pval, dict):
                 subs = []
                 for sname in pval:
                     subs.append(sexpr(sname, pval[sname]))
                 return sexpr(pname, " ".join(subs))
-            else:
-                return f"({pname} {pval})"
-        ami_params_in = "({} ".format(init_object.ami_params["root_name"])
+            return f"({pname} {pval})"
+
+        ami_params_in = f"({init_object.ami_params['root_name']} "
         for item in list(init_object.ami_params.items()):
             if not item[0] == "root_name":
                 ami_params_in += sexpr(item[0], item[1])
@@ -302,10 +299,10 @@ class AMIModel:
                 byref(self._msg),
             )
         except OSError as err:
-            print(f"pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
+            print("pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
             print(err)
             print(f"AMI_Init() address = {self._amiInit}")
-            print(f"Values sent into AMI_Init():")
+            print("Values sent into AMI_Init():")
             print(f"&initOut = {byref(self._initOut)}")
             print(f"row_size = {self._row_size}")
             print(f"num_aggressors = {self._num_aggressors}")
@@ -327,8 +324,8 @@ class AMIModel:
         self._bits_per_call = self._row_size / self._samps_per_bit
 
     def getWave(self, wave, bits_per_call=0):
-        """
-        Performs time domain processing of input waveform, using the ``AMI_GetWave`` function.
+        """Performs time domain processing of input waveform, using the
+        ``AMI_GetWave`` function.
 
         Args:
             wave(array-like): Waveform to be processed.

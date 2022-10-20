@@ -12,7 +12,7 @@ lint:
 check:
 	tox -e type-check
 
-test:
+tests:
 	tox -e py310
 
 test:

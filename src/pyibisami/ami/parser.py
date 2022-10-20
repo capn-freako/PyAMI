@@ -1,5 +1,4 @@
-"""
-IBIS-AMI parameter parsing and configuration utilities.
+"""IBIS-AMI parameter parsing and configuration utilities.
 
 Original author: David Banas <capn.freako@gmail.com>
 
@@ -9,8 +8,8 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 import re
 
-from parsec import ParseError, generate, many, many1, regex, string, parsecmap
-from traits.api import Bool, Enum, HasTraits, Range, Trait, List
+from parsec import ParseError, generate, many, many1, regex, string
+from traits.api import Bool, Enum, HasTraits, Range, Trait
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
 
@@ -22,8 +21,7 @@ from pyibisami.ami.parameter import AMIParamError, AMIParameter
 
 
 class AMIParamConfigurator(HasTraits):
-    """
-    Customizable IBIS-AMI model parameter configurator.
+    """Customizable IBIS-AMI model parameter configurator.
 
     This class can be configured to present a customized GUI to the user
     for configuring a particular IBIS-AMI model.
@@ -53,7 +51,6 @@ class AMIParamConfigurator(HasTraits):
 
     Any errors or warnings encountered while parsing are available, in
     the ``ami_parsing_errors`` property.
-
     """
 
     def __init__(self, ami_file_contents_str):
@@ -65,7 +62,7 @@ class AMIParamConfigurator(HasTraits):
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
         # to get all the Traits/UI machinery setup correctly.
-        super(AMIParamConfigurator, self).__init__()
+        super().__init__()
 
         # Parse the AMI file contents, storing any errors or warnings,
         # and customize the view accordingly.
@@ -84,11 +81,7 @@ class AMIParamConfigurator(HasTraits):
             raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
         pdict = param_dict["Reserved_Parameters"]
         pdict.update(param_dict["Model_Specific"])
-        gui_items, new_traits = make_gui_items(
-            "Model In/InOut Parameters",
-            pdict,
-            first_call=True
-        )
+        gui_items, new_traits = make_gui_items("Model In/InOut Parameters", pdict, first_call=True)
         trait_names = []
         for trait in new_traits:
             self.add_trait(trait[0], trait[1])
@@ -104,7 +97,8 @@ class AMIParamConfigurator(HasTraits):
         self.open_gui()
 
     def open_gui(self):
-        """Present a customized GUI to the user, for parameter customization."""
+        """Present a customized GUI to the user, for parameter
+        customization."""
         # self.edit_traits()
         self.configure_traits()
 
@@ -148,6 +142,7 @@ class AMIParamConfigurator(HasTraits):
     def set_param_val(self, branch_names, new_val):
         """Sets the value of the parameter found by traversing 'branch_names'
         or raises an exception if not found.
+
         Note: 'branch_names' should *not* begin with 'root_name'.
         Note: Be careful! There is no checking done here!
         """
@@ -158,7 +153,9 @@ class AMIParamConfigurator(HasTraits):
             if branch_name in param_dict:
                 param_dict = param_dict[branch_name]
             else:
-                raise ValueError(f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}")
+                raise ValueError(
+                    f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"
+                )
         if isinstance(param_dict, AMIParameter):
             param_dict.pvalue = new_val
             try:
@@ -170,7 +167,8 @@ class AMIParamConfigurator(HasTraits):
 
     @property
     def ami_parsing_errors(self):
-        """Any errors or warnings encountered, while parsing the AMI parameter definition file contents."""
+        """Any errors or warnings encountered, while parsing the AMI parameter
+        definition file contents."""
         return self._ami_parsing_errors
 
     @property
@@ -183,8 +181,8 @@ class AMIParamConfigurator(HasTraits):
 
     @property
     def input_ami_params(self):
-        """The dictionary of *Model Specific* AMI parameters of type
-        'In' or 'InOut', along with their user selected values.
+        """The dictionary of *Model Specific* AMI parameters of type 'In' or
+        'InOut', along with their user selected values.
 
         Should be passed to ``AMIModelInitializer`` constructor.
         """
@@ -196,8 +194,7 @@ class AMIParamConfigurator(HasTraits):
         return res
 
     def input_ami_param(self, params, pname):
-        """Retrieve one AMI parameter, or dictionary of subparameters.
-        """
+        """Retrieve one AMI parameter, or dictionary of subparameters."""
         res = {}
         param = params[pname]
         if isinstance(param, AMIParameter):
@@ -214,6 +211,7 @@ class AMIParamConfigurator(HasTraits):
             res[pname] = subs
         return res
 
+
 #####
 # AMI file parser.
 #####
@@ -221,28 +219,29 @@ class AMIParamConfigurator(HasTraits):
 # ignore cases.
 whitespace = regex(r"\s+", re.MULTILINE)
 comment = regex(r"\|.*")
-ignore = many((whitespace | comment))
+ignore = many(whitespace | comment)
 
 
 def lexeme(p):
     """Lexer for words."""
     return p << ignore  # skip all ignored characters.
 
+
 def int2tap(x):
     """Convert integer to tap position."""
     x = x.strip()
-    if (x[0] == '-'):
-        res = ("pre" + x[1:])
+    if x[0] == "-":
+        res = "pre" + x[1:]
     else:
-        res = ("post" + x)
+        res = "post" + x
     return res
 
 
 lparen = lexeme(string("("))
 rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
-integ  = lexeme(regex(r"[-+]?[0-9]+"))
-nat    = lexeme(regex(r"[0-9]+"))
+integ = lexeme(regex(r"[-+]?[0-9]+"))
+nat = lexeme(regex(r"[0-9]+"))
 tap_ix = (integ << whitespace).parsecmap(int2tap)
 symbol = lexeme(regex(r"[0-9a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
@@ -251,6 +250,7 @@ ami_string = lexeme(regex(r'"[^"]*"'))
 
 atom = number | symbol | ami_string | (true | false)
 node_name = tap_ix ^ symbol  # `tap_ix` is new and gives the tap position; negative positions are allowed.
+
 
 @generate("AMI node")
 def node():
@@ -267,8 +267,7 @@ ami_defs = ignore >> node
 
 
 def proc_branch(branch):
-    """
-    Process a branch in a AMI parameter definition tree.
+    """Process a branch in a AMI parameter definition tree.
 
     That is, build a dictionary from a pair containing:
         - a parameter name, and
@@ -294,21 +293,20 @@ def proc_branch(branch):
                 while building the parameter dictionary.
             param_dict:
                 Resultant parameter dictionary.
-
     """
     results = ("", {})  # Empty Results
     if len(branch) != 2:
         if not branch:
             err_str = "ERROR: Empty branch provided to proc_branch()!\n"
         else:
-            err_str = "ERROR: Malformed item: {}\n".format(branch[0])
+            err_str = f"ERROR: Malformed item: {branch[0]}\n"
         results = (err_str, {})
 
     param_name = branch[0]
     param_tags = branch[1]
 
     if not param_tags:
-        err_str = "ERROR: No tags/subparameters provided for parameter, '{}'\n".format(param_name)
+        err_str = f"ERROR: No tags/subparameters provided for parameter, '{param_name}'\n"
         results = (err_str, {})
 
     try:
@@ -331,8 +329,8 @@ def proc_branch(branch):
                 temp_str, temp_dict = proc_branch(param_tag)
                 param_dict[param_name].update(temp_dict)
                 if temp_str:
-                    err_str = "Error returned by recursive call, while processing parameter, '{}':\n{}".format(
-                        param_name, temp_str
+                    err_str = (
+                        f"Error returned by recursive call, while processing parameter, '{param_name}':\n{temp_str}"
                     )
                     results = (err_str, param_dict)
 
@@ -343,8 +341,7 @@ def proc_branch(branch):
 
 
 def parse_ami_param_defs(param_str):
-    """
-    Parse the contents of a IBIS-AMI parameter definition file.
+    """Parse the contents of a IBIS-AMI parameter definition file.
 
     Args:
         param_str (str): The contents of the file, as a single string.
@@ -386,12 +383,11 @@ def parse_ami_param_defs(param_str):
                 The values of both are either:
                     - instances of class *AMIParameter*, or
                     - sub-dictionaries following the same pattern.
-
     """
     try:
         res = ami_defs.parse(param_str)
     except ParseError as pe:
-        err_str = "Expected {} at {} in:\n{}".format(pe.expected, pe.loc(), pe.text[pe.index :])
+        err_str = f"Expected {pe.expected} at {pe.loc()} in:\n{pe.text[pe.index:]}"
         return err_str, {}
 
     err_str, param_dict = proc_branch(res)
@@ -409,9 +405,7 @@ def parse_ami_param_defs(param_str):
             tmp_params = params[label]
             for param_name in list(tmp_params.keys()):
                 if param_name not in AMIParameter.RESERVED_PARAM_NAMES:
-                    err_str += "WARNING: Unrecognized reserved parameter name, '{}', found in parameter definition string!\n".format(
-                        param_name
-                    )
+                    err_str += f"WARNING: Unrecognized reserved parameter name, '{param_name}', found in parameter definition string!\n"
                     continue
                 param = tmp_params[param_name]
                 if param.pname == "AMI_Version":
@@ -426,9 +420,7 @@ def parse_ami_param_defs(param_str):
         elif label == "description":
             pass
         else:
-            err_str += "WARNING: Unrecognized group with label, '{}', found in parameter definition string!\n".format(
-                label
-            )
+            err_str += f"WARNING: Unrecognized group with label, '{label}', found in parameter definition string!\n"
 
     if not reserved_found:
         err_str += "ERROR: Reserved parameters section not found! It is required."
@@ -469,8 +461,8 @@ def make_gui_items(pname, param, first_call=False):
                         tmp_dict.update(list(zip(list_tips, param.pvalue)))
                         val = list(tmp_dict.keys())[0]
                         if default:
-                            for tip in tmp_dict:
-                                if tmp_dict[tip] == default:
+                            for tip in tmp_dict.items():
+                                if tip == default:
                                     val = tip
                                     break
                         new_traits.append((pname, Trait(val, tmp_dict)))

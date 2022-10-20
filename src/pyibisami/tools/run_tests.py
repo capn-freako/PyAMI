@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
-"""
-Python tool for running several EmPy encoded tests on a IBIS-AMI model.
+"""Python tool for running several EmPy encoded tests on a IBIS-AMI model.
 
 Original Author: David Banas
 Original Date:   July 20, 2012
@@ -15,15 +14,18 @@ from pathlib import Path
 
 import click
 import em
-from numpy import floor
+import numpy as np
 
 from pyibisami.ami.model import AMIModel
 
+
 def plot_name(tst_name, n=0):
-    """Plot name generator keeps multiple tests from overwriting each other's plots."""
+    """Plot name generator keeps multiple tests from overwriting each other's
+    plots."""
     while True:
         n += 1
         yield f"{tst_name}_plot_{n}.png"
+
 
 def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     """Convert a HSV number to and RGB one."""
@@ -41,11 +43,11 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
     H = float(hue)
     S = float(saturation)
     V = float(value)
-    H_i = floor(H / 60.)
-    f = (H / 60.) - H_i
-    p = V * (1. - S)
-    q = V * (1. - f * S)
-    t = V * (1. - (1. - f) * S)
+    H_i = np.floor(H / 60.0)
+    f = (H / 60.0) - H_i
+    p = V * (1.0 - S)
+    q = V * (1.0 - f * S)
+    t = V * (1.0 - (1.0 - f) * S)
     if H_i == 0:
         R = V
         G = t
@@ -75,8 +77,7 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
 
 
 def color_picker(num_hues=3, first_hue=0):
-    """
-    Yields pairs of colors having the same hue, but different intensities.
+    """Yields pairs of colors having the same hue, but different intensities.
 
     The first color is fully bright and saturated, and the second is
     half bright and half saturated. Originally, the intent was to have
@@ -91,7 +92,8 @@ def color_picker(num_hues=3, first_hue=0):
 def expand_params(input_parameters):
     """Take the command line input and convert it into usable parameters.
 
-    We can pass in a file, directory or raw string here. Handle all three cases.
+    We can pass in a file, directory or raw string here. Handle all
+    three cases.
     """
     if Path(input_parameters).exists():
         if Path(input_parameters).is_file():
@@ -102,7 +104,7 @@ def expand_params(input_parameters):
         for cfg_filename in cfg_files:
             cfg_name = cfg_filename.stem
             param_list = []
-            with open(cfg_filename, "rt") as cfg_file:
+            with open(cfg_filename, "rt", encoding="utf-8") as cfg_file:
                 description = cfg_file.readline()
                 expr = ""
                 for line in cfg_file:
@@ -123,7 +125,8 @@ def expand_params(input_parameters):
 
 
 def run_tests(**kwargs):
-    """Provide a thin wrapper around the click interface so that we can test the operation."""
+    """Provide a thin wrapper around the click interface so that we can test
+    the operation."""
 
     # Fetch options and cast into local independent variables.
     test_dir = Path(kwargs["test_dir"]).resolve()
@@ -141,13 +144,13 @@ def run_tests(**kwargs):
     # someone, whom may not have the PyIBIS-AMI package installed.
     shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
 
-    print("Testing model: {}".format(model))
-    print("Using tests in: {}".format(test_dir))
+    print(f"Testing model: {model}")
+    print(f"Using tests in: {test_dir}")
     params = expand_params(kwargs["params"])
 
     # Run the tests.
-    print("Sending XHTML output to: {}".format(xml_filename))
-    with open(xml_filename, "w") as xml_file:
+    print(f"Sending XHTML output to: {xml_filename}")
+    with open(xml_filename, "w", encoding="utf-8") as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
         xml_file.write("<tests>\n")
@@ -157,20 +160,20 @@ def run_tests(**kwargs):
         tests = list(test_dir.glob("*.em"))
     for test in tests:
         # print("Running test: {} ...".format(test.stem))
-        print("Running test: {} ...".format(test))
-        theModel   = AMIModel(model.__str__())
+        print(f"Running test: {test} ...")
+        theModel = AMIModel(str(model))
         plot_names = plot_name(xml_filename.stem)
         for cfg_item in params:
             cfg_name = cfg_item[0]
-            print("\tRunning test configuration: {} ...".format(cfg_name))
+            print(f"\tRunning test configuration: {cfg_name} ...")
             description = cfg_item[1]
             param_list = cfg_item[2]
             colors = color_picker(num_hues=len(param_list))
-            with open(xml_filename, "a") as xml_file:
+            with open(xml_filename, "a", encoding="utf-8") as xml_file:
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
-                        "name": "{} ({})".format(test, cfg_name),
+                        "name": f"{test} ({cfg_name})",
                         "model": theModel,
                         "data": param_list,
                         # "plot_names": plot_name(xml_filename.stem),
@@ -190,10 +193,10 @@ def run_tests(**kwargs):
                 finally:
                     interpreter.shutdown()
         print("Test:", test, "complete.")
-    with open(xml_filename, "a") as xml_file:
+    with open(xml_filename, "a", encoding="utf-8") as xml_file:
         xml_file.write("</tests>\n")
 
-    print("Please, open file, `{}` in a Web browser, in order to view the test results.".format(xml_filename))
+    print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True, help_option_names=["-h", "--help"]))
@@ -236,8 +239,7 @@ def run_tests(**kwargs):
 @click.argument("tests", nargs=-1, type=click.UNPROCESSED)
 @click.version_option()
 def main(**kwargs):
-    """
-    Run a series of tests on a AMI model DLL file.
+    """Run a series of tests on a AMI model DLL file.
 
     If no tests are specified on the command line, run all tests found
     in `test_dir'. (See `-t' option.)
@@ -258,5 +260,6 @@ def main(**kwargs):
     # print(kwargs)
     run_tests(**kwargs)
 
+
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter
