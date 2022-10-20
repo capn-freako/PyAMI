@@ -1,5 +1,5 @@
 import pytest
-import pyibisami.ami_parse as ami_parse
+import pyibisami.ami.parser as ami_parse
 
 @pytest.fixture
 def test_ami_config():

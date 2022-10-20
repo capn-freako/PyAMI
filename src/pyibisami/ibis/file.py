@@ -24,8 +24,8 @@ from chaco.api    import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
 from traitsui.message import message
 
-from pyibisami.ibis_parser import parse_ibis_file
-from pyibisami.ibis_model  import Model
+from pyibisami.ibis.parser import parse_ibis_file
+from pyibisami.ibis.model  import Model
 
 class IBISModel(HasTraits):
     """
