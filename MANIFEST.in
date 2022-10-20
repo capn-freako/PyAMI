@@ -3,5 +3,5 @@ include LICENSE
 include src/pyibisami/tools/test_results.xsl
 include src/pyibisami/ami/generic.ami.em
 include src/pyibisami/ami/generic.ibs.em
-recursive-include docs/source/*
-recursive-include examples/*
+recursive-include docs/source *
+recursive-include examples *
