@@ -4,7 +4,7 @@
 
 @{
 import sys
-from pyibisami import ami_config as ac
+from pyibisami.ami import config as ac
 
 for (sec_name, sec_key) in [('Reserved_Parameters', 'reserved'), ('Model_Specific', 'model')]:
     print("    (%s" % sec_name)
@@ -18,4 +18,3 @@ for (sec_name, sec_key) in [('Reserved_Parameters', 'reserved'), ('Model_Specifi
     print("    )")
 }
 )
-

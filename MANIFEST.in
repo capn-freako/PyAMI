@@ -1,7 +1,7 @@
 include README.md
 include LICENSE
-include pyibisami/test_results.xsl
-include pyibisami/generic.ami.em
-include pyibisami/generic.ibs.em
+include src/pyibisami/tools/test_results.xsl
+include src/pyibisami/ami/generic.ami.em
+include src/pyibisami/ami/generic.ibs.em
 recursive-include docs/source/*
 recursive-include examples/*

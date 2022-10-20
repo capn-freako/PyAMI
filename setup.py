@@ -2,28 +2,31 @@
 
     David Banas
 """
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="PyIBIS-AMI",
     version="3.5.7",
-    packages=find_packages(exclude=["docs", "tests"]),
+    package_dir={'': 'src'},
+    packages=find_packages(where='src'),
     include_package_data=True,
     description="Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.",
     install_requires=[
-        "click",
-        "empy",
-        "numpy",
-        "scipy",
-        "matplotlib",
-        "parsec",
-        "traits",
-        "traitsui",
+        "click==8.1.3",
+        "empy==3.3.4",
+        "numpy==1.23.3",
+        "scipy==1.9.2",
+        "matplotlib==3.6.1",
+        "parsec==3.14",
+        "traits==6.4.1",
+        "traitsui==7.4.1",
+        "chaco==5.0.0",
+        "enable==5.3.1",
     ],
     entry_points={
         "console_scripts": [
-            "ami-config = pyibisami.ami_config:main",
-            "run-tests = pyibisami.run_tests:main",
+            "ami-config = pyibisami.ami.config:main",
+            "run-tests = pyibisami.tools.run_tests:main",
         ]
     },
     license="BSD",
@@ -33,15 +36,15 @@ setup(
     author_email="capn.freako@gmail.com",
     keywords=["ibis-ami"],
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: Implementation :: PyPy",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: System :: Emulators",
         "Topic :: Utilities",
     ],

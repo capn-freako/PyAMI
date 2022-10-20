@@ -14,7 +14,7 @@ from traits.api import Bool, Enum, HasTraits, Range, Trait, List
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
 
-from pyibisami.ami_parameter import AMIParamError, AMIParameter
+from pyibisami.ami.parameter import AMIParamError, AMIParameter
 
 #####
 # AMI parameter configurator.
@@ -102,7 +102,7 @@ class AMIParamConfigurator(HasTraits):
 
     def __call__(self):
         self.open_gui()
-        
+
     def open_gui(self):
         """Present a customized GUI to the user, for parameter customization."""
         # self.edit_traits()

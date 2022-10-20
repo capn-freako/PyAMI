@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from pyibisami.ami_model import loadWave, AMIModelInitializer, AMIModel
+from pyibisami.ami.model import loadWave, AMIModelInitializer, AMIModel
 
 
 def test_loadWave(tmp_path):
@@ -30,11 +30,11 @@ class Test_AMIModel(object):
         command is used with.
         """
         if sys.platform == "win32":
-            example_so = str(Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.dll"))
+            example_so = str(Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64.dll"))
         elif sys.platform.startswith("linux"):
-            example_so = str(Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so"))
+            example_so = str(Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64.so"))
         else:  # darwin aka OS X
-            example_so = str(Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64_osx.so"))
+            example_so = str(Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64_osx.so"))
 
         the_model = AMIModel(example_so)
 

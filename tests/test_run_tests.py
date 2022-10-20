@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from pyibisami.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
+from pyibisami.tools.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
 
 
 class TestRunTests(object):
@@ -20,8 +20,8 @@ class TestRunTests(object):
         assert hsv2rgb(240, 1, 1) == (0.0, 0.0, 1.0)
 
     def test_plot_name(self):
-        image_filename = plot_name("dummy")
-        assert next(image_filename) == "dummy_plot_1.png"
+        image_filename = plot_name("pytest")
+        assert next(image_filename) == "pytest_plot_1.png"
 
     def test_color_picker(self):
         color = color_picker()
@@ -116,12 +116,12 @@ class TestRunTests(object):
 
     @pytest.mark.xfail(reason="EMPY looses its stdout proxy.")
     def test_run_tests(self):
-        model = Path(__file__).parent.joinpath("examples", "example_tx_x86_amd64.so")
-        test_dir = Path(__file__).parent.joinpath("examples", "tests")
-        params = Path(__file__).parent.joinpath("examples", "runs")
+        model = Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64.so")
+        test_dir = Path(__file__).parents[1].joinpath("examples", "tests")
+        params = Path(__file__).parents[1].joinpath("examples", "runs")
         xml_file = "test_results.xml"
         ref_dir = Path().cwd()
-        out_dir = Path(__file__).parent.joinpath("examples", "test_results")
+        out_dir = Path(__file__).parents[1].joinpath("examples", "test_results")
         run_tests(
             model=model,
             test_dir=test_dir,

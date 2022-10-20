@@ -17,7 +17,7 @@ from parsec import  regex, eof, many1, many, string, generate, sepBy1, \
                     separated, letter, digit, optional, Parser, Value, \
                     choice, fail_with, exclude
 
-from pyibisami.ibis_model import Component, Model
+from pyibisami.ibis.model import Component, Model
 
 DBG = False
 
@@ -41,7 +41,7 @@ def logf(p, preStr=""):
     def fn(txt, ix):
         res = p(txt, ix)
         if not res.status:
-            print(f"{preStr}: Expected {res.expected} in '{txt[res.index : res.index+5]}' at {ParseError.loc_info(txt, res.index)}.") 
+            print(f"{preStr}: Expected {res.expected} in '{txt[res.index : res.index+5]}' at {ParseError.loc_info(txt, res.index)}.")
         return res
     return fn
 
