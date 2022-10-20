@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
-"""
-IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
+"""IBIS-AMI model source code, AMI file, and IBIS file configuration utility.
 
 Original author: David Banas
 
@@ -28,8 +27,8 @@ file, so as to ensure consistency between the three.
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
 """
-from datetime import date
 import importlib.util
+from datetime import date
 from pathlib import Path
 
 import click
@@ -44,22 +43,21 @@ param_types = {
 
 
 def print_param(indent, name, param):
-    """
-    Print AMI parameter specification. Handle nested parameters, via recursion.
+    """Print AMI parameter specification. Handle nested parameters, via
+    recursion.
 
     Args:
         indent (str): String containing some number of spaces.
         name (str): Parameter name.
         param (dict): Dictionary containing parameter definition fields.
-
     """
 
-    print(indent, "(%s" % name)
+    print(indent, f"({name}")
     if "subs" in param:
         for key in param["subs"]:
             print_param(indent + "    ", key, param["subs"][key])
         if "description" in param:
-            print(indent + "    ", "(Description {})".format(param["description"]))
+            print(indent + "    ", f"(Description {param['description']})")
     else:
         for (fld_name, fld_key) in [
             ("Usage", "usage"),
@@ -87,55 +85,50 @@ def print_param(indent, name, param):
                         print(item, end=" ")
                     print(")")
                 else:
-                    print(indent, "    (%s" % param["format"], param["default"], param["min"], param["max"], ")")
+                    print(indent, f"    ({param['format']}", param["default"], param["min"], param["max"], ")")
             # Execute the default action.
             else:
-                print(indent, "    (%s" % fld_name, param[fld_key], ")")
+                print(indent, f"    ({fld_name}", param[fld_key], ")")
     print(indent, ")")
 
 
 def print_code(pname, param):
-    """
-    Print C++ code needed to query AMI parameter tree for a particular leaf.
+    """Print C++ code needed to query AMI parameter tree for a particular leaf.
 
     Args:
         pname (str): Parameter name.
         param (dict): Dictionary containing parameter definition fields.
-
     """
 
-    print("       ", 'node_names.push_back("%s");' % pname)
+    print("       ", f'node_names.push_back("{pname}");')
     if "subs" in param:
         for key in param["subs"]:
             print_code(key, param["subs"][key])
     else:
         if param["usage"] == "In" or param["usage"] == "InOut":
             ptype = param["type"]
-            print("        {} {};".format(param_types[ptype]["c_type"], pname))
+            print(f"        {param_types[ptype]['c_type']} {pname};")
             if ptype == "BOOL":
-                print(
-                    "        {} = {}(node_names, {});".format(
-                        pname, param_types[ptype]["getter"], param["default"].lower()
-                    )
-                )
+                print(f"        {pname} = {param_types[ptype]['getter']}(node_names, {param['default'].lower()});")
             else:
-                print("        {} = {}(node_names, {});".format(pname, param_types[ptype]["getter"], param["default"]))
+                print(f"        {pname} = {param_types[ptype]['getter']}(node_names, {param['default']});")
     print("       ", "node_names.pop_back();")
 
 
 def ami_config(py_file):
-    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and cpp."""
+    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and
+    cpp."""
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
-    print("Reading model configuration information from file: %s." % (py_file))
+    print(f"Reading model configuration information from file: {py_file}.")
     spec = importlib.util.spec_from_file_location(file_base_name, py_file)
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)
 
     # Configure the 3 files.
     for ext in ["cpp", "ami", "ibs"]:
-        out_file = Path(py_file).with_suffix(".{}".format(ext))
+        out_file = Path(py_file).with_suffix(f".{ext}")
         if ext == "ami":
             em_file = Path(__file__).parent.joinpath("generic.ami.em")
         elif ext == "ibs":
@@ -144,7 +137,7 @@ def ami_config(py_file):
             em_file = out_file.with_suffix(".cpp.em")
 
         print(f"Building '{out_file}' from '{em_file}'...")
-        with open(out_file, "w") as out_file:
+        with open(out_file, "w", encoding="utf-8") as out_file:
             interpreter = em.Interpreter(
                 output=out_file,
                 globals={
@@ -176,5 +169,6 @@ def main(py_file):
     """
     ami_config(py_file)
 
+
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter

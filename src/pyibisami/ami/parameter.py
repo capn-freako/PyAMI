@@ -1,12 +1,10 @@
-"""
-``AMIParameter`` class definition, plus some helpers.
+"""``AMIParameter`` class definition, plus some helpers.
 
 Original author: David Banas <capn.freako@gmail.com>
 
 Original date:   December 24, 2016
 
 Copyright (c) 2019 David Banas; all rights reserved World wide.
-
 """
 
 #####
@@ -17,16 +15,12 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 class AMIParamError(Exception):
     """Base Exception for all AMI Parameter Errors."""
 
-    pass
-
 
 class AMIParameter:
-    """
-    IBIS-AMI model parameter.
+    """IBIS-AMI model parameter.
 
     This class encapsulates the attributes and behavior of a AMI
     parameter.
-
     """
 
     RESERVED_PARAM_NAMES = [
@@ -102,7 +96,7 @@ class AMIParameter:
     # to ensure that a malformed instance never be created.
 
     def _get_name(self):
-        """pname"""
+        """pname."""
         return self._name
 
     pname = property(_get_name, doc="Name of AMI parameter.")
@@ -115,7 +109,7 @@ class AMIParameter:
         if val in ("In", "Out", "InOut", "Info"):
             self._usage = val
         else:
-            raise AMIParamError("Unrecognized usage value: '{}'.".format(val))
+            raise AMIParamError(f"Unrecognized usage value: '{val}'.")
 
     def _get_usage(self):
         return self._usage
@@ -130,7 +124,7 @@ class AMIParameter:
         if val in ("Float", "Integer", "String", "Boolean", "UI", "Tap"):
             self._type = val
         else:
-            raise AMIParamError("Unrecognized type value: '{}'.".format(val))
+            raise AMIParamError(f"Unrecognized type value: '{val}'.")
 
     def _get_type(self):
         return self._type
@@ -145,7 +139,7 @@ class AMIParameter:
         #        if(not form in ['Value', 'Range', 'List']):
         #            raise AMIParamError ("Unrecognized format value: '{}'.".format(form))
         if len(values) < 2:
-            raise AMIParamError("No values provided for: '{}'.".format(form))
+            raise AMIParamError(f"No values provided for: '{form}'.")
         self._format = form
         self._format_rem = values[1:]
 
@@ -160,7 +154,7 @@ class AMIParameter:
 
     def _set_val(self, new_val):
         self._value = new_val
-        
+
     pvalue = property(_get_value, _set_val, doc="Value of AMI parameter.")
 
     # pmin
@@ -295,7 +289,7 @@ class AMIParameter:
                 try:
                     self._param_def_tag_procs[tag_name](self, tag[1])
                 except AMIParamError as err:
-                    raise AMIParamError("Problem initializing parameter, '{}': {}\n".format(name, err))
+                    raise AMIParamError(f"Problem initializing parameter, '{name}': {err}\n")
 
         # Validate and complete the instance.
         # Check for required tags.
@@ -328,37 +322,37 @@ class AMIParameter:
             if param_type in ("Float", "UI"):
                 try:
                     self._value = float(value_str)
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read float from '{}'.\n".format(value_str))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read float from '{value_str}'.\n") from exc
             elif param_type == "Integer":
                 try:
                     self._value = int(float(value_str))  # Hack to accommodate: "1e5", for instance.
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read integer from '{}'.\n".format(value_str))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read integer from '{value_str}'.\n") from exc
             elif param_type == "Boolean":
                 if value_str == "True":
                     self._value = True
                 elif value_str == "False":
                     self._value = False
                 else:
-                    raise AMIParamError("Couldn't read Boolean from '{}'.\n".format(value_str))
+                    raise AMIParamError(f"Couldn't read Boolean from '{value_str}'.\n")
             else:
                 self._value = value_str.strip('"')
         elif param_format == "Range":
             if param_type not in ("Float", "Integer", "UI", "Tap"):
-                raise AMIParamError("Illegal type, '{}', for use with Range.\n".format(param_type))
+                raise AMIParamError(f"Illegal type, '{param_type}', for use with Range.\n")
             if len(vals) < 3:
-                raise AMIParamError("Insufficient number of values, {}, provided for Range.\n".format(len(vals)))
+                raise AMIParamError(f"Insufficient number of values, {len(vals)}, provided for Range.\n")
             if param_type in ("Float", "UI"):
                 try:
                     temp_vals = list(map(float, vals[:3]))
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals[:3]))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read floats from '{vals[:3]}'.\n") from exc
             else:
                 try:
                     temp_vals = list(map(int, vals[:3]))
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read integers from '{}'.\n".format(vals[:3]))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read integers from '{vals[:3]}'.\n") from exc
             self._value = temp_vals[0]
             self._min = temp_vals[1]
             self._max = temp_vals[2]
@@ -366,19 +360,19 @@ class AMIParameter:
             if param_type in ("Float", "UI"):
                 try:
                     temp_vals = list(map(float, vals))
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read floats from '{}'.\n".format(vals))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read floats from '{vals}'.\n") from exc
             elif param_type in ("Integer", "Tap"):
                 try:
                     temp_vals = list(map(int, vals))
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read integers from '{}'.\n".format(vals))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read integers from '{vals}'.\n") from exc
             else:  # 'param_type' == 'String'
                 try:
                     temp_vals = list(map(str, vals))
                     temp_vals = [x.strip('"') for x in temp_vals]
-                except (ValueError, TypeError):
-                    raise AMIParamError("Couldn't read strings from '{}'.\n".format(vals))
+                except (ValueError, TypeError) as exc:
+                    raise AMIParamError(f"Couldn't read strings from '{vals}'.\n") from exc
             self._value = temp_vals
 
         self._name = name
