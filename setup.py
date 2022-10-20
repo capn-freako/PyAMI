@@ -8,7 +8,7 @@ setup(
     name="PyIBIS-AMI",
     version="3.5.7",
     package_dir={'': 'src'},
-    packages=find_packages(where='src', exclude=["docs", "tests"]),
+    packages=find_packages(where='src'),
     include_package_data=True,
     description="Facilitates working directly with IBIS-AMI DLLs from the Python command prompt.",
     install_requires=[
