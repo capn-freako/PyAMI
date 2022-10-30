@@ -1,3 +1,5 @@
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/capn-freako/PyAMI/master.svg)](https://results.pre-commit.ci/latest/github/capn-freako/PyAMI/master)
+
 # PyIBIS-AMI
 
 PyIBIS-AMI is a Python package of tools useful in the development and testing of IBIS-AMI models.
