@@ -23,7 +23,7 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
             </table>
             <h2>Test Results - Details</h2>
               <xsl:for-each select="tests/test">
-                <h3><a name="{name}"><xsl:value-of select="name"/> - <xsl:value-of select="description"/></a></h3> 
+                <h3><a name="{name}"><xsl:value-of select="name"/> - <xsl:value-of select="description"/></a></h3>
                     <div style="overflow:auto;height:200px;background-color:lightgray;">
                       <xsl:for-each select="output/block[@type='text']">
                         <h4><xsl:value-of select="./@name"/></h4>
@@ -40,4 +40,3 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 </xsl:template>
 
 </xsl:stylesheet>
-

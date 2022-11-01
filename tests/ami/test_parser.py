@@ -1,5 +1,7 @@
 import pytest
+
 import pyibisami.ami.parser as ami_parse
+
 
 @pytest.fixture
 def test_ami_config():
@@ -58,9 +60,9 @@ def test_ami_config():
 
 """
 
-@pytest.mark.usefixtures("test_ami_config")
-class TestAMIParse():
 
+@pytest.mark.usefixtures("test_ami_config")
+class TestAMIParse:
     def test_parse_ami_param_defs(self, test_ami_config):
         error_string, param_defs = ami_parse.parse_ami_param_defs(test_ami_config)
         assert error_string == ""

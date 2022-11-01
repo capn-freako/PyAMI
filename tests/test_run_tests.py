@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from pyibisami.tools.run_tests import color_picker, plot_name, hsv2rgb, expand_params, run_tests
+from pyibisami.tools.run_tests import (
+    color_picker,
+    expand_params,
+    hsv2rgb,
+    plot_name,
+    run_tests,
+)
 
 
 class TestRunTests(object):
