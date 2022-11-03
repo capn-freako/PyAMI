@@ -75,4 +75,3 @@ Sweep of Stratix-4 Tx pre-emphasis filter tap weight values.
   ), \
   'impulse_response_8ma.txt' \
 )
-
