@@ -5,8 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PyIBIS-AMI"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "3.5.7"
-authors = [{name = "David Banas", email = "capn.freako@gmail.com"}]
+version = "4.0.0"
+authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
+          , {name = "David Patterson", email = "dpatter877@gmail.com"}
+          ]
 urls = { documentation = "https://github.com/capn-freako/PyAMI/wiki" }
 readme = "README.md"
 requires-python = ">=3.8"
@@ -20,7 +22,7 @@ dependencies = [
         "parsec==3.14",
         "traits==6.4.1",
         "traitsui==7.4.1",
-        "chaco==5.0.0",
+        "chaco==5.1.0",
         "enable==5.3.1",
 ]
 keywords=["ibis-ami"]
@@ -74,3 +76,6 @@ ignore = [
     "D105", # Missing docstring in magic method
     "D107", # Missing docstring in __init__
 ]
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
