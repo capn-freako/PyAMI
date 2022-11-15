@@ -86,4 +86,3 @@ for tap_num in range(max_tap_pos + 1):
 } my_tx;
 
 AMIModel *ami_model = &my_tx;  ///< The pointer required by the API implementation.
-
