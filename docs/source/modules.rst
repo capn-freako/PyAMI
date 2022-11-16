@@ -1,44 +1,44 @@
 Modules in *pyibisami* package
 ------------------------------
 
-ami_model - IBIS-AMI model encapsulation.
+ami.model - IBIS-AMI model encapsulation.
 *****************************************
 
-.. automodule:: pyibisami.ami_model
+.. automodule:: pyibisami.ami.model
    :members:
 
-ami_parameter - IBIS-AMI parameter encapsulation.
+ami.parameter - IBIS-AMI parameter encapsulation.
 *************************************************
 
-.. automodule:: pyibisami.ami_parameter
+.. automodule:: pyibisami.ami.parameter
    :members:
 
-ami_parse - AMI file parsing utilities.
+ami.parse - AMI file parsing utilities.
 ***************************************
 
-.. automodule:: pyibisami.ami_parse
+.. automodule:: pyibisami.ami.parser
    :members:
 
-ami_config - Automatic configuration of: IBIS, AMI, and DLL/SO files, from Python configuration file.
+ami.config - Automatic configuration of: IBIS, AMI, and DLL/SO files, from Python configuration file.
 *****************************************************************************************************
 
-.. automodule:: pyibisami.ami_config
+.. automodule:: pyibisami.ami.config
    :members:
 
-ibis_file - Encapsulation of an IBIS model file.
+ibis.file - Encapsulation of an IBIS model file.
 ************************************************
 
-.. automodule:: pyibisami.ibis_file
+.. automodule:: pyibisami.ibis.file
    :members:
 
-ibis_model - Encapsulation of IBIS *Component* and *Model* keywords.
+ibis.model - Encapsulation of IBIS *Component* and *Model* keywords.
 ********************************************************************
 
-.. automodule:: pyibisami.ibis_model
+.. automodule:: pyibisami.ibis.model
    :members:
 
-ibis_parser - *Parsec* based parser for IBIS model files.
+ibis.parser - *Parsec* based parser for IBIS model files.
 *********************************************************
 
-.. automodule:: pyibisami.ibis_parser
+.. automodule:: pyibisami.ibis.parser
    :members:

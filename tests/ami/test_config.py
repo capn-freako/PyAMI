@@ -163,7 +163,6 @@ class MyTx : public AmiTx {
 } my_tx;
 
 AMIModel *ami_model = &my_tx;  ///< The pointer required by the API implementation.
-
 """
             )
         Path(__file__).parents[1].joinpath("examples", "example_tx.ami").unlink()
