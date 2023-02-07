@@ -294,6 +294,7 @@ def node(valid_keywords, stop_keywords, debug=False):
 
 # Individual IBIS keyword (i.e. - "node") parsers:
 
+
 # [End]
 @generate("[End]")
 def end():
@@ -504,7 +505,7 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
     components = {}
     models = {}
     model_selectors = {}
-    for (kw, val) in nodes:
+    for kw, val in nodes:
         if kw == "model":
             models.update(val)
         elif kw == "component":

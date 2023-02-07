@@ -59,7 +59,7 @@ def print_param(indent, name, param):
         if "description" in param:
             print(indent + "    ", f"(Description {param['description']})")
     else:
-        for (fld_name, fld_key) in [
+        for fld_name, fld_key in [
             ("Usage", "usage"),
             ("Type", "type"),
             ("Format", "format"),
