@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PyIBIS-AMI"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "4.0.5"
+version = "4.0.6"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
-          , {name = "David Patterson", email = "dpatter877@gmail.com"}
+          , {name = "David Patterson"}
           ]
 urls = { documentation = "https://github.com/capn-freako/PyAMI/wiki" }
 readme = "README.md"
@@ -19,11 +19,11 @@ dependencies = [
         "empy==3.3.4",
         "enable==5.3.1",
         "matplotlib==3.6.1",
-        "numpy>=1.22.3,<1.23",
-        "parsec==3.14",
-        "scipy==1.9.3",
-        "traits==6.4.1",
-        "traitsui==7.4.1",
+        "numpy>=1.23,<1.24",
+        "parsec>=3.15",
+        "scipy>=1.9",
+        "traits>=6.4",
+        "traitsui>=7.4",
 ]
 keywords=["ibis-ami"]
 classifiers=[
