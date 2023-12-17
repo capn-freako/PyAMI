@@ -72,7 +72,6 @@ def hsv2rgb(hue=0, saturation=1.0, value=1.0):
         R = V
         G = p
         B = q
-    # return (int(R), int(G), int(B))
     return (R, G, B)
 
 
@@ -119,7 +118,6 @@ def expand_params(input_parameters):
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:
-        # params = eval(compile(input_parameters, "cmd_line", "eval"))
         params = eval(input_parameters)
     return params
 
@@ -130,11 +128,11 @@ def run_tests(**kwargs):
 
     # Fetch options and cast into local independent variables.
     test_dir = Path(kwargs["test_dir"]).resolve()
-    ref_dir = Path(kwargs["ref_dir"])
+    ref_dir = Path(kwargs["ref_dir"]).resolve()
     if not ref_dir.exists():
         ref_dir = None
     model = Path(kwargs["model"]).resolve()
-    out_dir = Path(kwargs["out_dir"])
+    out_dir = Path(kwargs["out_dir"]).resolve()
     out_dir.mkdir(exist_ok=True)
     xml_filename = out_dir.joinpath(kwargs["xml_file"])
 
@@ -142,6 +140,8 @@ def run_tests(**kwargs):
     # folder as the *.XML file. Besides, this allows the model tester
     # to zip up her 'test_results' directory and send it off to
     # someone, whom may not have the PyIBIS-AMI package installed.
+    #
+    # Note: To avoid this issue entirely, incorporate `xsltproc` into your build flow.
     shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
 
     print(f"Testing model: {model}")
@@ -159,10 +159,10 @@ def run_tests(**kwargs):
     else:
         tests = list(test_dir.glob("*.em"))
     for test in tests:
-        # print("Running test: {} ...".format(test.stem))
-        print(f"Running test: {test} ...")
+        test_ = test.stem
+        print(f"Running test: {test_} ...")
         theModel = AMIModel(str(model))
-        plot_names = plot_name(xml_filename.stem)
+        plot_names = plot_name(test_)
         for cfg_item in params:
             cfg_name = cfg_item[0]
             print(f"\tRunning test configuration: {cfg_name} ...")
@@ -173,10 +173,9 @@ def run_tests(**kwargs):
                 interpreter = em.Interpreter(
                     output=xml_file,
                     globals={
-                        "name": f"{test} ({cfg_name})",
+                        "name": f"{test_} ({cfg_name})",
                         "model": theModel,
                         "data": param_list,
-                        # "plot_names": plot_name(xml_filename.stem),
                         "plot_names": plot_names,
                         "description": description,
                         "plot_colors": colors,
@@ -188,11 +187,11 @@ def run_tests(**kwargs):
                     chdir(out_dir)  # So that the images are saved in the output directory.
                     interpreter.file(open(Path(test_dir, test)))
                     chdir(cwd)
-                except:
-                    print("Something went wrong.")
+                except Exception as err:
+                    print("\t\t", err)
                 finally:
                     interpreter.shutdown()
-        print("Test:", test, "complete.")
+        print("Test:", test_, "complete.")
     with open(xml_filename, "a", encoding="utf-8") as xml_file:
         xml_file.write("</tests>\n")
 
@@ -256,8 +255,11 @@ def main(**kwargs):
     copy this file from the pyibisami package directory to your local
     working directory, in order to avoid file loading errors in your
     Web browser.
+
+    If your browser's security settings disallow the use of an XSLT style
+    sheet when processing XML then use the `xsltproc` utility to convert
+    the XML/XSLT to HTML before viewing in your browser.
     """
-    # print(kwargs)
     run_tests(**kwargs)
 
 

@@ -327,7 +327,7 @@ Model_keywords = {
 @generate("[Model]")
 def model():
     "Parse [Model]."
-    nm = yield name
+    nm = yield name << ignore
     if DBG:
         print(f"Parsing model: {nm}...")
     res = yield many1(node(Model_keywords, IBIS_keywords, debug=DBG))
