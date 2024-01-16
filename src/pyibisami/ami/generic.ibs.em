@@ -1,11 +1,11 @@
-[IBIS Ver]   7.1
-
 @{
 from numpy import array
 
+version           = ibis_params['version']
 file_name         = ibis_params['file_name']
 file_rev          = ibis_params['file_rev']
 copyright         = ibis_params['copyright']
+source            = ibis_params['source']
 component         = ibis_params['component']
 manufacturer      = ibis_params['manufacturer']
 r_pkg             = ibis_params['r_pkg']
@@ -24,12 +24,13 @@ impedance         = ibis_params['impedance']
 slew_rate         = ibis_params['slew_rate']
 }
 
+[IBIS Ver]   @(version)
 [File Name]  @(file_name)
 [File Rev]   @(file_rev)
 
 [Date]       @(date)
 
-[Source]     ibisami, a public domain IBIS-AMI model creation infrastructure
+[Source]     @(source)
 
 [Disclaimer]
 THIS MODEL IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -44,11 +45,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS MODEL, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 [Notes]
-This IBIS file was generated, using the template file,
-"example_tx.ibs.em", from ibisami, a public domain IBIS-AMI model
-creation infrastructure. To learn more, visit:
-
-https://github.com/capn-freako/ibisami/wiki
+This IBIS file was generated using the template file: "generic.ibs.em".
 
 [Copyright]    @(copyright)
 [Component]    @(component)
@@ -128,13 +125,14 @@ else:
     print("[GND Clamp]")
     print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], -10., -10., -10.))
     for v in [k * voltage_range[0] for k in range(3)]:
-        i = v / array(impedance)
+        i = v / array(impedance) / 2
         print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, i[0], i[1], i[2]))
     print("")
     print("[Power Clamp]")
     print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], 10., 10., 10.))
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (0., 0., 0., 0.))
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (2. * voltage_range[0], 0., 0., 0.))
+    for v in [k * voltage_range[0] for k in range(3)]:
+        i = v / array(impedance) / 2
+        print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, -i[0], -i[1], -i[2]))
     print("")
 }
 
