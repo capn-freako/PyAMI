@@ -6,6 +6,7 @@ Original Date:   July 3, 2012
 
 Copyright (c) 2019 David Banas; All rights reserved World wide.
 """
+
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double
 from pathlib import Path

@@ -6,6 +6,7 @@ Original date:   December 17, 2016
 
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
+
 import re
 
 from parsec import ParseError, generate, many, many1, regex, string

@@ -8,6 +8,7 @@ Original Date:   3 July 2012
 
 Copyright (c) 2012 by David Banas; All rights reserved World wide.
 """
+
 from importlib.metadata import version as _get_version
 
 # Set PEP396 version attribute
