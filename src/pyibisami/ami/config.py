@@ -117,23 +117,16 @@ def print_code(pname, param):
     print("       ", "node_names.pop_back();")
 
 
-def ami_config(py_file, test_dir="test_runs"):
+def mk_model(ibis_params, ami_params, model_name, description, out_dir="."):
     """
-    Read in the ``py_file`` and cpp.em file then generate a ibis, ami,
-    cpp, and test run configuration files.
+    Generate ibis, ami, and cpp files, by merging the
+    device specific parameterization with the templates.
     """
 
-    file_base_name = Path(py_file).stem
-
-    # Read model configuration information.
-    print(f"Reading model configuration information from file: {py_file}.")
-    spec = importlib.util.spec_from_file_location(file_base_name, py_file)
-    cfg = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cfg)
-
+    py_file = (Path(out_dir).resolve() / model_name).with_suffix(".py")
     # Configure the model files.
     for ext in ["cpp", "ami", "ibs"]:
-        out_file = Path(py_file).with_suffix(f".{ext}")
+        out_file = py_file.with_suffix(f".{ext}")
         if ext == "ami":
             em_file = Path(__file__).parent.joinpath("generic.ami.em")
         elif ext == "ibs":
@@ -146,11 +139,11 @@ def ami_config(py_file, test_dir="test_runs"):
             interpreter = em.Interpreter(
                 output=out_file,
                 globals={
-                    "ami_params": cfg.ami_params,
-                    "ibis_params": cfg.ibis_params,
+                    "ami_params": ami_params,
+                    "ibis_params": ibis_params,
                     "param_types": param_types,
-                    "model_name": cfg.kFileBaseName,
-                    "description": cfg.kDescription,
+                    "model_name": model_name,
+                    "description": description,
                     "date": str(date.today()),
                 },
             )
@@ -159,33 +152,55 @@ def ami_config(py_file, test_dir="test_runs"):
             finally:
                 interpreter.shutdown()
 
-    # Generate the test run files.
-    def mk_combs(dict_items):
-        """Make all combinations possible from a list of dictionary items.
 
-        Args:
-            dict_items([(str, [T])]): List of dictionary key/value pairs.
-                The values are lists.
+def ami_config(py_file):
+    """
+    Read in the ``py_file`` and cpp.em files,
+    then generate: ibis, ami, and cpp files.
+    """
 
-        Return:
-            [[(str, T)]]: List of all possible combinations of key values.
-        """
-        if not dict_items:
-            return [[],]
-        head, *tail = dict_items
-        k, vs = head
-        kvals = [(k,v) for v in vs]
-        return [ [kval] + l
-                 for kval in kvals
-                 for l in mk_combs(tail)
-               ]
+    file_base_name = Path(py_file).stem
+
+    # Read model configuration information.
+    print(f"Reading model configuration information from file: {py_file}.")
+    spec = importlib.util.spec_from_file_location(file_base_name, py_file)
+    cfg = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cfg)
+
+    mk_model(cfg.ibis_params, cfg.ami_params, cfg.kFileBaseName, cfg.kDescription, out_dir=Path(py_file).parent)
+
+
+def mk_combs(dict_items):
+    """Make all combinations possible from a list of dictionary items.
+
+    Args:
+        dict_items([(str, [T])]): List of dictionary key/value pairs.
+            The values are lists.
+
+    Return:
+        [[(str, T)]]: List of all possible combinations of key values.
+    """
+    if not dict_items:
+        return [[],]
+    head, *tail = dict_items
+    k, vs = head
+    kvals = [(k,v) for v in vs]
+    return [ [kval] + l
+             for kval in kvals
+             for l in mk_combs(tail)
+           ]
+
+
+def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
+    """Make the test run configuration files.
+    """
 
     pname = Path(test_dir).resolve()
     pname.mkdir(exist_ok=True)
     pname = (pname / file_base_name).resolve()
     pname.mkdir(exist_ok=True)
-    for fname in cfg.test_defs.keys():
-        desc, ami_defs, sim_defs, ref_fstr = cfg.test_defs[fname]
+    for fname in test_defs.keys():
+        desc, ami_defs, sim_defs, ref_fstr = test_defs[fname]
         ami_str, ami_dict = ami_defs
         sim_str, sim_dict = sim_defs
         with open((pname / fname).with_suffix(".run"), "w", encoding="utf-8") as f:
@@ -218,6 +233,8 @@ def ami_config(py_file, test_dir="test_runs"):
                     f.write(")\n")
 
 
+#NOTE: The following is deprecated! Instead, make your model configurator executable
+#      and import what you need from this module. This is much cleaner.
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
 @click.option("-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation.")
