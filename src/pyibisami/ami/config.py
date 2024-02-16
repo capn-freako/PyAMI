@@ -6,14 +6,17 @@ Original author: David Banas
 
 Original date:   February 26, 2016
 
+Copyright (c) 2016 David Banas; all rights reserved World wide.
+
 This script gets called from a makefile, when any of the following need rebuilding:
 
 * a C++ source code file
 * a ``*.AMI`` file
 * a ``*.IBS`` file
+* a ``*.TST`` file (a dummy place-holder indicating that the test run config. files have been made)
 
-All three will be rebuilt.
-(We rebuild all three, because it doesn't take very long, and we can
+All files will be rebuilt.
+(We rebuild all files, because it doesn't take very long, and we can
 insure consistency this way.)
 
 This gets triggered by one of two things:
@@ -21,11 +24,9 @@ This gets triggered by one of two things:
 #. The common model configuration information has changed, or
 #. One of the EmPy template files was updated.
 
-The idea, here, is that the ``*.IBS`` file, the ``*.AMI`` file, and the
-C++ source file should be configured from a common model configuration
-file, so as to ensure consistency between the three.
-
-Copyright (c) 2016 David Banas; all rights reserved World wide.
+The idea here is that the ``*.IBS`` file, the ``*.AMI`` file, the C++ source file,
+and the test run configuration files should be configured from a common model
+configuration file, so as to ensure consistency between them all.
 """
 import importlib.util
 from datetime import date
@@ -116,9 +117,12 @@ def print_code(pname, param):
     print("       ", "node_names.pop_back();")
 
 
-def ami_config(py_file):
-    """Read in the ``py_file`` and cpp.em file then generate a ibis, ami and
-    cpp."""
+def ami_config(py_file, test_dir="test_runs"):
+    """
+    Read in the ``py_file`` and cpp.em file then generate a ibis, ami,
+    cpp, and test run configuration files.
+    """
+
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
@@ -127,7 +131,7 @@ def ami_config(py_file):
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)
 
-    # Configure the 3 files.
+    # Configure the model files.
     for ext in ["cpp", "ami", "ibs"]:
         out_file = Path(py_file).with_suffix(f".{ext}")
         if ext == "ami":
@@ -155,11 +159,70 @@ def ami_config(py_file):
             finally:
                 interpreter.shutdown()
 
+    # Generate the test run files.
+    def mk_combs(dict_items):
+        """Make all combinations possible from a list of dictionary items.
+
+        Args:
+            dict_items([(str, [T])]): List of dictionary key/value pairs.
+                The values are lists.
+
+        Return:
+            [[(str, T)]]: List of all possible combinations of key values.
+        """
+        if not dict_items:
+            return [[],]
+        head, *tail = dict_items
+        k, vs = head
+        kvals = [(k,v) for v in vs]
+        return [ [kval] + l
+                 for kval in kvals
+                 for l in mk_combs(tail)
+               ]
+
+    pname = Path(test_dir).resolve()
+    pname.mkdir(exist_ok=True)
+    pname = (pname / file_base_name).resolve()
+    pname.mkdir(exist_ok=True)
+    for fname in cfg.test_defs.keys():
+        desc, ami_defs, sim_defs, ref_fstr = cfg.test_defs[fname]
+        ami_str, ami_dict = ami_defs
+        sim_str, sim_dict = sim_defs
+        with open((pname / fname).with_suffix(".run"), "w", encoding="utf-8") as f:
+            f.write(desc + "\n")
+            for ami_comb in mk_combs(ami_dict.items()):
+                for sim_comb in mk_combs(sim_dict.items()):
+                    try:
+                        pdict = dict(ami_comb)
+                        pdict.update(dict(sim_comb))
+                        f.write(f"\n('{ami_str.format(pdict=pdict)}_{sim_str.format(pdict=pdict)}', \\\n")
+                    except:
+                        print(f"ami_str: {ami_str}")
+                        print(f"sim_str: {sim_str}")
+                        print(f"pdict: {pdict}")
+                        raise
+                    f.write(f"  ({{'root_name': '{file_base_name}', \\\n")
+                    for (k,v) in ami_comb:
+                        f.write(f"    '{k}': {v}, \\\n")
+                    f.write("   }, \\\n")
+                    if sim_comb:
+                        head, *tail = sim_comb
+                        k, v = head
+                        f.write(f"   {{'{k}': {v}, \\\n")
+                        for (k,v) in tail:
+                            f.write(f"    '{k}': {v}, \\\n")
+                        f.write("   } \\\n")
+                    f.write("  ), \\\n")
+                    if ref_fstr:
+                        f.write(f"  '{ref_fstr.format(pdict=pdict)}', \\\n")
+                    f.write(")\n")
+
 
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
+@click.option("-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation.")
 @click.version_option()
-def main(py_file):
+def main(py_file, **kwd_args):
     """Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
 
     This command generates three files based off the input config file.
