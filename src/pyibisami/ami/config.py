@@ -181,19 +181,17 @@ def mk_combs(dict_items):
         [[(str, T)]]: List of all possible combinations of key values.
     """
     if not dict_items:
-        return [[],]
+        return [
+            [],
+        ]
     head, *tail = dict_items
     k, vs = head
-    kvals = [(k,v) for v in vs]
-    return [ [kval] + l
-             for kval in kvals
-             for l in mk_combs(tail)
-           ]
+    kvals = [(k, v) for v in vs]
+    return [[kval] + l for kval in kvals for l in mk_combs(tail)]
 
 
 def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
-    """Make the test run configuration files.
-    """
+    """Make the test run configuration files."""
 
     pname = Path(test_dir).resolve()
     pname.mkdir(exist_ok=True)
@@ -217,14 +215,14 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
                         print(f"pdict: {pdict}")
                         raise
                     f.write(f"  ({{'root_name': '{file_base_name}', \\\n")
-                    for (k,v) in ami_comb:
+                    for k, v in ami_comb:
                         f.write(f"    '{k}': {v}, \\\n")
                     f.write("   }, \\\n")
                     if sim_comb:
                         head, *tail = sim_comb
                         k, v = head
                         f.write(f"   {{'{k}': {v}, \\\n")
-                        for (k,v) in tail:
+                        for k, v in tail:
                             f.write(f"    '{k}': {v}, \\\n")
                         f.write("   } \\\n")
                     f.write("  ), \\\n")
@@ -233,11 +231,13 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
                     f.write(")\n")
 
 
-#NOTE: The following is deprecated! Instead, make your model configurator executable
+# NOTE: The following is deprecated! Instead, make your model configurator executable
 #      and import what you need from this module. This is much cleaner.
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
-@click.option("-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation.")
+@click.option(
+    "-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation."
+)
 @click.version_option()
 def main(py_file, **kwd_args):
     """Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
