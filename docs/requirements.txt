@@ -1,2 +1,2 @@
 sphinx
-m2r
+m2r2
