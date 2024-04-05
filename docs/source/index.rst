@@ -3,12 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-===========================================
- *PyIBIS-AMI* Source Code Developer's Guide
-===========================================
+ *PyIBIS-AMI* API User's Guide
+==============================
 
-Welcome to the *PyIBIS-AMI Developer's Guide*!
-==============================================
+Welcome to the *PyIBIS-AMI* API user's documentation!
 
 Contents
 --------
@@ -20,7 +18,7 @@ Contents
    modules
 
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

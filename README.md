@@ -9,7 +9,7 @@ command line applications.
 It can be installed via `conda`.  PyPi support is experimental but can be installed with
  `pip install PyIBIS-AMI`.
 
-[View API/Developer's Documentation.](https://htmlpreview.github.io/?https://github.com/capn-freako/PyAMI/blob/master/docs/build/html/index.html)
+[View API/Developer's Documentation.](https://pyibis-ami.readthedocs.io/en/latest/)
 
 ## Command Line Tools
 
