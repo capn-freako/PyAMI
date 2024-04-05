@@ -125,3 +125,6 @@ tests/examples/*.cpp
 tests/examples/*.ibs
 tests/examples/*.ami
 examples/test_results/*
+
+# MacOS system files
+.DS_Store
