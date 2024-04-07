@@ -1,5 +1,5 @@
 sphinx
 sphinx_rtd_theme
 m2r2
-PyIBIS-AMI @ file:../
+PyIBIS-AMI @ file:./
 # PyChOpMarg @ file:///Users/dbanas/prj/PyChOpMarg
