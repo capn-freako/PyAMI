@@ -7,8 +7,8 @@ Original Date:   November 1, 2019
 For information regarding the IBIS modeling standard, visit:
 https://ibis.org/
 
-*Note:* The ``IBISModel`` class, defined here, needs to be kept separate from the
-other IBIS-related classes, defined in the ``ibis_model`` module, in order to
+**Note:** The ``IBISModel`` class, defined here, needs to be kept separate from the
+other IBIS-related classes, defined in the ``model`` module, in order to
 avoid circular imports.
 
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
@@ -103,7 +103,7 @@ class IBISModel(HasTraits):
             ibis_file_name (str): The name of the IBIS file.
             is_tx (bool): True if this is a Tx model.
 
-        KeywordArgs:
+        Keyword Args:
             debug (bool): Output debugging info to console when true.
                 Default = False
             gui (bool): Set to `False` for command line and/or script usage.
@@ -164,6 +164,7 @@ class IBISModel(HasTraits):
         return f"IBIS Model '{self._model_dict['file_name']}'"
 
     def info(self):
+        """Basic information about the IBIS model."""
         res = ""
         try:
             for k in ["ibis_ver", "file_name", "file_rev"]:

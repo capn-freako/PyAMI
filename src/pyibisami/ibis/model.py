@@ -25,7 +25,7 @@ class Component(HasTraits):
     def __init__(self, subDict):
         """
         Args:
-            subDict (dict): Dictionary of [Component] sub-keywords/params.
+            subDict(dict): Dictionary of [Component] sub-keywords/params.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# PyBERT Developer Guide documentation build configuration file, created by
+# PyIBIS-AMI Developer Guide documentation build configuration file, created by
 # sphinx-quickstart on Tue Feb 10 10:04:12 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -34,15 +34,18 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.coverage",
     "sphinx.ext.todo",
-    "sphinx.ext.autosummary",
+    # "sphinx.ext.autosummary",
     "m2r2",
 ]
-auto_doc_default_options = {
-   'undoc-members': True,
-   'inherited-members': False,
-   'show-inheritance': True,
+autodoc_default_options = {
+   "undoc-members": True,
+   "inherited-members": False,
+   "show-inheritance": True,
+   "members": True,
+   "exclude-members": "default_traits_view",
 }
 autodoc_mock_imports = ["matplotlib", "enable"]
+autoclass_content = "both"
 autodata_content = 'both'
 
 # Add any paths that contain templates here, relative to this directory.
@@ -213,11 +216,11 @@ html_static_path = ['_static']
 # html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "PyIBIS-AMIDeveloperGuidedoc"
+htmlhelp_basename = "PyIBIS-AMIUserGuidedoc"
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+# latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     #'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
@@ -226,14 +229,14 @@ latex_elements = {
     #'preamble': '',
     # Latex figure (float) alignment
     #'figure_align': 'htbp',
-}
+# }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
-latex_documents = [
-    ("index", "PyIBIS-AMIDeveloperGuide.tex", "PyIBIS-AMI Developer Guide Documentation", "David Banas", "manual"),
-]
+# latex_documents = [
+#     ("index", "PyIBIS-AMIDeveloperGuide.tex", "PyIBIS-AMI Developer Guide Documentation", "David Banas", "manual"),
+# ]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
@@ -260,7 +263,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [("index", "pyibis-amideveloperguide", "PyIBIS-AMI Developer Guide Documentation", ["David Banas"], 1)]
+# man_pages = [("index", "pyibis-amideveloperguide", "PyIBIS-AMI Developer Guide Documentation", ["David Banas"], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
@@ -271,17 +274,17 @@ man_pages = [("index", "pyibis-amideveloperguide", "PyIBIS-AMI Developer Guide D
 # Grouping the document tree into Texinfo files. List of tuples
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
-texinfo_documents = [
-    (
-        "index",
-        "PyIBIS-AMIDeveloperGuide",
-        "PyIBIS-AMI Developer Guide Documentation",
-        "David Banas",
-        "PyIBIS-AMIDeveloperGuide",
-        "One line description of project.",
-        "Miscellaneous",
-    ),
-]
+# texinfo_documents = [
+#     (
+#         "index",
+#         "PyIBIS-AMIDeveloperGuide",
+#         "PyIBIS-AMI Developer Guide Documentation",
+#         "David Banas",
+#         "PyIBIS-AMIDeveloperGuide",
+#         "One line description of project.",
+#         "Miscellaneous",
+#     ),
+# ]
 
 # Documents to append as an appendix to all manuals.
 # texinfo_appendices = []

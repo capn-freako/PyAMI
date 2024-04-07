@@ -50,7 +50,7 @@ def logf(p, preStr=""):
     Args:
         p (Parser): The original parser.
 
-    KeywordArgs:
+    Keyword Args:
         preStr (str): A prefix string to use in failure message.
                       (Default = <empty string>)
     """
@@ -472,7 +472,7 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
     Args:
         ibis_file_contents_str (str): The contents of the IBIS file, as a single string.
 
-    KeywordArgs:
+    Keyword Args:
         debug (bool): Output debugging info to console when true.
             Default = False
 

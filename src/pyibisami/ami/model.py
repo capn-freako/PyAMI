@@ -216,7 +216,12 @@ class AMIModel:
     """
 
     def __init__(self, filename):
-        """Load the dll and bind the 3 AMI functions."""
+        """
+        Load the dll and bind the 3 AMI functions.
+
+        Args:
+            filename(str): The DLL/SO file name.
+        """
 
         self._ami_mem_handle = None
         my_dll = CDLL(filename)
