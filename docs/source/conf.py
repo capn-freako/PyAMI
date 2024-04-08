@@ -18,7 +18,7 @@ import sys
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../../src'))
+sys.path.insert(0, os.path.abspath("../../src"))
 
 # -- General configuration ------------------------------------------------
 
@@ -38,15 +38,15 @@ extensions = [
     "m2r2",
 ]
 autodoc_default_options = {
-   "undoc-members": True,
-   "inherited-members": False,
-   "show-inheritance": True,
-   "members": True,
-   "exclude-members": "default_traits_view",
+    "undoc-members": True,
+    "inherited-members": False,
+    "show-inheritance": True,
+    "members": True,
+    "exclude-members": "default_traits_view",
 }
 autodoc_mock_imports = ["matplotlib", "enable"]
 autoclass_content = "both"
-autodata_content = 'both'
+autodata_content = "both"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -64,8 +64,8 @@ master_doc = "index"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 project = "PyIBIS-AMI User's Guide"
 copyright = "2015, David Banas"
-author = 'David Banas'
-release = 'v5.1.1'
+author = "David Banas"
+release = "v5.1.1"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -91,7 +91,7 @@ language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -123,7 +123,7 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 todo_include_todos = True
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -153,7 +153,7 @@ todo_include_todos = True
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -221,14 +221,14 @@ htmlhelp_basename = "PyIBIS-AMIUserGuidedoc"
 # -- Options for LaTeX output ---------------------------------------------
 
 # latex_elements = {
-    # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
-    # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
-    # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
-    # Latex figure (float) alignment
-    #'figure_align': 'htbp',
+# The paper size ('letterpaper' or 'a4paper').
+#'papersize': 'letterpaper',
+# The font size ('10pt', '11pt' or '12pt').
+#'pointsize': '10pt',
+# Additional stuff for the LaTeX preamble.
+#'preamble': '',
+# Latex figure (float) alignment
+#'figure_align': 'htbp',
 # }
 
 # Grouping the document tree into LaTeX files. List of tuples
