@@ -1,5 +1,7 @@
+click
+m2r2
+numpy
+parsec
 sphinx
 sphinx_rtd_theme
-m2r2
-# PyIBIS-AMI @ file:./
-# PyChOpMarg @ file:///Users/dbanas/prj/PyChOpMarg
+traits
