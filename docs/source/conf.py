@@ -51,7 +51,6 @@ autodoc_mock_imports = [
     "enable",
     "matplotlib",
     "numpy",
-    "parsec",
     "traits",
     "traitsui",
 ]
