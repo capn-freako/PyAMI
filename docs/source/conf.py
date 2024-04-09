@@ -44,7 +44,17 @@ autodoc_default_options = {
     "members": True,
     "exclude-members": "default_traits_view",
 }
-autodoc_mock_imports = ["matplotlib", "enable"]
+autodoc_mock_imports = [
+    "chaco",
+    "click",
+    "em",
+    "enable",
+    "matplotlib",
+    "numpy",
+    "parsec",
+    "traits",
+    "traitsui",
+]
 autoclass_content = "both"
 autodata_content = "both"
 
