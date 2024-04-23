@@ -37,8 +37,8 @@ import em
 
 param_types = {
     "INT": {"c_type": "int", "ami_type": "Integer", "getter": "get_param_int"},
-    "FLOAT": {"c_type": "float", "ami_type": "Float", "getter": "get_param_float"},
-    "TAP": {"c_type": "float", "ami_type": "Tap", "getter": "get_param_float"},
+    "FLOAT": {"c_type": "double", "ami_type": "Float", "getter": "get_param_float"},
+    "TAP": {"c_type": "double", "ami_type": "Tap", "getter": "get_param_float"},
     "BOOL": {"c_type": "bool", "ami_type": "Boolean", "getter": "get_param_bool"},
     "STRING": {"c_type": "char *", "ami_type": "String", "getter": "get_param_str"},
 }
