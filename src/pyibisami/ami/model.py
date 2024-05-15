@@ -100,7 +100,8 @@ class AMIModelInitializer:
     }
 
     def __init__(self, ami_params: Dict, **optional_args):
-        """Constructor accepts a mandatory dictionary containing the AMI
+        """
+        Constructor accepts a mandatory dictionary containing the AMI
         parameters, as well as optional initialization data overrides and
         validates them, before using them to update the local initialization
         data structures.
@@ -208,46 +209,63 @@ class AMIModelInitializer:
 
 
 class AMIModel:
-    """Class defining the structure and behavior of a AMI Model.
+    """
+    Class defining the structure and behavior of an AMI Model.
 
     Notes:
-        * Makes the calling of ``AMI_Close()`` automagic,
-          by calling it from the destructor.
+        1. Makes the calling of ``AMI_Close()`` automagic,
+            by calling it from the destructor.
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename: str, ami_param_defs: Optional[dict[str, Any]] = None):
         """
         Load the dll and bind the 3 AMI functions.
 
         Args:
-            filename(str): The DLL/SO file name.
+            filename: The DLL/SO file name.
+
+        Keyword Args:
+            ami_param_defs: Dictionary containing all AMI parameter definitions for this model.
+                Default: None
+
+        Raises:
+            RuntimeError: If given ``ami_param_defs`` and finding disagreement w/ model.
         """
 
         self._ami_mem_handle = None
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
-        try:
-            self._amiGetWave = my_dll.AMI_GetWave
-        except:
-            self._amiGetWave = None
+        if ami_param_defs and "getwave_exists" in ami_param_defs and ami_param_defs["getwave_exists"]:
+            try:
+                self._amiGetWave = my_dll.AMI_GetWave
+            except OSError as err:
+                raise RuntimeError(
+                    sum([
+                        "AMI parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()` in the DLL/SO!\n"
+                        "When I try I'm told:\n"
+                        f"\t{err.msg}"
+                    ])
+                )
         self._amiClose = my_dll.AMI_Close
 
     def __del__(self):
-        """Destructor - Calls AMI_Close with handle to AMI model memory.
+        """
+        Destructor - Calls ``AMI_Close()`` with handle to AMI model memory.
 
-        This obviates the need for the user to call the AMI_Close
+        This obviates the need for the user to call the ``AMI_Close()``
         function explicitly, and guards against memory leaks, during
-        PyLab command prompt operation, by ensuring that AMI_Close
+        PyLab command prompt operation, by ensuring that ``AMI_Close()``
         gets called automagically when the model goes out of scope.
         """
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
 
-    def initialize(self, init_object):
-        """Wraps the ``AMI_Init`` function.
+    def initialize(self, init_object: AMIModelInitializer):
+        """
+        Wraps the ``AMI_Init()`` function.
 
         Args:
-            init_object(AMIModelInitializer): The model initialization data.
+            init_object: The model initialization data.
 
         Notes:
             * Takes an instance of ``AMIModelInitializer`` as its only argument.
@@ -255,6 +273,7 @@ class AMIModel:
               and modified incrementally in between multiple calls of
               ``initialize``. This is useful for *PyLab* command prompt testing.
         """
+
         # Free any memory allocated by the previous initialization.
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
@@ -324,22 +343,32 @@ class AMIModel:
         bit_time = self._bit_time.value
         sample_interval = self._sample_interval.value
         # ToDo: Fix this.
-        # if(bit_time % sample_interval):
-        # raise ValueError("bit_time ({:6.3G}) must be an integral multiple of sample_interval ({:6.3G}).".format(self._bit_time.value, self._sample_interval.value))
+        if (bit_time % sample_interval) > (sample_interval / 100):
+            raise ValueError(
+                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns).")
         self._samps_per_bit = int(bit_time / sample_interval)
         self._bits_per_call = self._row_size / self._samps_per_bit
 
-    def getWave(self, wave, bits_per_call=0):
-        """Performs time domain processing of input waveform, using the
+    def getWave(self, wave: RVec, bits_per_call : int = 0) -> tuple(RVec, RVec):
+        """
+        Performs time domain processing of input waveform, using the
         ``AMI_GetWave`` function.
 
         Args:
-            wave(array-like): Waveform to be processed.
-            bits_per_call(Integer): Number of bits to use, per call to AMI_GetWave().
-                (Optional; default = existing value.)
+            wave: Waveform to be processed.
+
+        Keyword Args:
+            bits_per_call: Number of bits to use, per call to ``AMI_GetWave()``.
+                Default: 0 (Means "Use existing value.")
 
         Returns:
-            NumPy 1D array, NumPy 1D array: (The processed waveform, The recovered slicer sampling instants).
+            (wave_out, clock_times): A pair containing:
+                - the processed waveform, and
+                - the recovered slicer sampling instants.
+
+        Notes:
+            1. The returned clock times are given in "pre-edge-aligned" fashion,
+                which means their values are: sampling instant - ui/2.
         """
 
         if bits_per_call:
@@ -372,6 +401,93 @@ class AMIModel:
             idx += len(_wave)
 
         return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit])
+
+    def get_responses(self, bits_per_call: int = 0, bit_gen: generator[int] = None) -> dict[str, Any]:
+        """
+        Get the impulse, step, pulse, and frequency responses of an initialized IBIS-AMI model.
+
+        Keyword Args:
+            bits_per_call: Number of bits to include in the input to `GetWave()`.
+                Default: 0 (Means "use model's existing value".)
+            bit_gen: The bit generator to use for `GetWave()` input data generation.
+                Should produce integers from the set: {0,1}.
+                Default: None (Means "use randint(2)".)
+
+        Returns:
+            Dictionary containing the responses under the following keys:
+                "imp_resp_init": The model's impulse response, from its `AMI_Init()` function.
+                "step_resp_init": The model's step response, from its `AMI_Init()` function.
+                "pulse_resp_init": The model's pulse response, from its `AMI_Init()` function.
+                "freq_resp_init": The model's frequency response, from its `AMI_Init()` function.
+                "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function.
+                "step_resp_getw": The model's step response, from its `AMI_GetWave()` function.
+                "pulse_resp_getw": The model's pulse response, from its `AMI_GetWave()` function.
+                "freq_resp_getw": The model's frequency response, from its `AMI_GetWave()` function.
+
+        Notes:
+            1. If either set of keys (i.e. - "..._init" or "..._getw")
+                is missing from the returned dictionary, it means that
+                that mode of operation (`AMI_Init()` or `AMI_GetWave()`)
+                was not available in the given model.
+            2. An empty dictionary implies that neither the `Init_Returns_Impulse`
+                nor the `GetWave_Exists` AMI reserved parameter was True.
+            3. One additional key is added to the returned dictionary, when appropriate:
+                - "params_out_getw": If the model's ``AMI_GetWave()`` function is called and it returns parameters.
+            4. Note that impulse responses are returned with units: (V/sample), not (V/s).
+            5. The frequency vector corresponding to the returned frequency responses is given by:
+                [n * f0 for n in range(impulse_length // 2 + 1)], where:
+                f0 = 1 / (ts * impulse_length)
+        """
+
+        rslt = {}
+
+        # Capture needed parameter definitions.
+        impulse_length = ami_param_defs["Row_Size"]
+        ui = ami_param_defs["Bit_Time"]
+        ts = ami_param_defs["Sample_Interval"]
+        ignore_bits = ami_param_defs["Ignore_Bits"]
+
+        # Capture/convert instance variables.
+        chnl_imp = self.channel_response * ts  # input (a.k.a. - "channel") impulse response (V/sample)
+        out_imp = self.initOut * ts  # output impulse response (V/sample)
+
+        # Extract and return the model responses.
+        if ami_param_defs["Init_Returns_Impulse"]:
+            rslt["imp_resp_init"] = deconvolve(out_imp, chnl_imp)
+            rslt["step_resp_init"] = np.cumsum(rslt["imp_resp_init"])
+            rslt["pulse_resp_init"] = (
+                rslt["step_resp_init"] - np.pad(rslt["step_resp_init"][:-nspui], (nspui, 0),
+                                                mode="constant", constant_values=0) )
+            rslt["freq_resp_init"] = np.fft.rfft(rslt["imp_resp_init"])
+            rslt["out_resp_init"] = out_imp
+        if ami_param_defs["GetWave_Exists"]:
+            # Run `ignore_bits` bits of data through the model first.
+            if bit_gen:
+                wave_in = [next(bit_gen) for _ in range(ignore_bits)]
+            else:
+                wave_in = [randint(2) for _ in range(ignore_bits)]
+            _, _ = model.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+            # Then, run a perfect step, to extract model's step response.
+            wave_out, _ = model.getWave(
+                np.array([0] * impulse_length + [1] * impulse_length) - 0.5,
+                bits_per_call=bits_per_call)
+            # Remove any artifactual vertical offset from beginning of result:
+            rslt["step_resp_getw"] = wave_out[impulse_length:] - wave_out[impulse_length - 1]
+            # Calculate other responses from step response.
+            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0),
+                                              mode="constant", constant_values=0)
+            rslt["pulse_resp_getw"] = (
+                rslt["step_resp_getw"] - np.pad(rslt["step_resp_getw"][:-nspui], (nspui, 0),
+                                                mode="constant", constant_values=0) )
+            rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
+            # Calculate effective cumulative impulse response (i.e. - channel + Tx).
+            # - Form the step response equivalent to the given channel impulse response.
+            chnl_step = cumsum(chnl_imp)
+            # - And run it through `GetWave()`, after d.c. balancing.
+            out_step, _ = model.getWave(chnl_step - chnl_step.ptp / 2, bits_per_call=bits_per_call)
+            # - Convert result back to an impulse response.
+            rslt["out_resp_init"] = np.pad(np.diff(out_step), (1, 0), mode="constant", constant_values=0)
+        return rslt
 
     def _getInitOut(self):
         return list(map(float, self._initOut))
