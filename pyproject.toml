@@ -5,23 +5,28 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PyIBIS-AMI"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "5.1.4"
+version = "6.1.0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           , {name = "David Patterson"}
           ]
-urls = { documentation = "https://github.com/capn-freako/PyAMI/wiki" }
+urls = {
+    documentation = "https://pyibis-ami.readthedocs.io/en/latest/",
+    wiki = "https://github.com/capn-freako/PyAMI/wiki",
+    github = "https://github.com/capn-freako/PyAMI",
+    pypi = "https://pypi.org/project/PyIBIS-AMI/",
+}
 readme = "README.md"
 requires-python = ">=3.9,<3.12"
 license = {text = "BSD"}
 dependencies = [
-        "chaco>=6.0.0",
-        "click>=8.1.3",
-        "empy>=3.3.4",
-        "importlib_resources",
-        "matplotlib>=3.6.1",
-        "numpy>=1.25,<1.26",
-        "parsec>=3.15",
-        "scipy>=1.9",
+    "chaco>=6.0.0",
+    "click>=8.1.3",
+    "empy>=3.3.4",
+    "importlib_resources",
+    "matplotlib>=3.6.1",
+    "numpy>=1.25,<1.26",
+    "parsec>=3.15",
+    "scipy>=1.9",
 ]
 keywords=["ibis-ami"]
 classifiers=[
@@ -34,6 +39,7 @@ classifiers=[
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: System :: Emulators",
     "Topic :: Utilities",
