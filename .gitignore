@@ -109,6 +109,8 @@ cython_debug/
 MANIFEST
 *.swp
 *_log.txt
+*_dbg.txt
+*_cfg.yaml
 empy_exec_test.*
 *.ami
 *.ibs
