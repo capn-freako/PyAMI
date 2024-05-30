@@ -223,6 +223,7 @@ class AMIParamConfigurator(HasTraits):
         "Dictionary of *Reserved* AMI parameter values."
         return self._info_dict
 
+
 #####
 # AMI file parser.
 #####

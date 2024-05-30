@@ -8,15 +8,16 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 """
 
 import copy as cp
-import numpy as np
-
 from ctypes import CDLL, byref, c_char_p, c_double
-from numpy.fft import rfft, irfft
-from numpy.random import randint
 from pathlib import Path
+
+import numpy as np
+from numpy.fft import irfft, rfft
+from numpy.random import randint
 from scipy.signal import deconvolve
 
 from pyibisami.common import *
+
 
 def loadWave(filename):
     """Load a waveform file.
@@ -280,13 +281,13 @@ class AMIModel:
         self._sample_interval = init_object._init_data["sample_interval"]
         self._bit_time = init_object._init_data["bit_time"]
         self._info_params = init_object.info_params
-        assert self._info_params, RuntimeError(
-            f"`info_params` is None!\n`init_object: {init_object}")
+        assert self._info_params, RuntimeError(f"`info_params` is None!\n`init_object: {init_object}")
 
         # Check GetWave() consistency if possible.
         if init_object.info_params and init_object.info_params["GetWave_Exists"]:
             assert self._amiGetWave, RuntimeError(
-                "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!")
+                "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
+            )
 
         # Construct the AMI parameters string.
         def sexpr(pname, pval):
@@ -346,11 +347,12 @@ class AMIModel:
         # ToDo: Fix this.
         if (bit_time % sample_interval) > (sample_interval / 100):
             raise ValueError(
-                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns).")
+                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns)."
+            )
         self._samps_per_bit = int(bit_time / sample_interval)
         self._bits_per_call = self._row_size / self._samps_per_bit
 
-    def getWave(self, wave: Rvec, bits_per_call : int = 0) -> tuple[Rvec, Rvec]:
+    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec]:
         """
         Performs time domain processing of input waveform, using the
         ``AMI_GetWave()`` function.
@@ -460,9 +462,9 @@ class AMIModel:
             h_model = np.where(abs(h_model) > 1, np.zeros(len(h_model)), h_model)
             rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
             rslt["step_resp_init"] = np.cumsum(rslt["imp_resp_init"])
-            rslt["pulse_resp_init"] = (
-                rslt["step_resp_init"] - np.pad(rslt["step_resp_init"][:-nspui], (nspui, 0),
-                                                mode="constant", constant_values=0) )
+            rslt["pulse_resp_init"] = rslt["step_resp_init"] - np.pad(
+                rslt["step_resp_init"][:-nspui], (nspui, 0), mode="constant", constant_values=0
+            )
             rslt["freq_resp_init"] = np.fft.rfft(rslt["imp_resp_init"])
             rslt["out_resp_init"] = out_imp
         if self.info_params["GetWave_Exists"]:
@@ -474,16 +476,15 @@ class AMIModel:
             _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
             # Then, run a perfect step, to extract model's step response.
             wave_out, _ = self.getWave(
-                np.array([0] * impulse_length + [1] * impulse_length) - 0.5,
-                bits_per_call=bits_per_call)
+                np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
+            )
             # Remove any artifactual vertical offset from beginning of result:
             rslt["step_resp_getw"] = wave_out[impulse_length:] - wave_out[impulse_length - 1]
             # Calculate other responses from step response.
-            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0),
-                                              mode="constant", constant_values=0)
-            rslt["pulse_resp_getw"] = (
-                rslt["step_resp_getw"] - np.pad(rslt["step_resp_getw"][:-nspui], (nspui, 0),
-                                                mode="constant", constant_values=0) )
+            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
+            rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
+                rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
+            )
             rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
             # Calculate effective cumulative impulse response (i.e. - channel + Tx).
             # - Form the step response equivalent to the given channel impulse response.

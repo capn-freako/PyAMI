@@ -8,13 +8,14 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
+from typing import Any, Dict, Iterator, Optional, TypeAlias, TypeVar
+
 import numpy as np  # type: ignore
 import numpy.typing as npt  # type: ignore
 from scipy.linalg import convolution_matrix, lstsq
-from typing import Any, Dict, Iterator, Optional, TypeVar, TypeAlias
 
-Real = TypeVar('Real', float, float)
-Comp = TypeVar('Comp', complex, complex)
+Real = TypeVar("Real", float, float)
+Comp = TypeVar("Comp", complex, complex)
 Rvec: TypeAlias = npt.NDArray[Real]
 Cvec: TypeAlias = npt.NDArray[Comp]
 
@@ -25,7 +26,7 @@ Cvec: TypeAlias = npt.NDArray[Comp]
 # Why?! And what is 'pi'?!
 
 PI: float = 3.141592653589793238462643383279502884
-TWOPI: float = 2. * PI
+TWOPI: float = 2.0 * PI
 
 
 def deconv_same(y: Rvec, x: Rvec) -> Rvec:
@@ -39,6 +40,6 @@ def deconv_same(y: Rvec, x: Rvec) -> Rvec:
     Returns:
         h: filter impulse response.
     """
-    A = convolution_matrix(x, len(y), 'same')
+    A = convolution_matrix(x, len(y), "same")
     h, _, _, _ = lstsq(A, y)
     return h
