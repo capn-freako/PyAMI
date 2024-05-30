@@ -10,10 +10,10 @@ authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           , {name = "David Patterson"}
           ]
 urls = {
-    documentation = "https://pyibis-ami.readthedocs.io/en/latest/",
-    wiki = "https://github.com/capn-freako/PyAMI/wiki",
-    github = "https://github.com/capn-freako/PyAMI",
-    pypi = "https://pypi.org/project/PyIBIS-AMI/",
+    Documentation = "https://pyibis-ami.readthedocs.io/en/latest/",
+    Wiki = "https://github.com/capn-freako/PyAMI/wiki",
+    GitHub = "https://github.com/capn-freako/PyAMI",
+    PyPi = "https://pypi.org/project/PyIBIS-AMI/",
 }
 readme = "README.md"
 requires-python = ">=3.9,<3.12"
