@@ -10,9 +10,13 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
+from numpy.fft import irfft, rfft
+from numpy.random import randint
+from scipy.signal import deconvolve
+
+from pyibisami.common import *
 
 
 def loadWave(filename):
@@ -74,8 +78,8 @@ def interpFile(filename, sample_per):
 
 
 class AMIModelInitializer:
-    """Class containing the initialization data for an instance of
-    ``AMIModel``.
+    """
+    Class containing the initialization data for an instance of ``AMIModel``.
 
     Created primarily to facilitate use of the PyAMI package at the
     pylab command prompt, this class can be used by the pylab user, in
@@ -99,7 +103,7 @@ class AMIModelInitializer:
         "bit_time": c_double(0.1e-9),
     }
 
-    def __init__(self, ami_params: Dict, **optional_args):
+    def __init__(self, ami_params: Dict, info_params: Dict = None, **optional_args):
         """
         Constructor accepts a mandatory dictionary containing the AMI
         parameters, as well as optional initialization data overrides and
@@ -142,6 +146,7 @@ class AMIModelInitializer:
 
         self.ami_params = {"root_name": ""}
         self.ami_params.update(ami_params)
+        self.info_params = info_params
 
         # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
         # before ``channel_response``, since ``channel_response`` depends upon ``sample_interval``,
@@ -217,36 +222,25 @@ class AMIModel:
             by calling it from the destructor.
     """
 
-    def __init__(self, filename: str, ami_param_defs: Optional[dict[str, Any]] = None):
+    def __init__(self, filename: str):
         """
         Load the dll and bind the 3 AMI functions.
 
         Args:
             filename: The DLL/SO file name.
 
-        Keyword Args:
-            ami_param_defs: Dictionary containing all AMI parameter definitions for this model.
-                Default: None
-
         Raises:
-            RuntimeError: If given ``ami_param_defs`` and finding disagreement w/ model.
+            OSError: If given file cannot be opened.
         """
 
         self._ami_mem_handle = None
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
-        if ami_param_defs and "getwave_exists" in ami_param_defs and ami_param_defs["getwave_exists"]:
-            try:
-                self._amiGetWave = my_dll.AMI_GetWave
-            except OSError as err:
-                raise RuntimeError(
-                    sum([
-                        "AMI parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()` in the DLL/SO!\n"
-                        "When I try I'm told:\n"
-                        f"\t{err.msg}"
-                    ])
-                )
         self._amiClose = my_dll.AMI_Close
+        try:
+            self._amiGetWave = my_dll.AMI_GetWave
+        except:
+            self._amiGetWave = None
 
     def __del__(self):
         """
@@ -286,6 +280,14 @@ class AMIModel:
         self._num_aggressors = init_object._init_data["num_aggressors"]
         self._sample_interval = init_object._init_data["sample_interval"]
         self._bit_time = init_object._init_data["bit_time"]
+        self._info_params = init_object.info_params
+        assert self._info_params, RuntimeError(f"`info_params` is None!\n`init_object: {init_object}")
+
+        # Check GetWave() consistency if possible.
+        if init_object.info_params and init_object.info_params["GetWave_Exists"]:
+            assert self._amiGetWave, RuntimeError(
+                "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
+            )
 
         # Construct the AMI parameters string.
         def sexpr(pname, pval):
@@ -345,14 +347,15 @@ class AMIModel:
         # ToDo: Fix this.
         if (bit_time % sample_interval) > (sample_interval / 100):
             raise ValueError(
-                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns).")
+                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns)."
+            )
         self._samps_per_bit = int(bit_time / sample_interval)
         self._bits_per_call = self._row_size / self._samps_per_bit
 
-    def getWave(self, wave: RVec, bits_per_call : int = 0) -> tuple(RVec, RVec):
+    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec]:
         """
         Performs time domain processing of input waveform, using the
-        ``AMI_GetWave`` function.
+        ``AMI_GetWave()`` function.
 
         Args:
             wave: Waveform to be processed.
@@ -402,7 +405,7 @@ class AMIModel:
 
         return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit])
 
-    def get_responses(self, bits_per_call: int = 0, bit_gen: generator[int] = None) -> dict[str, Any]:
+    def get_responses(self, bits_per_call: int = 0, bit_gen: Iterator[int] = None) -> dict[str, Any]:
         """
         Get the impulse, step, pulse, and frequency responses of an initialized IBIS-AMI model.
 
@@ -415,11 +418,11 @@ class AMIModel:
 
         Returns:
             Dictionary containing the responses under the following keys:
-                "imp_resp_init": The model's impulse response, from its `AMI_Init()` function.
+                "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
                 "step_resp_init": The model's step response, from its `AMI_Init()` function.
                 "pulse_resp_init": The model's pulse response, from its `AMI_Init()` function.
                 "freq_resp_init": The model's frequency response, from its `AMI_Init()` function.
-                "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function.
+                "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function (V/sample).
                 "step_resp_getw": The model's step response, from its `AMI_GetWave()` function.
                 "pulse_resp_getw": The model's pulse response, from its `AMI_GetWave()` function.
                 "freq_resp_getw": The model's frequency response, from its `AMI_GetWave()` function.
@@ -442,51 +445,54 @@ class AMIModel:
         rslt = {}
 
         # Capture needed parameter definitions.
-        impulse_length = ami_param_defs["Row_Size"]
-        ui = ami_param_defs["Bit_Time"]
-        ts = ami_param_defs["Sample_Interval"]
-        ignore_bits = ami_param_defs["Ignore_Bits"]
+        impulse_length = self.row_size
+        ui = self.bit_time
+        ts = self.sample_interval
+        nspui = int(ui / ts)
+        ignore_bits = self.info_params["Ignore_Bits"]
 
         # Capture/convert instance variables.
-        chnl_imp = self.channel_response * ts  # input (a.k.a. - "channel") impulse response (V/sample)
-        out_imp = self.initOut * ts  # output impulse response (V/sample)
+        chnl_imp = np.array(self.channel_response) * ts  # input (a.k.a. - "channel") impulse response (V/sample)
+        out_imp = np.array(self.initOut) * ts  # output impulse response (V/sample)
 
         # Extract and return the model responses.
-        if ami_param_defs["Init_Returns_Impulse"]:
-            rslt["imp_resp_init"] = deconvolve(out_imp, chnl_imp)
+        if self.info_params["Init_Returns_Impulse"]:
+            h_model = deconv_same(out_imp, chnl_imp)
+            # h_model = irfft(rfft(out_imp) / rfft(chnl_imp))  # Seems to produce results just as noisy as above.
+            h_model = np.where(abs(h_model) > 1, np.zeros(len(h_model)), h_model)
+            rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
             rslt["step_resp_init"] = np.cumsum(rslt["imp_resp_init"])
-            rslt["pulse_resp_init"] = (
-                rslt["step_resp_init"] - np.pad(rslt["step_resp_init"][:-nspui], (nspui, 0),
-                                                mode="constant", constant_values=0) )
+            rslt["pulse_resp_init"] = rslt["step_resp_init"] - np.pad(
+                rslt["step_resp_init"][:-nspui], (nspui, 0), mode="constant", constant_values=0
+            )
             rslt["freq_resp_init"] = np.fft.rfft(rslt["imp_resp_init"])
             rslt["out_resp_init"] = out_imp
-        if ami_param_defs["GetWave_Exists"]:
+        if self.info_params["GetWave_Exists"]:
             # Run `ignore_bits` bits of data through the model first.
             if bit_gen:
                 wave_in = [next(bit_gen) for _ in range(ignore_bits)]
             else:
                 wave_in = [randint(2) for _ in range(ignore_bits)]
-            _, _ = model.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+            _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
             # Then, run a perfect step, to extract model's step response.
-            wave_out, _ = model.getWave(
-                np.array([0] * impulse_length + [1] * impulse_length) - 0.5,
-                bits_per_call=bits_per_call)
+            wave_out, _ = self.getWave(
+                np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
+            )
             # Remove any artifactual vertical offset from beginning of result:
             rslt["step_resp_getw"] = wave_out[impulse_length:] - wave_out[impulse_length - 1]
             # Calculate other responses from step response.
-            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0),
-                                              mode="constant", constant_values=0)
-            rslt["pulse_resp_getw"] = (
-                rslt["step_resp_getw"] - np.pad(rslt["step_resp_getw"][:-nspui], (nspui, 0),
-                                                mode="constant", constant_values=0) )
+            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
+            rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
+                rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
+            )
             rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
             # Calculate effective cumulative impulse response (i.e. - channel + Tx).
             # - Form the step response equivalent to the given channel impulse response.
-            chnl_step = cumsum(chnl_imp)
+            chnl_step = np.cumsum(chnl_imp)
             # - And run it through `GetWave()`, after d.c. balancing.
-            out_step, _ = model.getWave(chnl_step - chnl_step.ptp / 2, bits_per_call=bits_per_call)
+            out_step, _ = self.getWave(chnl_step - chnl_step.ptp() / 2, bits_per_call=bits_per_call)
             # - Convert result back to an impulse response.
-            rslt["out_resp_init"] = np.pad(np.diff(out_step), (1, 0), mode="constant", constant_values=0)
+            rslt["out_resp_getw"] = np.pad(np.diff(out_step), (1, 0), mode="constant", constant_values=0)
         return rslt
 
     def _getInitOut(self):
@@ -540,3 +546,8 @@ class AMIModel:
         return self._clock_times
 
     clock_times = property(_getClockTimes, doc="Clock times returned by most recent call to getWave().")
+
+    def _getInfoParams(self):
+        return self._info_params
+
+    info_params = property(_getInfoParams, doc="Reserved AMI parameter values for this model.")

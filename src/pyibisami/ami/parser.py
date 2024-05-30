@@ -80,7 +80,7 @@ class AMIParamConfigurator(HasTraits):
         if "Model_Specific" not in param_dict:
             print(f"Error: {err_str}\nParameters: {param_dict}")
             raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
-        pdict = param_dict["Reserved_Parameters"]
+        pdict = param_dict["Reserved_Parameters"].copy()
         pdict.update(param_dict["Model_Specific"])
         gui_items, new_traits = make_gui_items("Model In/InOut Parameters", pdict, first_call=True)
         trait_names = []
@@ -93,6 +93,11 @@ class AMIParamConfigurator(HasTraits):
         self._ami_parsing_errors = err_str
         self._content = gui_items
         self._param_dict = param_dict
+        try:
+            self._info_dict = {name: p.pvalue for (name, p) in list(param_dict["Reserved_Parameters"].items())}
+        except:
+            print(f"param_dict['Reserved_Parameters']: {param_dict['Reserved_Parameters']}")
+            raise
 
     def __call__(self):
         self.open_gui()
@@ -100,7 +105,6 @@ class AMIParamConfigurator(HasTraits):
     def open_gui(self):
         """Present a customized GUI to the user, for parameter
         customization."""
-        # self.edit_traits()
         self.configure_traits()
 
     def default_traits_view(self):
@@ -213,6 +217,11 @@ class AMIParamConfigurator(HasTraits):
                 subs.update(self.input_ami_param(param, sname))
             res[pname] = subs
         return res
+
+    @property
+    def info_ami_params(self):
+        "Dictionary of *Reserved* AMI parameter values."
+        return self._info_dict
 
 
 #####
