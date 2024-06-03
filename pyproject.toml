@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,12 +9,6 @@ version = "6.1.0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           , {name = "David Patterson"}
           ]
-urls = {
-    Documentation = "https://pyibis-ami.readthedocs.io/en/latest/",
-    Wiki = "https://github.com/capn-freako/PyAMI/wiki",
-    GitHub = "https://github.com/capn-freako/PyAMI",
-    PyPi = "https://pypi.org/project/PyIBIS-AMI/",
-}
 readme = "README.md"
 requires-python = ">=3.9,<3.12"
 license = {text = "BSD"}
@@ -44,6 +38,12 @@ classifiers=[
     "Topic :: System :: Emulators",
     "Topic :: Utilities",
 ]
+
+[project.urls]
+Documentation = "https://pyibis-ami.readthedocs.io/en/latest/"
+Wiki = "https://github.com/capn-freako/PyAMI/wiki"
+GitHub = "https://github.com/capn-freako/PyAMI"
+PyPi = "https://pypi.org/project/PyIBIS-AMI/"
 
 [project.scripts]
 ami-config = "pyibisami.ami.config:main"
