@@ -79,6 +79,7 @@ class Component(HasTraits):
         self.edit_traits()
 
     def default_traits_view(self):
+        "Default Traits/UI view definition."
         view = View(
             resizable=False,
             buttons=ModalButtons,
@@ -103,10 +104,10 @@ class Component(HasTraits):
         return self._pins
 
 
-class Model(HasTraits):
+class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
     """Encapsulation of a particular I/O model from an IBIS model file."""
 
-    def __init__(self, subDict):
+    def __init__(self, subDict):  # pylint: disable=too-many-locals,too-many-statements
         """
         Args:
             subDict (dict): Dictionary of sub-keywords/params.
@@ -160,8 +161,6 @@ class Model(HasTraits):
                     return abs((vs[ix] - vs[ix - 1]) / (ivals[ix] - ivals[ix - 1]))
                 except ZeroDivisionError:
                     return 1e7  # Use 10 MOhms in place of infinity.
-                except Exception:
-                    raise
 
             zs = map(calcZ, zip([vs, vs, vs], [ityps, imins, imaxs]))
             return vs, ityps, imins, imaxs, zs
@@ -259,9 +258,9 @@ class Model(HasTraits):
             ((os, _), _) = x
             return os.lower() == "windows"
 
-        def showExec(x):
-            ((os, b), fs) = x
-            return os + str(b) + ": " + str(fs)
+        # def showExec(x):
+        #     ((os, b), fs) = x
+        #     return os + str(b) + ": " + str(fs)
 
         def partition(p, xs):
             ts, fs = [], []
@@ -355,6 +354,7 @@ class Model(HasTraits):
         self.edit_traits(kind="livemodal")
 
     def default_traits_view(self):
+        "Default Traits/UI view definition."
         view = View(
             resizable=False,
             buttons=ModalButtons,

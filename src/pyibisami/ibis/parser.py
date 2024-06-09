@@ -17,7 +17,6 @@ from parsec import (
     Parser,
     count,
     eof,
-    exclude,
     fail_with,
     generate,
     letter,
@@ -151,6 +150,7 @@ vi_line = (number + typminmax) << ignore
 
 @generate("ratio")
 def ratio():
+    "Parse ratio."
     [num, den] = yield (separated(number, string("/"), 2, maxt=2, end=False) | na.result([0, 0]))
     if den:
         return num / den
@@ -162,18 +162,18 @@ ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").res
 )
 ex_line = (
     word(string("Executable"))
-    >> (
+    >> (  # noqa: W503
         (
             ((string("L") | string("l")) >> string("inux")).result("linux")
-            | ((string("W") | string("w")) >> string("indows")).result("windows")
+            | ((string("W") | string("w")) >> string("indows")).result("windows")  # noqa: W503
         )
-        << string("_")
-        << many(none_of("_"))
-        << string("_")
+        << string("_")  # noqa: W503
+        << many(none_of("_"))  # noqa: W503
+        << string("_")  # noqa: W503
     )
-    + lexeme(string("32") | string("64"))
-    + count(name, 2)
-    << ignore
+    + lexeme(string("32") | string("64"))  # noqa: W503
+    + count(name, 2)  # noqa: W503
+    << ignore  # noqa: W503
 )
 
 
@@ -307,7 +307,7 @@ def end():
 @generate("[Ramp]")
 def ramp():
     "Parse [Ramp]."
-    params = yield many(exclude(param, ramp_line))
+    # params = yield many(exclude(param, ramp_line))
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
     return dict(lines)  # .update(dict(params))
 
@@ -337,7 +337,7 @@ def model():
         theModel = Model(dict(res))
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {str(le)}")
-    except Exception as err:
+    except Exception as err:  # pylint: disable=broad-exception-caught
         return fail_with(f"[Model] {nm}: {str(err)}")
     return {nm: theModel}
 
@@ -380,7 +380,7 @@ def pins():
     def filt(x):
         (_, (mod, _)) = x
         m = mod.upper()
-        return not m in ("POWER", "GND", "NC")
+        return m not in ("POWER", "GND", "NC")
 
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
     rlcs = yield optional(count(rlc, 3), [])
@@ -408,7 +408,7 @@ def comp():
         Component(dict(res))
     except LookupError as le:
         return fail_with(f"[Component] {nm}: {str(le)}")
-    except Exception as err:
+    except Exception as err:  # pylint: disable=broad-exception-caught
         return fail_with(f"[Component] {nm}: {str(err)}")
     return {nm: Component(dict(res))}
 
@@ -462,6 +462,7 @@ IBIS_kywrd_parsers.update(
 
 @generate("IBIS File")
 def ibis_file():
+    "Parse IBIS file."
     res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DBG)) << end
     return res
 
@@ -491,15 +492,13 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
             model_dict:
                 Dictionary containing keyword definitions (empty upon failure).
     """
-    DBG = debug
+
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
-        if DBG:
+        if debug:
             print("Parsed nodes:\n", nodes)
     except ParseError as pe:
         return str(pe), {}
-    except:
-        raise
 
     kw_dict = {}
     components = {}

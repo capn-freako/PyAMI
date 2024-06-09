@@ -95,7 +95,8 @@ class AMIParamConfigurator(HasTraits):
         self._param_dict = param_dict
         try:
             self._info_dict = {name: p.pvalue for (name, p) in list(param_dict["Reserved_Parameters"].items())}
-        except:
+        except Exception as err:
+            print(f"{err}")
             print(f"param_dict['Reserved_Parameters']: {param_dict['Reserved_Parameters']}")
             raise
 
@@ -108,6 +109,7 @@ class AMIParamConfigurator(HasTraits):
         self.configure_traits()
 
     def default_traits_view(self):
+        "Default Traits/UI view definition."
         view = View(
             resizable=False,
             buttons=ModalButtons,
@@ -143,8 +145,7 @@ class AMIParamConfigurator(HasTraits):
         _param = self.fetch_param(branch_names)
         if _param:
             return _param.pvalue
-        else:
-            return None
+        return None
 
     def set_param_val(self, branch_names, new_val):
         """Sets the value of the parameter found by traversing 'branch_names'
@@ -166,9 +167,9 @@ class AMIParamConfigurator(HasTraits):
         if isinstance(param_dict, AMIParameter):
             param_dict.pvalue = new_val
             try:
-                eval(f"self.set({branch_name}_={new_val})")  # mapped trait; see below
-            except:
-                eval(f"self.set({branch_name}={new_val})")
+                eval(f"self.set({branch_name}_={new_val})")  # pylint: disable=eval-used
+            except Exception:  # pylint: disable=broad-exception-caught
+                eval(f"self.set({branch_name}={new_val})")  # pylint: disable=eval-used
         else:
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
 
@@ -209,7 +210,7 @@ class AMIParamConfigurator(HasTraits):
                 # See the docs on the *HasTraits* class, if this is confusing.
                 try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
                     res[pname] = self.get(pname + "_")[pname + "_"]
-                except:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
+                except Exception:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.  # pylint: disable=broad-exception-caught
                     res[pname] = self.get(pname)[pname]
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs = {}
@@ -323,9 +324,9 @@ def proc_branch(branch):
 
     try:
         if (
-            (len(param_tags) > 1)
-            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)
-            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)
+            (len(param_tags) > 1)  # noqa: W503
+            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)  # pylint: disable=protected-access  # noqa: W503
+            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)  # pylint: disable=protected-access  # noqa: W503
         ):
             try:
                 results = ("", {param_name: AMIParameter(param_name, param_tags)})
@@ -347,12 +348,12 @@ def proc_branch(branch):
                     results = (err_str, param_dict)
 
             results = (err_str, param_dict)
-    except:
+    except Exception:  # pylint: disable=broad-exception-caught
         print(f"Error processing branch:\n{param_tags}")
     return results
 
 
-def parse_ami_param_defs(param_str):
+def parse_ami_param_defs(param_str):  # pylint: disable=too-many-branches
     """Parse the contents of a IBIS-AMI parameter definition file.
 
     Args:
@@ -449,12 +450,12 @@ def parse_ami_param_defs(param_str):
     return (err_str, param_dict)
 
 
-def make_gui_items(pname, param, first_call=False):
+def make_gui_items(pname, param, first_call=False):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """Builds list of GUI items from AMI parameter dictionary."""
 
     gui_items = []
     new_traits = []
-    if isinstance(param, AMIParameter):
+    if isinstance(param, AMIParameter):  # pylint: disable=too-many-nested-blocks
         pusage = param.pusage
         if pusage in ("In", "InOut"):
             if param.ptype == "Boolean":

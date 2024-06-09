@@ -35,7 +35,7 @@ from traitsui.message import message
 from pyibisami.ibis.parser import parse_ibis_file
 
 
-class IBISModel(HasTraits):
+class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     """HasTraits subclass for wrapping and interacting with an IBIS model.
 
     This class can be configured to present a customized GUI to the user
@@ -140,7 +140,7 @@ class IBISModel(HasTraits):
         self.add_trait("comp", Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
         self.pins = self.get_pins()  # the thing above it (file) can't change.
         self.add_trait("pin", Enum(self.pins[0], values="pins"))
-        (mname, rlc_dict) = self.pin_
+        (mname, _) = self.pin_
         self.models = self.get_models(mname)
         self.add_trait("mod", Enum(self.models[0], values="models"))
         self.add_trait("ibis_ver", Float(model_dict["ibis_ver"]))
@@ -169,7 +169,8 @@ class IBISModel(HasTraits):
         try:
             for k in ["ibis_ver", "file_name", "file_rev"]:
                 res += k + ":\t" + str(self._model_dict[k]) + "\n"
-        except:
+        except Exception as err:
+            print(f"{err}")
             print(self._model_dict)
             raise
         res += "date" + ":\t\t" + str(self._model_dict["date"]) + "\n"
@@ -204,6 +205,7 @@ class IBISModel(HasTraits):
             message(_msg, "PyAMI Alert")
 
     def default_traits_view(self):
+        "Default Traits/UI view definition."
         view = View(
             VGroup(
                 HGroup(
@@ -260,10 +262,12 @@ class IBISModel(HasTraits):
 
     @property
     def dll_file(self):
+        "Shared object file."
         return self._dll_file
 
     @property
     def ami_file(self):
+        "AMI file."
         return self._ami_file
 
     def _comp_changed(self, new_value):
@@ -286,14 +290,14 @@ class IBISModel(HasTraits):
         ami_file = ""
         if os_type.lower() == "windows":
             if os_bits == "64bit":
-                fnames = model._exec64Wins
+                fnames = model._exec64Wins  # pylint: disable=protected-access
             else:
-                fnames = model._exec32Wins
+                fnames = model._exec32Wins  # pylint: disable=protected-access
         else:
             if os_bits == "64bit":
-                fnames = model._exec64Lins
+                fnames = model._exec64Lins  # pylint: disable=protected-access
             else:
-                fnames = model._exec32Lins
+                fnames = model._exec32Lins  # pylint: disable=protected-access
         if fnames:
             dll_file = fnames[0]
             ami_file = fnames[1]
@@ -303,7 +307,7 @@ If you wish to use the AMI model associated with this IBIS model,\n \
 please, go the 'Equalization' tab and enable it now.",
                 alert=True,
             )
-        elif "algorithmic_model" in model._subDict:
+        elif "algorithmic_model" in model._subDict:  # pylint: disable=protected-access
             self.log(
                 f"There was an [Algorithmic Model] keyword for this model,\n \
 but no executable for your platform: {os_type}-{os_bits};\n \
@@ -316,5 +320,5 @@ PyBERT native equalization modeling being used instead.",
 PyBERT native equalization modeling being used instead.",
                 alert=True,
             )
-        self._dll_file = dll_file
-        self._ami_file = ami_file
+        self._dll_file = dll_file  # pylint: disable=attribute-defined-outside-init
+        self._ami_file = ami_file  # pylint: disable=attribute-defined-outside-init

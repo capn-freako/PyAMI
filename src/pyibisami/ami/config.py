@@ -44,7 +44,7 @@ param_types = {
 }
 
 
-def print_param(indent, name, param):
+def print_param(indent, name, param):  # pylint: disable=too-many-branches
     """Print AMI parameter specification. Handle nested parameters, via
     recursion.
 
@@ -148,7 +148,8 @@ def mk_model(ibis_params, ami_params, model_name, description, out_dir="."):
                 },
             )
             try:
-                interpreter.file(open(em_file))
+                with open(em_file, "rt", encoding="utf-8") as in_file:
+                    interpreter.file(in_file)
             finally:
                 interpreter.shutdown()
 
@@ -187,10 +188,10 @@ def mk_combs(dict_items):
     head, *tail = dict_items
     k, vs = head
     kvals = [(k, v) for v in vs]
-    return [[kval] + l for kval in kvals for l in mk_combs(tail)]
+    return [[kval] + rest for kval in kvals for rest in mk_combs(tail)]
 
 
-def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
+def mk_tests(test_defs, file_base_name, test_dir="test_runs"):  # pylint: disable=too-many-locals
     """Make the test run configuration files."""
 
     pname = Path(test_dir).resolve()
@@ -209,7 +210,8 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
                         pdict = dict(ami_comb)
                         pdict.update(dict(sim_comb))
                         f.write(f"\n('{ami_str.format(pdict=pdict)}_{sim_str.format(pdict=pdict)}', \\\n")
-                    except:
+                    except Exception as err:
+                        print(f"{err}")
                         print(f"ami_str: {ami_str}")
                         print(f"sim_str: {sim_str}")
                         print(f"pdict: {pdict}")
@@ -233,13 +235,13 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):
 
 # NOTE: The following is deprecated! Instead, make your model configurator executable
 #      and import what you need from this module. This is much cleaner.
-@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
 @click.option(
     "-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation."
 )
 @click.version_option()
-def main(py_file, **kwd_args):
+def main(py_file):
     """Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
 
     This command generates three files based off the input config file.

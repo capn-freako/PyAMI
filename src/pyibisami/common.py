@@ -8,9 +8,8 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
-from typing import Any, Dict, Iterator, Optional, TypeAlias, TypeVar
+from typing import TypeAlias, TypeVar
 
-import numpy as np  # type: ignore
 import numpy.typing as npt  # type: ignore
 from scipy.linalg import convolution_matrix, lstsq
 

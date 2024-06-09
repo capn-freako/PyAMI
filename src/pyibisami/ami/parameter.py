@@ -16,7 +16,7 @@ class AMIParamError(Exception):
     """Base Exception for all AMI Parameter Errors."""
 
 
-class AMIParameter:
+class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-public-methods
     """IBIS-AMI model parameter.
 
     This class encapsulates the attributes and behavior of a AMI
@@ -255,7 +255,7 @@ class AMIParameter:
         "Labels": _set_list_tip,
     }
 
-    def __init__(self, name, tags):
+    def __init__(self, name, tags):  # pylint: disable=too-many-branches,too-many-statements
         """
         Args:
             name (str): The name of the AMI parameter being created.
@@ -289,7 +289,7 @@ class AMIParameter:
                 try:
                     self._param_def_tag_procs[tag_name](self, tag[1])
                 except AMIParamError as err:
-                    raise AMIParamError(f"Problem initializing parameter, '{name}': {err}\n")
+                    raise AMIParamError(f"Problem initializing parameter, '{name}': {err}\n") from err
 
         # Validate and complete the instance.
         # Check for required tags.

@@ -114,15 +114,15 @@ def expand_params(input_parameters):
                     if toks[-1] == "\\":  # Test for line continuation.
                         expr = expr.rstrip("\\\n")
                     else:
-                        param_list.append(eval(compile(expr, cfg_filename, "eval")))
+                        param_list.append(eval(compile(expr, cfg_filename, "eval")))  # pylint: disable=eval-used
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:
-        params = eval(input_parameters)
+        params = eval(input_parameters)  # pylint: disable=eval-used
     return params
 
 
-def run_tests(**kwargs):
+def run_tests(**kwargs):  # pylint: disable=too-many-locals
     """Provide a thin wrapper around the click interface so that we can test
     the operation."""
 
@@ -185,9 +185,10 @@ def run_tests(**kwargs):
                 try:
                     cwd = Path().cwd()
                     chdir(out_dir)  # So that the images are saved in the output directory.
-                    interpreter.file(open(Path(test_dir, test)))
+                    with open(Path(test_dir, test), encoding="utf-8") as test_file:
+                        interpreter.file(test_file)
                     chdir(cwd)
-                except Exception as err:
+                except Exception as err:  # pylint: disable=broad-exception-caught
                     print("\t\t", err)
                 finally:
                     interpreter.shutdown()
@@ -198,7 +199,8 @@ def run_tests(**kwargs):
     print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True, help_option_names=["-h", "--help"]))
+@click.command(context_settings={"ignore_unknown_options": True,
+                                 "help_option_names": ["-h", "--help"]})
 @click.option(
     "--model", "-m", default="libami.so", type=click.Path(exists=True), help="Sets the AMI model DLL file name."
 )

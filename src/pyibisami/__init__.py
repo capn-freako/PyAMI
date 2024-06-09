@@ -14,8 +14,8 @@ from importlib.metadata import version as _get_version
 # Set PEP396 version attribute
 try:
     __version__ = _get_version("PyIBIS-AMI")
-except:
-    __version__ = "(dev)"
+except Exception as err:  # pylint: disable=broad-exception-caught
+    __version__ = f"{err} (dev)"
 
 __date__ = "October 12, 2023"
 __authors__ = "David Banas & David Patterson"
