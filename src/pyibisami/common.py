@@ -8,15 +8,18 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
-from typing import TypeAlias, TypeVar
+# from typing import TypeAlias, TypeVar
+from typing import TypeVar
 
 import numpy.typing as npt  # type: ignore
 from scipy.linalg import convolution_matrix, lstsq
 
 Real = TypeVar("Real", float, float)
 Comp = TypeVar("Comp", complex, complex)
-Rvec: TypeAlias = npt.NDArray[Real]
-Cvec: TypeAlias = npt.NDArray[Comp]
+# Rvec: TypeAlias = npt.NDArray[Real]
+# Cvec: TypeAlias = npt.NDArray[Comp]
+Rvec = npt.NDArray[Real]
+Cvec = npt.NDArray[Comp]
 
 # PI: float = np.pi  # Causes a failed import of `pyibisami.ami.model` during `tox -e docs`, due to:
 #   File "C:\Users\davibana\prj\PyBERT\PyAMI\src\pyibisami\common.py", line 23, in <module>
