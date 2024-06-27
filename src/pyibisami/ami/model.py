@@ -214,7 +214,7 @@ class AMIModelInitializer:
 
 class AMIModel:  # pylint: disable=too-many-instance-attributes
     """
-    Class defining the structure and behavior of an AMI Model.
+    Class defining the structure and behavior of an IBIS-AMI Model.
 
     Notes:
         1. Makes the calling of ``AMI_Close()`` automagic,
@@ -342,7 +342,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         # Initialize attributes used by getWave().
         bit_time = init_object.bit_time
         sample_interval = init_object.sample_interval
-        # ToDo: Fix this.
+        # ToDo: Fix this. There isn't actually a requirement that `bit_time` be an integral multiple of `sample_interval`.
+        # And there may be an advantage to having it not be!
         if (bit_time % sample_interval) > (sample_interval / 100):
             raise ValueError(
                 f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns)."
@@ -350,7 +351,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._samps_per_bit = int(bit_time / sample_interval)  # pylint: disable=attribute-defined-outside-init
         self._bits_per_call = init_object.row_size / self._samps_per_bit  # pylint: disable=attribute-defined-outside-init
 
-    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec]:  # noqa: F405
+    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:  # noqa: F405
         """
         Performs time domain processing of input waveform, using the
         ``AMI_GetWave()`` function.
@@ -363,9 +364,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: 0 (Means "Use existing value.")
 
         Returns:
-            (wave_out, clock_times): A pair containing:
-                - the processed waveform, and
-                - the recovered slicer sampling instants.
+            (wave_out, clock_times, params_out): A tuple containing:
+                - the processed waveform,
+                - the recovered slicer sampling instants, and
+                - the list of output parameter strings received from each call to ``AMI_GetWave()``.
 
         Notes:
             1. The returned clock times are given in "pre-edge-aligned" fashion,
@@ -379,12 +381,13 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Create the required C types.
         Signal = c_double * samps_per_call
-        Clocks = c_double * bits_per_call
+        Clocks = c_double * (bits_per_call + 1)  # The "+1" is critical, to prevent access violations by the model.
 
         idx = 0  # Holds the starting index of the next processing chunk.
         _clock_times = Clocks(0.0)
         wave_out: list[float] = []
         clock_times: list[float] = []
+        params_out: list[str] = []
         input_len = len(wave)
         while idx < input_len:
             remaining_samps = input_len - idx
@@ -398,9 +401,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                              byref(self._ami_params_out), self._ami_mem_handle)  # type: ignore
             wave_out.extend(_wave)
             clock_times.extend(_clock_times)
+            params_out.append(self.ami_params_out)
             idx += len(_wave)
 
-        return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit])
+        return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit]), params_out
 
     def get_responses(self, bits_per_call: int = 0, bit_gen: Optional[Iterator[int]] = None  # pylint: disable=too-many-locals
                       ) -> dict[str, Any]:
@@ -471,26 +475,30 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 wave_in = [next(bit_gen) for _ in range(ignore_bits)]
             else:
                 wave_in = [randint(2) for _ in range(ignore_bits)]
-            _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+            _, _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+
             # Then, run a perfect step, to extract model's step response.
-            wave_out, _ = self.getWave(
+            wave_out, _, _ = self.getWave(
                 np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
             )
             # Remove any artifactual vertical offset from beginning of result:
-            rslt["step_resp_getw"] = wave_out[impulse_length:] - wave_out[impulse_length - 1]
+            rslt["step_resp_getw"] = wave_out[impulse_length - nspui: -nspui] - wave_out[impulse_length - 1]
+
             # Calculate other responses from step response.
             rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
             rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
                 rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
             )
             rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
+
             # Calculate effective cumulative impulse response (i.e. - channel + Tx).
             # - Form the step response equivalent to the given channel impulse response.
             chnl_step = np.cumsum(chnl_imp)
             # - And run it through `GetWave()`, after d.c. balancing.
-            out_step, _ = self.getWave(chnl_step - chnl_step.ptp() / 2, bits_per_call=bits_per_call)
+            chnl_step_bal = chnl_step - chnl_step[-1] / 2
+            out_step, _, _ = self.getWave(np.pad(chnl_step_bal, (10 * nspui, 0), mode="edge"), bits_per_call=bits_per_call)
             # - Convert result back to an impulse response.
-            rslt["out_resp_getw"] = np.pad(np.diff(out_step), (1, 0), mode="constant", constant_values=0)
+            rslt["out_resp_getw"] = np.diff(out_step[10 * nspui:])
         return rslt
 
     def _getInitOut(self):
@@ -533,7 +541,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     def _getAmiParamsOut(self):
         return self._ami_params_out.value
 
-    ami_params_out = property(_getAmiParamsOut, doc="The AMI parameter string returned by AMI_Init().")
+    ami_params_out = property(_getAmiParamsOut, doc="The AMI parameter string returned by either `AMI_Init()` or `AMI_GetWave()`.")
 
     def _getMsg(self):
         return self._msg.value

@@ -258,10 +258,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             ((os, _), _) = x
             return os.lower() == "windows"
 
-        # def showExec(x):
-        #     ((os, b), fs) = x
-        #     return os + str(b) + ": " + str(fs)
-
         def partition(p, xs):
             ts, fs = [], []
             for x in xs:
