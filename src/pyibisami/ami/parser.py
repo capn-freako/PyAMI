@@ -300,12 +300,9 @@ def proc_branch(branch):
 
     Returns:
         (str, dict): A pair containing:
-
-            err_str:
-                String containing any errors or warnings encountered,
+            err_str: String containing any errors or warnings encountered,
                 while building the parameter dictionary.
-            param_dict:
-                Resultant parameter dictionary.
+            param_dict: Resultant parameter dictionary.
     """
     results = ("", {})  # Empty Results
     if len(branch) != 2:
@@ -368,12 +365,10 @@ def parse_ami_param_defs(param_str):  # pylint: disable=too-many-branches
 
     Returns:
         (str, dict): A pair containing:
-
             err_str:
                 - None, if parser succeeds.
                 - Helpful message, if it fails.
-            param_dict:
-                Dictionary containing parameter definitions.
+            param_dict: Dictionary containing parameter definitions.
                 (Empty, on failure.)
                 It has a single key, at the top level, which is the
                 model root name. This key indexes the actual

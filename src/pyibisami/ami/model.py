@@ -406,10 +406,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit]), params_out
 
-    def get_responses(self, bits_per_call: int = 0, bit_gen: Optional[Iterator[int]] = None  # pylint: disable=too-many-locals
-                      ) -> dict[str, Any]:
+    def get_responses(self, bits_per_call: int = 0, bit_gen: Optional[Iterator[int]] = None,  # pylint: disable=too-many-locals
+                      pad_bits: int = 10) -> dict[str, Any]:
         """
-        Get the impulse, step, pulse, and frequency responses of an initialized IBIS-AMI model.
+        Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
 
         Keyword Args:
             bits_per_call: Number of bits to include in the input to `GetWave()`.
@@ -417,17 +417,16 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             bit_gen: The bit generator to use for `GetWave()` input data generation.
                 Should produce integers from the set: {0,1}.
                 Default: None (Means "use randint(2)".)
+            pad_bits: Number of bits to pad leading edge with when calling `GetWave()`,
+                to protect from initial garbage in `GetWave()` output.
+                Default: 10
 
         Returns:
-            Dictionary containing the responses under the following keys:
+            rslt: Dictionary containing the responses under the following keys:
                 "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
-                "step_resp_init": The model's step response, from its `AMI_Init()` function.
-                "pulse_resp_init": The model's pulse response, from its `AMI_Init()` function.
-                "freq_resp_init": The model's frequency response, from its `AMI_Init()` function.
+                "out_resp_init": `imp_resp_init` convolved with the channel.
                 "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function (V/sample).
-                "step_resp_getw": The model's step response, from its `AMI_GetWave()` function.
-                "pulse_resp_getw": The model's pulse response, from its `AMI_GetWave()` function.
-                "freq_resp_getw": The model's frequency response, from its `AMI_GetWave()` function.
+                "out_resp_getw": `imp_resp_getw` convolved with the channel.
 
         Notes:
             1. If either set of keys (i.e. - "..._init" or "..._getw")
@@ -436,12 +435,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 was not available in the given model.
             2. An empty dictionary implies that neither the `Init_Returns_Impulse`
                 nor the `GetWave_Exists` AMI reserved parameter was True.
-            3. One additional key is added to the returned dictionary, when appropriate:
-                - "params_out_getw": If the model's ``AMI_GetWave()`` function is called and it returns parameters.
-            4. Note that impulse responses are returned with units: (V/sample), not (V/s).
-            5. The frequency vector corresponding to the returned frequency responses is given by:
-                [n * f0 for n in range(impulse_length // 2 + 1)], where:
-                f0 = 1 / (ts * impulse_length)
+            3. Note that impulse responses are returned with units: (V/sample), not (V/s).
         """
 
         rslt = {}
@@ -450,12 +444,15 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         impulse_length = self.row_size
         ui = self.bit_time
         ts = self.sample_interval
-        nspui = int(ui / ts)
         ignore_bits = self.info_params["Ignore_Bits"]
 
         # Capture/convert instance variables.
         chnl_imp = np.array(self.channel_response) * ts  # input (a.k.a. - "channel") impulse response (V/sample)
-        out_imp = np.array(self.initOut) * ts  # output impulse response (V/sample)
+        out_imp  = np.array(self.initOut) * ts           # output impulse response (V/sample)
+
+        # Calculate some needed intermediate values.
+        nspui     = int(ui / ts)      # samps per UI
+        pad_samps = pad_bits * nspui  # leading edge padding samples for GetWave() calls
 
         # Extract and return the model responses.
         if self.info_params["Init_Returns_Impulse"]:
@@ -463,42 +460,42 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             # h_model = irfft(rfft(out_imp) / rfft(chnl_imp))  # Seems to produce results just as noisy as above.
             h_model = np.where(abs(h_model) > 1, np.zeros(len(h_model)), h_model)
             rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
-            rslt["step_resp_init"] = np.cumsum(rslt["imp_resp_init"])
-            rslt["pulse_resp_init"] = rslt["step_resp_init"] - np.pad(
-                rslt["step_resp_init"][:-nspui], (nspui, 0), mode="constant", constant_values=0
-            )
-            rslt["freq_resp_init"] = np.fft.rfft(rslt["imp_resp_init"])
             rslt["out_resp_init"] = out_imp
         if self.info_params["GetWave_Exists"]:
             # Run `ignore_bits` bits of data through the model first.
-            if bit_gen:
-                wave_in = [next(bit_gen) for _ in range(ignore_bits)]
-            else:
-                wave_in = [randint(2) for _ in range(ignore_bits)]
-            _, _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+            # if bit_gen:
+            #     wave_in = [next(bit_gen) for _ in range(ignore_bits)]
+            # else:
+            #     wave_in = [randint(2) for _ in range(ignore_bits)]
+            # _, _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
 
             # Then, run a perfect step, to extract model's step response.
             wave_out, _, _ = self.getWave(
-                np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
+                # np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
+                np.array([0] * pad_samps + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
             )
             # Remove any artifactual vertical offset from beginning of result:
-            rslt["step_resp_getw"] = wave_out[impulse_length - nspui: -nspui] - wave_out[impulse_length - 1]
+            # rslt["step_resp_getw"] = wave_out[impulse_length - nspui: -nspui] - wave_out[impulse_length - 1]
+            # rslt["step_resp_getw"] = wave_out[10 * nspui:]
+            # rslt["step_resp_getw"] -= rslt["step_resp_getw"][0]
 
             # Calculate other responses from step response.
-            rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
-            rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
-                rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
-            )
-            rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
+            # rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
+            # rslt["imp_resp_getw"] = np.diff(rslt["step_resp_getw"])
+            rslt["imp_resp_getw"] = np.diff(wave_out[pad_samps:])
+            # rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
+            #     rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
+            # )
+            # rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
 
             # Calculate effective cumulative impulse response (i.e. - channel + Tx).
             # - Form the step response equivalent to the given channel impulse response.
             chnl_step = np.cumsum(chnl_imp)
             # - And run it through `GetWave()`, after d.c. balancing.
             chnl_step_bal = chnl_step - chnl_step[-1] / 2
-            out_step, _, _ = self.getWave(np.pad(chnl_step_bal, (10 * nspui, 0), mode="edge"), bits_per_call=bits_per_call)
+            out_step, _, _ = self.getWave(np.pad(chnl_step_bal, (pad_samps, 0), mode="edge"), bits_per_call=bits_per_call)
             # - Convert result back to an impulse response.
-            rslt["out_resp_getw"] = np.diff(out_step[10 * nspui:])
+            rslt["out_resp_getw"] = np.diff(out_step[pad_samps:])
         return rslt
 
     def _getInitOut(self):
