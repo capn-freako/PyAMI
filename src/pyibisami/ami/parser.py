@@ -210,7 +210,9 @@ class AMIParamConfigurator(HasTraits):
                 # See the docs on the *HasTraits* class, if this is confusing.
                 try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
                     res[pname] = self.get(pname + "_")[pname + "_"]
-                except Exception:  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.  # pylint: disable=broad-exception-caught
+                except (
+                    Exception
+                ):  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.  # pylint: disable=broad-exception-caught
                     res[pname] = self.get(pname)[pname]
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs = {}
@@ -322,8 +324,12 @@ def proc_branch(branch):
     try:
         if (
             (len(param_tags) > 1)  # noqa: W503
-            and (param_tags[0][0] in AMIParameter._param_def_tag_procs)  # pylint: disable=protected-access  # noqa: W503
-            and (param_tags[1][0] in AMIParameter._param_def_tag_procs)  # pylint: disable=protected-access  # noqa: W503
+            and (
+                param_tags[0][0] in AMIParameter._param_def_tag_procs
+            )  # pylint: disable=protected-access  # noqa: W503
+            and (
+                param_tags[1][0] in AMIParameter._param_def_tag_procs
+            )  # pylint: disable=protected-access  # noqa: W503
         ):
             try:
                 results = ("", {param_name: AMIParameter(param_name, param_tags)})
@@ -445,7 +451,9 @@ def parse_ami_param_defs(param_str):  # pylint: disable=too-many-branches
     return (err_str, param_dict)
 
 
-def make_gui_items(pname, param, first_call=False):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def make_gui_items(
+    pname, param, first_call=False
+):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """Builds list of GUI items from AMI parameter dictionary."""
 
     gui_items = []

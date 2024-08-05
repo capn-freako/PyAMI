@@ -1,7 +1,9 @@
-from pyibisami.common import *
+from typing import Any, Dict, Iterator
+
 from _typeshed import Incomplete
 from scipy.signal import deconvolve as deconvolve
-from typing import Any, Dict, Iterator
+
+from pyibisami.common import *
 
 def loadWave(filename): ...
 def interpFile(filename, sample_per): ...

@@ -1,6 +1,9 @@
-from _typeshed import Incomplete
 from collections.abc import Generator
-from pyibisami.ibis.model import Component as Component, Model as Model
+
+from _typeshed import Incomplete
+
+from pyibisami.ibis.model import Component as Component
+from pyibisami.ibis.model import Model as Model
 
 DBG: bool
 whitespace: Incomplete
