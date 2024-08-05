@@ -199,8 +199,7 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
     print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
 
 
-@click.command(context_settings={"ignore_unknown_options": True,
-                                 "help_option_names": ["-h", "--help"]})
+@click.command(context_settings={"ignore_unknown_options": True, "help_option_names": ["-h", "--help"]})
 @click.option(
     "--model", "-m", default="libami.so", type=click.Path(exists=True), help="Sets the AMI model DLL file name."
 )

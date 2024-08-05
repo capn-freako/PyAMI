@@ -8,7 +8,7 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
-from typing import TypeVar, TypeAlias
+from typing import TypeAlias, TypeVar
 
 import numpy.typing as npt  # type: ignore
 from scipy.linalg import convolution_matrix, lstsq
