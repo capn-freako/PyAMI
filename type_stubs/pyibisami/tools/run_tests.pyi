@@ -1,5 +1,7 @@
-from _typeshed import Incomplete
 from collections.abc import Generator
+
+from _typeshed import Incomplete
+
 from pyibisami.ami.model import AMIModel as AMIModel
 
 def plot_name(tst_name, n: int = ...) -> Generator[Incomplete, None, None]: ...

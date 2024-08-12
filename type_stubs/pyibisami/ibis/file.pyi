@@ -1,6 +1,7 @@
 from _typeshed import Incomplete
-from pyibisami.ibis.parser import parse_ibis_file as parse_ibis_file
 from traits.api import HasTraits
+
+from pyibisami.ibis.parser import parse_ibis_file as parse_ibis_file
 
 class IBISModel(HasTraits):
     pin_: Incomplete
