@@ -1,7 +1,10 @@
-from _typeshed import Incomplete
 from collections.abc import Generator
-from pyibisami.ami.parameter import AMIParamError as AMIParamError, AMIParameter as AMIParameter
+
+from _typeshed import Incomplete
 from traits.api import HasTraits
+
+from pyibisami.ami.parameter import AMIParamError as AMIParamError
+from pyibisami.ami.parameter import AMIParameter as AMIParameter
 
 class AMIParamConfigurator(HasTraits):
     def __init__(self, ami_file_contents_str) -> None: ...

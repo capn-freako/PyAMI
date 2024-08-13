@@ -1,6 +1,6 @@
 # Makefile for PyIBIS-AMI project.
 #
-# Original author: David Banas <capn.freako@gmail.com>  
+# Original author: David Banas <capn.freako@gmail.com>
 # Original date:   February 11, 2019
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
