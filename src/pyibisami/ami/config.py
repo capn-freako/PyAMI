@@ -237,9 +237,9 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):  # pylint: disabl
 #      and import what you need from this module. This is much cleaner.
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
-@click.option(
-    "-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation."
-)
+# @click.option(
+#     "-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation."
+# )
 @click.version_option()
 def main(py_file):
     """Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.

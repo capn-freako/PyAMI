@@ -270,7 +270,7 @@ def node():
     "Parse AMI node."
     yield lparen
     label = yield node_name
-    values = yield many1(expr)
+    values = yield many(expr)
     yield rparen
     return (label, values)
 
