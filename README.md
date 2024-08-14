@@ -6,8 +6,7 @@ PyIBIS-AMI is a Python package of tools useful in the development and testing of
 This library is used in [PyBERT](https://github.com/capn-freako/PyBERT) and also provides two
 command line applications.
 
-It can be installed via `conda`.  PyPi support is experimental but can be installed with
- `pip install PyIBIS-AMI`.
+It can be installed via: `pip install PyIBIS-AMI`.
 
 [View API/Developer's Documentation.](https://pyibis-ami.readthedocs.io/en/latest/)
 
