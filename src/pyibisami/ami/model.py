@@ -10,10 +10,10 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Optional
 
 import numpy as np
-from numpy.random import randint
+# from numpy.random import randint
 
 from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
 
@@ -272,22 +272,22 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
-        self._channel_response = init_object._init_data[
+        self._channel_response = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "channel_response"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
+        ]
         self._initOut = cp.copy(self._channel_response)  # type: ignore  # pylint: disable=attribute-defined-outside-init
-        self._row_size = init_object._init_data[
+        self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "row_size"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
-        self._num_aggressors = init_object._init_data[
+        ]
+        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "num_aggressors"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
-        self._sample_interval = init_object._init_data[
+        ]
+        self._sample_interval = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "sample_interval"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
-        self._bit_time = init_object._init_data[
+        ]
+        self._bit_time = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "bit_time"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
+        ]
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
         assert self._info_params, RuntimeError(
             f"`info_params` is None!\n`init_object: {init_object}"
@@ -358,12 +358,12 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         # And there may be an advantage to having it not be!
         if (bit_time % sample_interval) > (sample_interval / 100):
             raise ValueError(
-                f"Bit time ({bit_time * 1e9 : 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9 : 6.3G} ns)."
+                f"Bit time ({bit_time * 1e9: 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9: 6.3G} ns)."
             )
         self._samps_per_bit = int(bit_time / sample_interval)  # pylint: disable=attribute-defined-outside-init
-        self._bits_per_call = (
+        self._bits_per_call = (  # pylint: disable=attribute-defined-outside-init
             init_object.row_size / self._samps_per_bit
-        )  # pylint: disable=attribute-defined-outside-init
+        )
 
     def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:  # noqa: F405
         """
@@ -409,7 +409,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Signal = c_double * remaining_samps
                 tmp_wave = wave[idx:]
             else:
-                tmp_wave = wave[idx : idx + samps_per_call]
+                tmp_wave = wave[idx: idx + samps_per_call]
             _wave = Signal(*tmp_wave)
             self._amiGetWave(
                 byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle
@@ -421,10 +421,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         return np.array(wave_out), np.array(clock_times[: len(wave_out) // self._samps_per_bit]), params_out
 
-    def get_responses(
+    def get_responses(  # pylint: disable=too-many-locals
         self,
         bits_per_call: int = 0,
-        bit_gen: Optional[Iterator[int]] = None,  # pylint: disable=too-many-locals
+        # bit_gen: Optional[Iterator[int]] = None,
         pad_bits: int = 10,
     ) -> dict[str, Any]:
         """
@@ -455,6 +455,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             2. An empty dictionary implies that neither the `Init_Returns_Impulse`
                 nor the `GetWave_Exists` AMI reserved parameter was True.
             3. Note that impulse responses are returned with units: (V/sample), not (V/s).
+
+        ToDo:
+            1. Implement `bit_gen`.
+            2. Implement `ignore_bits`.
         """
 
         rslt = {}
@@ -463,7 +467,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         impulse_length = self.row_size
         ui = self.bit_time
         ts = self.sample_interval
-        ignore_bits = self.info_params["Ignore_Bits"]
+        # info_params = self.info_params
+        # ignore_bits = info_params["Ignore_Bits"] if "Ignore_Bits" in info_params else 0
 
         # Capture/convert instance variables.
         chnl_imp = np.array(self.channel_response) * ts  # input (a.k.a. - "channel") impulse response (V/sample)
@@ -490,23 +495,12 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
             # Then, run a perfect step, to extract model's step response.
             wave_out, _, _ = self.getWave(
-                # np.array([0] * impulse_length + [1] * impulse_length) - 0.5, bits_per_call=bits_per_call
                 np.array([0] * pad_samps + [1] * impulse_length) - 0.5,
                 bits_per_call=bits_per_call,
             )
-            # Remove any artifactual vertical offset from beginning of result:
-            # rslt["step_resp_getw"] = wave_out[impulse_length - nspui: -nspui] - wave_out[impulse_length - 1]
-            # rslt["step_resp_getw"] = wave_out[10 * nspui:]
-            # rslt["step_resp_getw"] -= rslt["step_resp_getw"][0]
 
             # Calculate other responses from step response.
-            # rslt["imp_resp_getw"] = np.pad(np.diff(rslt["step_resp_getw"]), (1, 0), mode="constant", constant_values=0)
-            # rslt["imp_resp_getw"] = np.diff(rslt["step_resp_getw"])
             rslt["imp_resp_getw"] = np.diff(wave_out[pad_samps:])
-            # rslt["pulse_resp_getw"] = rslt["step_resp_getw"] - np.pad(
-            #     rslt["step_resp_getw"][:-nspui], (nspui, 0), mode="constant", constant_values=0
-            # )
-            # rslt["freq_resp_getw"] = np.fft.rfft(rslt["imp_resp_getw"])
 
             # Calculate effective cumulative impulse response (i.e. - channel + Tx).
             # - Form the step response equivalent to the given channel impulse response.

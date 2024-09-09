@@ -9,7 +9,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 import re
 
-from parsec import ParseError, generate, many, many1, regex, string
+from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait
 from traitsui.api import Group, Item, View
 from traitsui.menu import ModalButtons
@@ -211,8 +211,8 @@ class AMIParamConfigurator(HasTraits):
                 try:  # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
                     res[pname] = self.get(pname + "_")[pname + "_"]
                 except (
-                    Exception
-                ):  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.  # pylint: disable=broad-exception-caught
+                    Exception  # pylint: disable=broad-exception-caught
+                ):  # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
                     res[pname] = self.get(pname)[pname]
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs = {}
@@ -323,13 +323,13 @@ def proc_branch(branch):
 
     try:
         if (
-            (len(param_tags) > 1)  # noqa: W503
-            and (
-                param_tags[0][0] in AMIParameter._param_def_tag_procs
-            )  # pylint: disable=protected-access  # noqa: W503
-            and (
-                param_tags[1][0] in AMIParameter._param_def_tag_procs
-            )  # pylint: disable=protected-access  # noqa: W503
+            (len(param_tags) > 1)
+            and (  # noqa: W503
+                param_tags[0][0] in AMIParameter._param_def_tag_procs  # pylint: disable=protected-access  # noqa: W503
+            )
+            and (  # noqa: W503
+                param_tags[1][0] in AMIParameter._param_def_tag_procs  # pylint: disable=protected-access  # noqa: W503
+            )
         ):
             try:
                 results = ("", {param_name: AMIParameter(param_name, param_tags)})

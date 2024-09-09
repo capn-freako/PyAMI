@@ -59,7 +59,7 @@ def logf(p, preStr=""):
         res = p(txt, ix)
         if not res.status:
             print(
-                f"{preStr}: Expected {res.expected} in '{txt[res.index : res.index+5]}' at {ParseError.loc_info(txt, res.index)}."
+                f"{preStr}: Expected {res.expected} in '{txt[res.index: res.index + 5]}' at {ParseError.loc_info(txt, res.index)}."
             )
         return res
 
