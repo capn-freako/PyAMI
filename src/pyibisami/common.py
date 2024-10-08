@@ -8,10 +8,9 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
-from typing_extensions import TypeAlias, TypeVar
-
 import numpy.typing as npt  # type: ignore
 from scipy.linalg import convolution_matrix, lstsq
+from typing_extensions import TypeAlias, TypeVar
 
 Real = TypeVar("Real", float, float)
 Comp = TypeVar("Comp", complex, complex)
