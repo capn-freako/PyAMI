@@ -13,9 +13,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-# from numpy.random import randint
 
 from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
+
+# from numpy.random import randint
+
 
 
 def loadWave(filename):
@@ -272,19 +274,23 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
-        self._channel_response = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "channel_response"
-        ]
+        self._channel_response = (
+            init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
+                "channel_response"
+            ]
+        )
         self._initOut = cp.copy(self._channel_response)  # type: ignore  # pylint: disable=attribute-defined-outside-init
         self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "row_size"
         ]
-        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
+        self._num_aggressors = init_object._init_data[
             "num_aggressors"
-        ]
-        self._sample_interval = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "sample_interval"
-        ]
+        ]  # pylint: disable=protected-access,attribute-defined-outside-init
+        self._sample_interval = (
+            init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
+                "sample_interval"
+            ]
+        )
         self._bit_time = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "bit_time"
         ]
@@ -409,7 +415,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Signal = c_double * remaining_samps
                 tmp_wave = wave[idx:]
             else:
-                tmp_wave = wave[idx: idx + samps_per_call]
+                tmp_wave = wave[idx : idx + samps_per_call]
             _wave = Signal(*tmp_wave)
             self._amiGetWave(
                 byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle

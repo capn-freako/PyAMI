@@ -7708,7 +7708,7 @@ This notebook can also serve as the final report back to the model maker, by sim
 <span class="sd">    Plot one or two sets of responses.</span>
 <span class="sd">    """</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">131</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t</span><span class="o">*</span><span class="mf">1e9</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">lbls</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">s2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -7717,7 +7717,7 @@ This notebook can also serve as the final report back to the model maker, by sim
     <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Time (ns)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">132</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t</span><span class="o">*</span><span class="mf">1e9</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">lbls</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">p2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -7726,7 +7726,7 @@ This notebook can also serve as the final report back to the model maker, by sim
     <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Time (ns)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">133</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">f</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">,</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">log10</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">H</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="n">f</span><span class="p">)])),</span> <span class="n">label</span><span class="o">=</span><span class="n">lbls</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">H2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -7970,14 +7970,14 @@ And you may need to invoke it from your task bar.</p>
     <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">msg</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">"AMI output parameters from AMI_Init():"</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">ami_params_out</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
-    
+
     <span class="c1"># Init() output</span>
     <span class="n">t</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">H</span> <span class="o">=</span> <span class="n">get_init_resps</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">nspui</span><span class="p">)</span>
-    
+
     <span class="c1"># GetWave() output</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">"DFE adaptation results:"</span><span class="p">)</span>
     <span class="n">_</span><span class="p">,</span> <span class="n">s2</span><span class="p">,</span> <span class="n">p2</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">H2</span> <span class="o">=</span> <span class="n">get_wave_resps</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">nspui</span><span class="p">,</span> <span class="n">ignore_bits</span><span class="o">=</span><span class="n">ignore_bits</span><span class="p">)</span>
-    
+
     <span class="c1"># Plot results for comparison.</span>
     <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="n">fig_x</span><span class="p">,</span> <span class="n">fig_y</span><span class="p">))</span>
     <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="p">[</span><span class="s2">"Init"</span><span class="p">,</span> <span class="s2">"GetWave"</span><span class="p">],</span> <span class="n">s2</span><span class="o">=</span><span class="n">s2</span><span class="p">,</span> <span class="n">p2</span><span class="o">=</span><span class="n">p2</span><span class="p">,</span> <span class="n">H2</span><span class="o">=</span><span class="n">H2</span><span class="p">)</span>
@@ -8128,7 +8128,7 @@ The <em>Init()</em> and <em>GetWave()</em> plots should look nearly identical.<b
         <span class="n">initializer</span><span class="o">.</span><span class="n">channel_response</span> <span class="o">=</span> <span class="n">interp</span><span class="p">(</span><span class="n">_t</span><span class="p">)</span>
         <span class="n">model</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">initializer</span><span class="p">)</span>
         <span class="n">_t</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span><span class="p">,</span> <span class="n">_f</span><span class="p">,</span> <span class="n">_H</span> <span class="o">=</span> <span class="n">get_init_resps</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">osf</span><span class="p">)</span>
-        <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">_t</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span><span class="p">,</span> <span class="n">_f</span><span class="p">,</span> <span class="n">_H</span><span class="p">,</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">osf</span><span class="si">}</span><span class="s2">x"</span><span class="p">])</span>    
+        <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">_t</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span><span class="p">,</span> <span class="n">_f</span><span class="p">,</span> <span class="n">_H</span><span class="p">,</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">osf</span><span class="si">}</span><span class="s2">x"</span><span class="p">])</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">131</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="n">xmin</span><span class="o">=-</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">xmax</span><span class="o">=</span><span class="n">plot_t_max</span><span class="o">*</span><span class="mf">1e9</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">132</span><span class="p">)</span>
@@ -8206,7 +8206,7 @@ In fact, the <code>AMI_GetWave()</code> function is often used to capture <em>no
     <span class="n">p_gauss</span> <span class="o">=</span> <span class="n">s_gauss</span> <span class="o">-</span> <span class="n">pad</span><span class="p">(</span><span class="n">s_gauss</span><span class="p">[:</span><span class="o">-</span><span class="n">nspui</span><span class="p">],</span> <span class="p">(</span><span class="n">nspui</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"constant"</span><span class="p">,</span> <span class="n">constant_values</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
     <span class="n">H_gauss</span> <span class="o">=</span> <span class="n">rfft</span><span class="p">(</span><span class="n">h_gauss</span><span class="p">)</span>
     <span class="n">lbl</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">bw</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e9</span><span class="w"> </span><span class="si">:</span><span class="s2"> 6.2f</span><span class="si">}</span><span class="s2">"</span>
-    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_gauss</span><span class="p">,</span> <span class="n">s_gauss</span><span class="p">,</span> <span class="n">p_gauss</span><span class="p">,</span> <span class="n">f_gauss</span><span class="p">,</span> <span class="n">H_gauss</span><span class="p">,</span> <span class="p">[</span><span class="n">lbl</span><span class="p">])</span>    
+    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_gauss</span><span class="p">,</span> <span class="n">s_gauss</span><span class="p">,</span> <span class="n">p_gauss</span><span class="p">,</span> <span class="n">f_gauss</span><span class="p">,</span> <span class="n">H_gauss</span><span class="p">,</span> <span class="p">[</span><span class="n">lbl</span><span class="p">])</span>
     <span class="n">hs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">h_gauss</span><span class="p">,</span> <span class="n">lbl</span><span class="p">))</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">131</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="n">xmin</span><span class="o">=-</span><span class="n">plot_t_max</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="mf">1e9</span><span class="p">,</span> <span class="n">xmax</span><span class="o">=</span><span class="n">plot_t_max</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="mf">1e9</span><span class="p">)</span>
@@ -8245,8 +8245,8 @@ In fact, the <code>AMI_GetWave()</code> function is often used to capture <em>no
     <span class="n">p_tot</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
     <span class="n">H_tot</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
     <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="n">fig_x</span><span class="p">,</span> <span class="n">fig_y</span><span class="p">))</span>
-    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_sum</span><span class="p">,</span> <span class="n">s_sum</span><span class="p">,</span> <span class="n">p_sum</span><span class="p">,</span> <span class="n">f_sum</span><span class="p">,</span> <span class="n">H_sum</span><span class="p">,</span> <span class="p">[</span><span class="s2">"Response to Sum"</span><span class="p">])</span>    
-    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_sum</span><span class="p">,</span> <span class="n">s_tot</span><span class="p">,</span> <span class="n">p_tot</span><span class="p">,</span> <span class="n">f_sum</span><span class="p">,</span> <span class="n">H_tot</span><span class="p">,</span> <span class="p">[</span><span class="s2">"Sum of Responses"</span><span class="p">])</span>    
+    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_sum</span><span class="p">,</span> <span class="n">s_sum</span><span class="p">,</span> <span class="n">p_sum</span><span class="p">,</span> <span class="n">f_sum</span><span class="p">,</span> <span class="n">H_sum</span><span class="p">,</span> <span class="p">[</span><span class="s2">"Response to Sum"</span><span class="p">])</span>
+    <span class="n">plot_resps</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">t_sum</span><span class="p">,</span> <span class="n">s_tot</span><span class="p">,</span> <span class="n">p_tot</span><span class="p">,</span> <span class="n">f_sum</span><span class="p">,</span> <span class="n">H_tot</span><span class="p">,</span> <span class="p">[</span><span class="s2">"Sum of Responses"</span><span class="p">])</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">131</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="n">xmin</span><span class="o">=-</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">xmax</span><span class="o">=</span><span class="n">plot_t_max</span> <span class="o">*</span> <span class="mf">1e9</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">132</span><span class="p">)</span>
@@ -8369,21 +8369,21 @@ Here, we try to flush that out if it's occurring.</p>
             <span class="n">Ys</span> <span class="o">=</span> <span class="n">fft</span><span class="p">(</span><span class="n">ys</span><span class="p">)</span>
             <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">f</span><span class="p">[:</span><span class="n">len_u</span> <span class="o">//</span> <span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">,</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">log10</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">Ys</span><span class="p">[:</span><span class="n">len_u</span> <span class="o">//</span> <span class="mi">2</span><span class="p">])),</span>
                          <span class="n">label</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">bits_per_call</span><span class="p">))</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">121</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"AMI_GetWave() Output"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Time (ns)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">"Vout (V)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">122</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"Spectral Content"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Frequency (GHz)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">"|H(f)| (dB)"</span><span class="p">)</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
     <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
-    
+
     <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 
 <span class="n">check_getwave_input_length</span><span class="p">()</span>
@@ -8969,7 +8969,7 @@ Here, we try to flush that out if it's occurring.</p>
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
-<div class="highlight hl-ipython3"><pre><span></span> 
+<div class="highlight hl-ipython3"><pre><span></span>
 </pre></div>
 </div>
 </div>
