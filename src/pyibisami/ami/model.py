@@ -19,7 +19,6 @@ from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcar
 # from numpy.random import randint
 
 
-
 def loadWave(filename):
     """Load a waveform file.
 
