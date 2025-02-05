@@ -17,7 +17,7 @@ This script gets called from a makefile, when any of the following need rebuildi
 
 All files will be rebuilt.
 (We rebuild all files, because it doesn't take very long, and we can
-insure consistency this way.)
+ensure consistency this way.)
 
 This gets triggered by one of two things:
 
