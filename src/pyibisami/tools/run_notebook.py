@@ -10,9 +10,9 @@ Original Date:   January 31, 2025
 Copyright (c) 2025 David Banas; all rights reserved World wide.
 """
 
-import shutil
-from os import chdir
+import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any, Optional
 
@@ -23,7 +23,7 @@ from papermill import execute_notebook
 
 from pyibisami.ami.model import AMIModel
 
-NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Checker.ipynb")
+NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
 
 
 def run_notebook(
@@ -47,12 +47,23 @@ def run_notebook(
             Default: None
     """
 
-    # Fetch options and cast into local independent variables.
+    # Validate input.
     assert ibis_file.exists(), RuntimeError(
         f"Can't find IBIS-AMI model file, {ibis_file}!")
     assert notebook.exists(), RuntimeError(
         f"Can't find notebook file, {notebook}!")
-    tmp_notebook = notebook.with_stem(notebook.stem + "_papermill")
+
+    # Define temp. (i.e. - parameterized) notebook and output file locations.
+    tmp_dir = (
+        os.environ.get("TMP") or
+        os.environ.get("TEMP") or
+        (Path(os.environ.get("HOME")).joinpath("tmp")
+            if os.environ.get("HOME")
+            else "/tmp")
+    )
+    tmp_dir = Path(tmp_dir)
+    tmp_dir.mkdir(exist_ok=True)
+    tmp_notebook = tmp_dir.joinpath(notebook.stem + "_papermill").with_suffix(".ipynb")
     out_dir = out_dir or ibis_file.resolve().parent
     out_dir.mkdir(exist_ok=True)
     html_file = Path(out_dir.joinpath(ibis_file.name)).with_suffix(".html")
@@ -62,9 +73,6 @@ def run_notebook(
     print(f"using notebook: {notebook},")
     print(f"sending HTML output to: {html_file}...")
     execute_notebook(notebook, tmp_notebook, parameters=notebook_params)
-    # subprocess.run([
-    #     'jupyter', 'nbconvert', '--to', 'notebook', '--execute', '--inplace', notebook],
-    #     check=True)
     subprocess.run(
         ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
         check=True)
@@ -81,6 +89,11 @@ def run_notebook(
     "--out-dir", "-o", default=None, type=click.Path(),
     help="Override the name of the directory in which to place the results."
 )
+@click.option(
+    "--params", "-p",
+    default='[("cfg_dflt", "default", [("default", ({"root_name":"testAMI"},{})),]),]',
+    help='List of lists of model configurations. Format: <filename> or [(name, [(label, ({AMI params., in "key:val" format},{Model params., in "key:val" format})), ...]), ...]',
+)
 @click.option("--debug", is_flag=True, help="Provide extra debugging information.")
 @click.option("--is_tx", is_flag=True, help="Flags a Tx model.")
 @click.option("--nspui", default=32, show_default=True, help="Number of samples per unit interval.")
@@ -93,7 +106,8 @@ def run_notebook(
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
-def main(notebook, out_dir, ibis_file, bit_rate, debug, is_tx, nspui, nbits, plot_t_max, f_max, f_step, fig_x, fig_y):
+def main(notebook, out_dir, params, ibis_file, bit_rate, debug, is_tx, nspui, nbits,
+         plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
     run_notebook(Path(ibis_file), Path(notebook), out_dir=out_dir,
         notebook_params={
@@ -108,6 +122,7 @@ def main(notebook, out_dir, ibis_file, bit_rate, debug, is_tx, nspui, nbits, plo
             'fig_x': fig_x,
             'fig_y': fig_y,
             'bit_rate': bit_rate,
+            'params': expand_params(params),
         })
 
 

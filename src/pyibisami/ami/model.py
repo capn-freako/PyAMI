@@ -266,6 +266,9 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
               This allows model initialization data to be constructed once,
               and modified incrementally in between multiple calls of
               ``initialize``. This is useful for *PyLab* command prompt testing.
+
+        ToDo:
+            1. Allow for non-integral number of samples per unit interval.
         """
 
         # Free any memory allocated by the previous initialization.
