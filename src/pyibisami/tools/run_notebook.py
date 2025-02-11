@@ -20,8 +20,11 @@ import click
 import em
 import numpy as np
 from papermill import execute_notebook
+import yaml
 
-from pyibisami.ami.model import AMIModel
+from pyibisami.ami.model        import AMIModel
+from pyibisami.common           import TestSweep
+from pyibisami.tools.run_tests  import expand_params
 
 NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
 
@@ -30,6 +33,7 @@ def run_notebook(
     ibis_file: Path,
     notebook: Path,
     out_dir: Optional[Path] = None,
+    ami_params: Optional[list[TestSweep]] = None,
     notebook_params: Optional[dict[str, Any]] = None,
 ):
     """
@@ -72,7 +76,13 @@ def run_notebook(
     print(f"Testing IBIS-AMI model: {ibis_file},")
     print(f"using notebook: {notebook},")
     print(f"sending HTML output to: {html_file}...")
-    execute_notebook(notebook, tmp_notebook, parameters=notebook_params)
+    yaml_str = yaml.safe_dump({'params': ami_params})
+    subprocess.run(
+        (['papermill', notebook, tmp_notebook] +
+         [tok for item in notebook_params.items()
+              for tok in ['-p', f'{item[0]}', f'{item[1]}']] +
+         ['-y', yaml_str]),
+        check=True)
     subprocess.run(
         ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
         check=True)
@@ -101,15 +111,21 @@ def run_notebook(
 @click.option("--plot-t-max", default=0.5e-9, show_default=True, help="Maximum time value for plots (s).")
 @click.option("--f-max",  default=40e9, show_default=True, help="Maximum frequency for transfer functions (Hz).")
 @click.option("--f-step", default=10e6, show_default=True, help="Frequency step for transfer functions (Hz).")
-@click.option("--fig-x", default=7, show_default=True, help="x-dimmension for plot figures (in).")
-@click.option("--fig-y", default=2, show_default=True, help="y-dimmension for plot figures (in).")
+@click.option("--fig-x", default=10, show_default=True, help="x-dimmension for plot figures (in).")
+@click.option("--fig-y", default=3, show_default=True, help="y-dimmension for plot figures (in).")
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
 def main(notebook, out_dir, params, ibis_file, bit_rate, debug, is_tx, nspui, nbits,
          plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
-    run_notebook(Path(ibis_file), Path(notebook), out_dir=out_dir,
+
+    print(f"AMI parameter sweeps taken from: {params}")
+    ami_params = expand_params(params)
+    for (name, desc, cfgs) in ami_params:
+        print(f"\t{name} ({desc.strip()}): {len(cfgs)} sweeps.")
+
+    run_notebook(Path(ibis_file), Path(notebook), out_dir=out_dir, ami_params=ami_params,
         notebook_params={
             'ibis_file': ibis_file,
             'debug': debug,
@@ -122,7 +138,6 @@ def main(notebook, out_dir, params, ibis_file, bit_rate, debug, is_tx, nspui, nb
             'fig_x': fig_x,
             'fig_y': fig_y,
             'bit_rate': bit_rate,
-            'params': expand_params(params),
         })
 
 

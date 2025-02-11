@@ -1,4 +1,5 @@
-"""Class definitions for working with IBIS-AMI models.
+"""
+Class definitions for working with IBIS-AMI models.
 
 Original Author: David Banas
 
@@ -15,8 +16,6 @@ from typing import Any, Optional
 import numpy as np
 
 from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
-
-# from numpy.random import randint
 
 
 def loadWave(filename):

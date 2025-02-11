@@ -118,7 +118,10 @@ def expand_params(input_parameters):
                         expr = ""
             params.append((cfg_name, description, param_list))
     else:
-        params = eval(input_parameters)  # pylint: disable=eval-used
+        try:
+            params = eval(input_parameters)  # pylint: disable=eval-used
+        except Exception as err:
+            raise ValueError(f"input_parameters: {input_parameters}") from err
     return params
 
 
