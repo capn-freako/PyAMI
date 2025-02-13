@@ -35,7 +35,7 @@ def run_notebook(
     out_dir: Optional[Path] = None,
     ami_params: Optional[list[TestSweep]] = None,
     notebook_params: Optional[dict[str, Any]] = None,
-):
+) -> None:
     """
     Run the Jupyter notebook on the target IBIS-AMI model.
 
@@ -102,7 +102,7 @@ def run_notebook(
 @click.option(
     "--params", "-p",
     default='[("cfg_dflt", "default", [("default", ({"root_name":"testAMI"},{})),]),]',
-    help='List of lists of model configurations. Format: <filename> or [(name, [(label, ({AMI params., in "key:val" format},{Model params., in "key:val" format})), ...]), ...]',
+    help='List of model configuration sweeps. Format: <filename> or [(name, [(label, ({AMI params., in "key:val" format},{Model params., in "key:val" format})), ...]), ...]',
 )
 @click.option("--debug", is_flag=True, help="Provide extra debugging information.")
 @click.option("--is_tx", is_flag=True, help="Flags a Tx model.")

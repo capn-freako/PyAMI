@@ -237,7 +237,6 @@ class AMIParamConfigurator(HasTraits):
     def get_init(
         self,
         bit_time:         float,
-        row_size:         int,
         sample_interval:  float,
         channel_response: NDArray[float],
         ami_params: Optional[dict[str, Any]] = None
@@ -246,6 +245,7 @@ class AMIParamConfigurator(HasTraits):
         Get a model initializer, configured by the user if necessary.
         """
 
+        row_size = len(channel_response)
         if ami_params:
             initializer = AMIModelInitializer(
                 ami_params,

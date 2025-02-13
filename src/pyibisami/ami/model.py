@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
+from numpy.random     import default_rng
 
 from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
 
@@ -433,6 +434,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         bits_per_call: int = 0,
         # bit_gen: Optional[Iterator[int]] = None,
         pad_bits: int = 10,
+        nbits: int = 200
     ) -> dict[str, Any]:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
@@ -446,6 +448,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             pad_bits: Number of bits to pad leading edge with when calling `GetWave()`,
                 to protect from initial garbage in `GetWave()` output.
                 Default: 10
+            nbits: Number of "real" bits to use for `GetWave()` testing.
+                Default: 200
 
         Returns:
             rslt: Dictionary containing the responses under the following keys:
@@ -471,54 +475,64 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         rslt = {}
 
         # Capture needed parameter definitions.
-        impulse_length = self.row_size
         ui = self.bit_time
         ts = self.sample_interval
-        # info_params = self.info_params
-        # ignore_bits = info_params["Ignore_Bits"] if "Ignore_Bits" in info_params else 0
+        info_params = self.info_params
+        ignore_bits = info_params["Ignore_Bits"] if "Ignore_Bits" in info_params else 0
 
         # Capture/convert instance variables.
-        chnl_imp = np.array(self.channel_response) * ts  # input (a.k.a. - "channel") impulse response (V/sample)
-        out_imp = np.array(self.initOut) * ts  # output impulse response (V/sample)
+        chnl_imp = np.array(self.channel_response) * ts     # input (a.k.a. - "channel") impulse response (V/sample)
+        out_imp = np.array(self.initOut) * ts               # output impulse response (V/sample)
 
         # Calculate some needed intermediate values.
-        nspui = int(ui / ts)  # samps per UI
-        pad_samps = pad_bits * nspui  # leading edge padding samples for GetWave() calls
+        nspui = int(ui / ts)            # samps per UI
+        pad_samps = pad_bits * nspui    # leading edge padding samples for GetWave() calls
+        len_h = len(out_imp)
+        t = np.array([i * ts for i in range(-pad_samps, len_h - pad_samps)])
+        f = np.array([i * 1.0 / (ts * len_h) for i in range(len_h // 2 + 1)])  # Assumes `rfft()` is used.
 
         # Extract and return the model responses.
         if self.info_params["Init_Returns_Impulse"]:
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
-            # h_model = irfft(rfft(out_imp) / rfft(chnl_imp))  # Seems to produce results just as noisy as above.
-            h_model = np.where(abs(h_model) > 1, np.zeros(len(h_model)), h_model)
             rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
-            rslt["out_resp_init"] = out_imp
+
+            # h_init = np.roll(self.initOut, pad_samps) * ts
+            h_init = np.roll(out_imp, pad_samps)
+            s_init = np.cumsum(h_init)                 # Step response.
+            p_init = s_init - np.pad(s_init[:-nspui], (nspui, 0), mode='constant', constant_values=0)
+            H_init = np.fft.rfft(self.initOut)
+            H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
+            rslt["out_resp_init"] = (t, h_init, s_init, p_init, f, H_init)
+
         if self.info_params["GetWave_Exists"]:
-            # Run `ignore_bits` bits of data through the model first.
-            # if bit_gen:
-            #     wave_in = [next(bit_gen) for _ in range(ignore_bits)]
-            # else:
-            #     wave_in = [randint(2) for _ in range(ignore_bits)]
-            # _, _, _ = self.getWave(np.array(wave_in) - 0.5, bits_per_call=bits_per_call)
+            # Get model's step response.
+            rng = default_rng()
+            u = np.concatenate(
+                (rng.integers(low=0, high=2, size=ignore_bits),
+                 np.array([0] * pad_bits + [1] * nbits))).repeat(nspui) - 0.5
+            wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
 
-            # Then, run a perfect step, to extract model's step response.
-            wave_out, _, _ = self.getWave(
-                np.array([0] * pad_samps + [1] * impulse_length) - 0.5,
-                bits_per_call=bits_per_call,
-            )
+            # Calculate impulse response from step response.
+            rslt["imp_resp_getw"] = np.diff(wave_out[(ignore_bits + pad_bits) * nspui:])
 
-            # Calculate other responses from step response.
-            rslt["imp_resp_getw"] = np.diff(wave_out[pad_samps:])
+            # Get step response of channel + model.
+            wave_in = np.convolve(u, chnl_imp)[:len(u)]
+            wave_out, clks_out, params_out = self.getWave(wave_in, bits_per_call=bits_per_call)
+            s_getw = wave_out[ignore_bits * nspui :][:len(t)] + 0.5
+            # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
+            s_getw -= s_getw[pad_samps-1]
+            p_getw = s_getw - np.pad(s_getw[:-nspui], (nspui, 0), mode='constant', constant_values=0)
+            # h_getw = diff(s_getw[pad_samps-1:])[:len(t)]
+            _s = s_getw[pad_samps:]
+            h_getw = np.insert(np.diff(_s), 0, _s[0])
+            len_hgw = len(h_getw)
+            if len_hgw > len_h:
+                h_getw = h_getw[:len_h]
+            else:
+                h_getw = np.pad(h_getw, (0, len_h - len_hgw))
+            H_getw = np.fft.rfft(h_getw)
+            rslt["out_resp_getw"] = (t, h_getw, s_getw, p_getw, f, H_getw)
 
-            # Calculate effective cumulative impulse response (i.e. - channel + Tx).
-            # - Form the step response equivalent to the given channel impulse response.
-            chnl_step = np.cumsum(chnl_imp)
-            # - And run it through `GetWave()`, after d.c. balancing.
-            chnl_step_bal = chnl_step - chnl_step[-1] / 2
-            out_step, _, _ = self.getWave(
-                np.pad(chnl_step_bal, (pad_samps, 0), mode="edge"), bits_per_call=bits_per_call
-            )
-            # - Convert result back to an impulse response.
-            rslt["out_resp_getw"] = np.diff(out_step[pad_samps:])
         return rslt
 
     def _getInitOut(self):
