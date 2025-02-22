@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-from numpy.random import default_rng
+from numpy.random     import default_rng
 
 from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
 
@@ -276,19 +276,23 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
-        self._channel_response = init_object._init_data[  # pylint: disable=attribute-defined-outside-init
-            "channel_response"
-        ]  # pylint: disable=protected-access
+        self._channel_response = (   # pylint: disable=attribute-defined-outside-init
+            init_object._init_data[  # pylint: disable=protected-access
+                "channel_response"
+            ]
+        )
         self._initOut = cp.copy(self._channel_response)  # type: ignore  # pylint: disable=attribute-defined-outside-init
         self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "row_size"
         ]
-        self._num_aggressors = init_object._init_data[
+        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "num_aggressors"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
-        self._sample_interval = init_object._init_data[  # pylint: disable=attribute-defined-outside-init
-            "sample_interval"
-        ]  # pylint: disable=protected-access
+        ]
+        self._sample_interval = (    # pylint: disable=attribute-defined-outside-init
+            init_object._init_data[  # pylint: disable=protected-access
+                "sample_interval"
+            ]
+        )
         self._bit_time = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "bit_time"
         ]
@@ -413,7 +417,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Signal = c_double * remaining_samps
                 tmp_wave = wave[idx:]
             else:
-                tmp_wave = wave[idx : idx + samps_per_call]
+                tmp_wave = wave[idx: idx + samps_per_call]
             _wave = Signal(*tmp_wave)
             self._amiGetWave(
                 byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle
@@ -431,7 +435,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         # bit_gen: Optional[Iterator[int]] = None,
         pad_bits: int = 10,
         nbits: int = 200,
-        calc_getw: bool = True,
+        calc_getw: bool = True
     ) -> dict[str, Any]:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
@@ -480,12 +484,12 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         ignore_bits = info_params["Ignore_Bits"] if "Ignore_Bits" in info_params else 0
 
         # Capture/convert instance variables.
-        chnl_imp = np.array(self.channel_response) * ts  # input (a.k.a. - "channel") impulse response (V/sample)
-        out_imp = np.array(self.initOut) * ts  # output impulse response (V/sample)
+        chnl_imp = np.array(self.channel_response) * ts     # input (a.k.a. - "channel") impulse response (V/sample)
+        out_imp = np.array(self.initOut) * ts               # output impulse response (V/sample)
 
         # Calculate some needed intermediate values.
-        nspui = int(ui / ts)  # samps per UI
-        pad_samps = pad_bits * nspui  # leading edge padding samples for GetWave() calls
+        nspui = int(ui / ts)            # samps per UI
+        pad_samps = pad_bits * nspui    # leading edge padding samples for GetWave() calls
         len_h = len(out_imp)
         t = np.array([i * ts for i in range(-pad_samps, len_h - pad_samps)])
         f = np.array([i * 1.0 / (ts * len_h) for i in range(len_h // 2 + 1)])  # Assumes `rfft()` is used.
@@ -497,33 +501,30 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
             # h_init = np.roll(self.initOut, pad_samps) * ts
             h_init = np.roll(out_imp, pad_samps)
-            s_init = np.cumsum(h_init)  # Step response.
-            p_init = s_init - np.pad(s_init[:-nspui], (nspui, 0), mode="constant", constant_values=0)
+            s_init = np.cumsum(h_init)                 # Step response.
+            p_init = s_init - np.pad(s_init[:-nspui], (nspui, 0), mode='constant', constant_values=0)
             H_init = np.fft.rfft(self.initOut)
-            H_init *= s_init[-1] / np.abs(H_init[0])  # Normalize for proper d.c.
+            H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
             rslt["out_resp_init"] = (t, h_init, s_init, p_init, f, H_init)
 
         if calc_getw and self.info_params["GetWave_Exists"]:
             # Get model's step response.
             rng = default_rng()
-            u = (
-                np.concatenate(
-                    (rng.integers(low=0, high=2, size=ignore_bits), np.array([0] * pad_bits + [1] * nbits))
-                ).repeat(nspui)
-                - 0.5
-            )
+            u = np.concatenate(
+                (rng.integers(low=0, high=2, size=ignore_bits),
+                 np.array([0] * pad_bits + [1] * nbits))).repeat(nspui) - 0.5
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
 
             # Calculate impulse response from step response.
-            rslt["imp_resp_getw"] = np.diff(wave_out[(ignore_bits + pad_bits) * nspui :])
+            rslt["imp_resp_getw"] = np.diff(wave_out[(ignore_bits + pad_bits) * nspui:])
 
             # Get step response of channel + model.
-            wave_in = np.convolve(u, chnl_imp)[: len(u)]
+            wave_in = np.convolve(u, chnl_imp)[:len(u)]
             wave_out, _, _ = self.getWave(wave_in, bits_per_call=bits_per_call)
-            s_getw = wave_out[ignore_bits * nspui :][: len(t)] + 0.5
+            s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
             s_getw -= s_getw[pad_samps - 1]
-            p_getw = s_getw - np.pad(s_getw[:-nspui], (nspui, 0), mode="constant", constant_values=0)
+            p_getw = s_getw - np.pad(s_getw[:-nspui], (nspui, 0), mode='constant', constant_values=0)
             # h_getw = diff(s_getw[pad_samps-1:])[:len(t)]
             _s = s_getw[pad_samps:]
             try:
