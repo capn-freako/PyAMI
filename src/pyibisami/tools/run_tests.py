@@ -16,8 +16,8 @@ import click
 import em
 import numpy as np
 
-from pyibisami.ami.model    import AMIModel
-from pyibisami.common       import TestSweep
+from pyibisami.ami.model import AMIModel
+from pyibisami.common import TestSweep
 
 
 def plot_name(tst_name, n=0):
