@@ -12,6 +12,34 @@ It can be installed via: `pip install PyIBIS-AMI`.
 
 ## Command Line Tools
 
+### Run IBIS-AMI Model Testing Notebook
+
+```shell
+$ run-notebook -h
+Usage: run-notebook [OPTIONS] IBIS_FILE BIT_RATE
+
+  Run a *Jupyter* notebook on an IBIS-AMI model file.
+
+Options:
+  -n, --notebook PATH  Override the default notebook file name.
+  -o, --out-dir PATH   Override the name of the directory in which to place
+                       the results.
+  -p, --params TEXT    Directory (or, file) containing configuration sweeps.
+  --debug              Provide extra debugging information.
+  --is_tx              Flags a Tx model.
+  --nspui INTEGER      Number of samples per unit interval.  [default: 32]
+  --nbits INTEGER      Number of bits to run in simulations.  [default: 200]
+  --plot-t-max FLOAT   Maximum time value for plots (s).  [default: 5e-10]
+  --f-max FLOAT        Maximum frequency for transfer functions (Hz).
+                       [default: 40000000000.0]
+  --f-step FLOAT       Frequency step for transfer functions (Hz).  [default:
+                       10000000.0]
+  --fig-x INTEGER      x-dimmension for plot figures (in).  [default: 10]
+  --fig-y INTEGER      y-dimmension for plot figures (in).  [default: 3]
+  --version            Show the version and exit.
+  -h, --help           Show this message and exit.
+```
+
 ### AMI Config
 
 ```shell

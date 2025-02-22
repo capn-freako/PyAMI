@@ -10,7 +10,7 @@
 PROJ_NAME := PyIBIS_AMI
 PROJ_FILE := pyproject.toml
 PROJ_INFO := src/PyIBIS_AMI.egg-info/PKG-INFO
-VER_FILE := .proj_ver
+VER_FILE := ./.proj_ver
 VER_GETTER := ./get_proj_ver.py
 PYTHON_EXEC := python -I
 TOX_EXEC := tox
@@ -53,7 +53,8 @@ build: ${VER_FILE}
 	${TOX_EXEC} run -e build
 
 upload: ${VER_FILE}
-	source $< && ${TOX_EXEC} run -e upload
+# 	source $< && ${TOX_EXEC} run -e upload
+	source ${VER_FILE} && ${TOX_EXEC} run -e upload
 
 test:
 	@for V in ${PYVERS}; do \
