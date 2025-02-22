@@ -17,6 +17,7 @@ import em
 import numpy as np
 
 from pyibisami.ami.model import AMIModel
+from pyibisami.common import TestSweep
 
 
 def plot_name(tst_name, n=0):
@@ -88,18 +89,19 @@ def color_picker(num_hues=3, first_hue=0):
         hue += 360 // num_hues
 
 
-def expand_params(input_parameters):
-    """Take the command line input and convert it into usable parameters.
+def expand_params(input_parameters: str) -> list[TestSweep]:
+    """
+    Take the command line input and convert it into usable parameter sweeps.
 
-    We can pass in a file, directory or raw string here. Handle all
-    three cases.
+    We can pass in a file, directory, or raw string here.
+    Handle all three cases.
     """
     if Path(input_parameters).exists():
         if Path(input_parameters).is_file():
             cfg_files = [Path(input_parameters)]
         else:
             cfg_files = list(Path(input_parameters).glob("*.run"))
-        params = []
+        param_sweeps = []
         for cfg_filename in cfg_files:
             cfg_name = cfg_filename.stem
             param_list = []
@@ -116,10 +118,13 @@ def expand_params(input_parameters):
                     else:
                         param_list.append(eval(compile(expr, cfg_filename, "eval")))  # pylint: disable=eval-used
                         expr = ""
-            params.append((cfg_name, description, param_list))
+            param_sweeps.append((cfg_name, description, param_list))
     else:
-        params = eval(input_parameters)  # pylint: disable=eval-used
-    return params
+        try:
+            param_sweeps = eval(input_parameters)  # pylint: disable=eval-used
+        except Exception as err:
+            raise ValueError(f"input_parameters: {input_parameters}") from err
+    return param_sweeps
 
 
 def run_tests(**kwargs):  # pylint: disable=too-many-locals
