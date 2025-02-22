@@ -7,9 +7,9 @@ Original date:   December 17, 2016
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 
-from ctypes         import CDLL, byref, c_char_p, c_double
+from ctypes         import c_double
 import re
-from typing         import Any, Generator, NewType, Optional
+from typing         import Any, Optional, TypeAlias
 
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
@@ -21,8 +21,11 @@ from pyibisami.ami.model     import AMIModelInitializer
 from pyibisami.ami.parameter import AMIParamError, AMIParameter
 
 # New types and aliases.
-Parameters  = NewType('Parameters',  dict[str, AMIParameter] | dict[str, 'Parameters'])
-ParamValues = NewType('ParamValues', dict[str, list[Any]]    | dict[str, 'ParamValues'])
+# Parameters  = NewType('Parameters',  dict[str, AMIParameter] | dict[str, 'Parameters'])
+# ParamValues = NewType('ParamValues', dict[str, list[Any]]    | dict[str, 'ParamValues'])
+# See: https://stackoverflow.com/questions/70894567/using-mypy-newtype-with-type-aliases-or-protocols
+Parameters: TypeAlias  = dict[str, AMIParameter] | dict[str, 'Parameters']
+ParamValues: TypeAlias = dict[str, list[Any]]    | dict[str, 'ParamValues']
 
 #####
 # AMI parameter configurator.
@@ -249,25 +252,27 @@ class AMIParamConfigurator(HasTraits):
         if ami_params:
             initializer = AMIModelInitializer(
                 ami_params,
-                info_params = self.info_ami_params,
-                bit_time = c_double(bit_time),
-                row_size = row_size,
-                sample_interval = c_double(sample_interval)
+                info_params=self.info_ami_params,
+                bit_time=c_double(bit_time),
+                row_size=row_size,
+                sample_interval=c_double(sample_interval)
             )
         else:
-            self()  # This call will invoke a GUI applet for the user to interact with,
-                    # to configure the AMI parameter values.
+            # This call will invoke a GUI applet for the user to interact with,
+            # to configure the AMI parameter values.
+            self()
             initializer = AMIModelInitializer(
                 self.input_ami_params,
-                info_params = self.info_ami_params,
-                bit_time = c_double(bit_time),
-                row_size = row_size,
-                sample_interval = c_double(sample_interval)
+                info_params=self.info_ami_params,
+                bit_time=c_double(bit_time),
+                row_size=row_size,
+                sample_interval=c_double(sample_interval)
             )
 
         # Don't try to pack this into the parentheses above!
         initializer.channel_response = channel_response
         return initializer
+
 
 #####
 # AMI file parser.

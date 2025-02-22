@@ -276,8 +276,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
-        self._channel_response = (
-            init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
+        self._channel_response = (   # pylint: disable=attribute-defined-outside-init
+            init_object._init_data[  # pylint: disable=protected-access
                 "channel_response"
             ]
         )
@@ -285,11 +285,11 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "row_size"
         ]
-        self._num_aggressors = init_object._init_data[
+        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
             "num_aggressors"
-        ]  # pylint: disable=protected-access,attribute-defined-outside-init
-        self._sample_interval = (
-            init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
+        ]
+        self._sample_interval = (    # pylint: disable=attribute-defined-outside-init
+            init_object._init_data[  # pylint: disable=protected-access
                 "sample_interval"
             ]
         )
@@ -364,10 +364,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         sample_interval = init_object.sample_interval
         # ToDo: Fix this. There isn't actually a requirement that `bit_time` be an integral multiple of `sample_interval`.
         # And there may be an advantage to having it not be!
-        if (bit_time % sample_interval) > (sample_interval / 100):
-            raise ValueError(
-                f"Bit time ({bit_time * 1e9: 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9: 6.3G} ns)."
-            )
+        # if (bit_time % sample_interval) > (sample_interval / 100):
+        #     raise ValueError(
+        #         f"Bit time ({bit_time * 1e9: 6.3G} ns) must be an integral multiple of sample interval ({sample_interval * 1e9: 6.3G} ns)."
+        #     )
         self._samps_per_bit = int(bit_time / sample_interval)  # pylint: disable=attribute-defined-outside-init
         self._bits_per_call = (  # pylint: disable=attribute-defined-outside-init
             init_object.row_size / self._samps_per_bit
@@ -417,7 +417,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Signal = c_double * remaining_samps
                 tmp_wave = wave[idx:]
             else:
-                tmp_wave = wave[idx : idx + samps_per_call]
+                tmp_wave = wave[idx: idx + samps_per_call]
             _wave = Signal(*tmp_wave)
             self._amiGetWave(
                 byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle
@@ -434,7 +434,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         bits_per_call: int = 0,
         # bit_gen: Optional[Iterator[int]] = None,
         pad_bits: int = 10,
-        nbits: int = 200
+        nbits: int = 200,
+        calc_getw: bool = True
     ) -> dict[str, Any]:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
@@ -450,6 +451,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: 10
             nbits: Number of "real" bits to use for `GetWave()` testing.
                 Default: 200
+            calc_getw: Calculate ``GetWave()`` responses, also, when True.
+                Default: True
 
         Returns:
             rslt: Dictionary containing the responses under the following keys:
@@ -504,7 +507,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
             rslt["out_resp_init"] = (t, h_init, s_init, p_init, f, H_init)
 
-        if self.info_params["GetWave_Exists"]:
+        if calc_getw and self.info_params["GetWave_Exists"]:
             # Get model's step response.
             rng = default_rng()
             u = np.concatenate(
@@ -517,14 +520,20 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
             # Get step response of channel + model.
             wave_in = np.convolve(u, chnl_imp)[:len(u)]
-            wave_out, clks_out, params_out = self.getWave(wave_in, bits_per_call=bits_per_call)
-            s_getw = wave_out[ignore_bits * nspui :][:len(t)] + 0.5
+            wave_out, _, _ = self.getWave(wave_in, bits_per_call=bits_per_call)
+            s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
-            s_getw -= s_getw[pad_samps-1]
+            s_getw -= s_getw[pad_samps - 1]
             p_getw = s_getw - np.pad(s_getw[:-nspui], (nspui, 0), mode='constant', constant_values=0)
             # h_getw = diff(s_getw[pad_samps-1:])[:len(t)]
             _s = s_getw[pad_samps:]
-            h_getw = np.insert(np.diff(_s), 0, _s[0])
+            try:
+                h_getw = np.insert(np.diff(_s), 0, _s[0])
+            except Exception:
+                print(f"_s: {_s}")
+                print(f"len(s_getw): {len(s_getw)}")
+                print(f"pad_samps: {pad_samps}")
+                raise
             len_hgw = len(h_getw)
             if len_hgw > len_h:
                 h_getw = h_getw[:len_h]

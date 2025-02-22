@@ -54,7 +54,7 @@ run-notebook = "pyibisami.tools.run_notebook:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"" = ['*.ipynb']  # <--- "" (empty string) means "all packages".
+"pyibisami" = ['*.ipynb']  # <--- "" (empty string) means "all packages".
 
 [tool.black]
 line-length = 119
