@@ -39,19 +39,23 @@ DBG = False
 # Parser Definitions
 
 whitespace = regex(r"\s+", re.MULTILINE)
-comment = regex(r"\|.*")
-ignore = many(whitespace | comment)
+comment    = regex(r"\|.*")                 # To end of line only.
+ignore     = many(whitespace | comment)     # None is okay; so, can be used completely safely.
 
 
-def logf(p, preStr=""):
-    """Logs failure at point of occurence.
+def logf(p: Parser, preStr: str = "") -> Parser:
+    """
+    Returns parser ``p`` wrapped in a thin shell, which logs any failure at the point of occurence.
 
     Args:
-        p (Parser): The original parser.
+        p: The original parser.
 
     Keyword Args:
-        preStr (str): A prefix string to use in failure message.
-                      (Default = <empty string>)
+        preStr: A prefix string to use in failure message.
+            (Default = <empty string>)
+
+    Returns:
+        p': The original parser wrapped in a thin failure location shell.
     """
 
     @Parser
@@ -59,7 +63,8 @@ def logf(p, preStr=""):
         res = p(txt, ix)
         if not res.status:
             print(
-                f"{preStr}: Expected {res.expected} in '{txt[res.index: res.index + 5]}' at {ParseError.loc_info(txt, res.index)}."
+                f"{preStr}: Expected `{res.expected}` in `{txt[res.index: res.index + 5]}` at {ParseError.loc_info(txt, res.index)}.",
+                flush=True
             )
         return res
 
@@ -241,10 +246,10 @@ def param():
     # Parameters must begin with a letter in column 1.
     pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
     if DBG:
-        print(f"Parsing parameter {pname}...", end="")
+        print(f"Parsing parameter {pname}...", end="", flush=True)
     res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
     if DBG:
-        print(res)
+        print(res, flush=True)
     yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
 
@@ -275,7 +280,7 @@ def node(valid_keywords, stop_keywords, debug=False):
         nm = yield keyword()
         nmL = nm.lower()
         if debug:
-            print(f"Parsing keyword: [{nm}]...")
+            print(f"Parsing keyword: [{nm}]...", flush=True)
         if nmL in valid_keywords:
             if nmL == "end":  # Because ``ibis_file`` expects this to be the last thing it sees,
                 return fail_with("")  # we can't consume it here.
@@ -286,7 +291,7 @@ def node(valid_keywords, stop_keywords, debug=False):
             res = yield skip_keyword
         yield ignore  # So that ``kywrd`` behaves as a lexeme.
         if debug:
-            print(f"Finished parsing keyword: [{nm}].")
+            print(f"Finished parsing keyword: [{nm}].", flush=True)
         return (nmL, res)
 
     return kywrd | param
@@ -329,16 +334,16 @@ def model():
     "Parse [Model]."
     nm = yield name << ignore
     if DBG:
-        print(f"Parsing model: {nm}...")
+        print(f"Parsing model: {nm}...", flush=True)
     res = yield many1(node(Model_keywords, IBIS_keywords, debug=DBG))
     if DBG:
-        print(f"[Model] {nm} contains: {dict(res).keys()}")
+        print(f"[Model] {nm} contains: {dict(res).keys()}", flush=True)
     try:
         theModel = Model(dict(res))
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {str(le)}")
-    except Exception as err:  # pylint: disable=broad-exception-caught
-        return fail_with(f"[Model] {nm}: {str(err)}")
+    # except Exception as err:  # pylint: disable=broad-exception-caught
+    #     return fail_with(f"[Model] {nm}: {str(err)}")
     return {nm: theModel}
 
 
@@ -351,7 +356,7 @@ def package():
     "Parse package RLC values."
     rlcs = yield many1(param)
     if DBG:
-        print(f"rlcs: {rlcs}")
+        print(f"rlcs: {rlcs}", flush=True)
     return dict(rlcs)
 
 
@@ -402,7 +407,7 @@ def comp():
     "Parse [Component]."
     nm = yield lexeme(name)
     if DBG:
-        print(f"Parsing component: {nm}")
+        print(f"Parsing component: {nm}", flush=True)
     res = yield many1(node(Component_keywords, IBIS_keywords, debug=DBG))
     try:
         Component(dict(res))
@@ -496,7 +501,7 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
         if debug:
-            print("Parsed nodes:\n", nodes)
+            print("Parsed nodes:\n", nodes, flush=True)
     except ParseError as pe:
         return str(pe), {}
 

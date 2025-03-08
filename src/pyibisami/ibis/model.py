@@ -210,34 +210,41 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             ramp = subDict["ramp"]
             self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
         elif mtype == "input":
-            if "gnd_clamp" not in subDict or "power_clamp" not in subDict:
+            if "gnd_clamp" not in subDict and "power_clamp" not in subDict:
                 raise LookupError("Missing clamp curves!")
+
             plotdata = ArrayPlotData()
-            gc_vs, gc_ityps, gc_imins, gc_imaxs, gc_zs = proc_iv(subDict["gnd_clamp"])
-            pc_vs, pc_ityps, pc_imins, pc_imaxs, pc_zs = proc_iv(subDict["power_clamp"])
-            pc_vs = self._vrange[0] - np.array(pc_vs)  # Correct for Vdd-relative pull-up voltages.
-            pc_ityps = -np.array(pc_ityps)  # Correct for current sense, for nicer plot.
-            pc_imins = -np.array(pc_imins)
-            pc_imaxs = -np.array(pc_imaxs)
-            gc_z = list(gc_zs)[0]  # Use typical value for Zin calc.
-            pc_z = list(pc_zs)[0]
-            self._zin = (gc_z * pc_z) / (gc_z + pc_z)  # Parallel combination, as both clamps are always active.
-            plotdata.set_data("gc_vs", gc_vs)
-            plotdata.set_data("gc_ityps", gc_ityps)
-            plotdata.set_data("gc_imins", gc_imins)
-            plotdata.set_data("gc_imaxs", gc_imaxs)
-            plotdata.set_data("pc_vs", pc_vs)
-            plotdata.set_data("pc_ityps", pc_ityps)
-            plotdata.set_data("pc_imins", pc_imins)
-            plotdata.set_data("pc_imaxs", pc_imaxs)
+
+            if "gnd_clamp" in subDict:
+                gc_vs, gc_ityps, gc_imins, gc_imaxs, gc_zs = proc_iv(subDict["gnd_clamp"])
+                gc_z = list(gc_zs)[0]  # Use typical value for Zin calc.
+                plotdata.set_data("gc_vs", gc_vs)
+                plotdata.set_data("gc_ityps", gc_ityps)
+                plotdata.set_data("gc_imins", gc_imins)
+                plotdata.set_data("gc_imaxs", gc_imaxs)
+
+            if "power_clamp" in subDict:
+                pc_vs, pc_ityps, pc_imins, pc_imaxs, pc_zs = proc_iv(subDict["power_clamp"])
+                pc_z = list(pc_zs)[0]
+                pc_vs = self._vrange[0] - np.array(pc_vs)  # Correct for Vdd-relative pull-up voltages.
+                pc_ityps = -np.array(pc_ityps)  # Correct for current sense, for nicer plot.
+                pc_imins = -np.array(pc_imins)
+                pc_imaxs = -np.array(pc_imaxs)
+                plotdata.set_data("pc_vs", pc_vs)
+                plotdata.set_data("pc_ityps", pc_ityps)
+                plotdata.set_data("pc_imins", pc_imins)
+                plotdata.set_data("pc_imaxs", pc_imaxs)
+
             plot_iv = Plot(plotdata)  # , padding_left=75)
             # The 'line_style' trait of a LinePlot instance must be 'dash' or 'dot dash' or 'dot' or 'long dash' or 'solid'.
-            plot_iv.plot(("gc_vs", "gc_ityps"), type="line", color="blue", line_style="solid", name="PD-Typ")
-            plot_iv.plot(("gc_vs", "gc_imins"), type="line", color="blue", line_style="dot", name="PD-Min")
-            plot_iv.plot(("gc_vs", "gc_imaxs"), type="line", color="blue", line_style="dash", name="PD-Max")
-            plot_iv.plot(("pc_vs", "pc_ityps"), type="line", color="red", line_style="solid", name="PU-Typ")
-            plot_iv.plot(("pc_vs", "pc_imins"), type="line", color="red", line_style="dot", name="PU-Min")
-            plot_iv.plot(("pc_vs", "pc_imaxs"), type="line", color="red", line_style="dash", name="PU-Max")
+            if "gnd_clamp" in subDict:
+                plot_iv.plot(("gc_vs", "gc_ityps"), type="line", color="blue", line_style="solid", name="PD-Typ")
+                plot_iv.plot(("gc_vs", "gc_imins"), type="line", color="blue", line_style="dot", name="PD-Min")
+                plot_iv.plot(("gc_vs", "gc_imaxs"), type="line", color="blue", line_style="dash", name="PD-Max")
+            if "power_clamp" in subDict:
+                plot_iv.plot(("pc_vs", "pc_ityps"), type="line", color="red", line_style="solid", name="PU-Typ")
+                plot_iv.plot(("pc_vs", "pc_imins"), type="line", color="red", line_style="dot", name="PU-Min")
+                plot_iv.plot(("pc_vs", "pc_imaxs"), type="line", color="red", line_style="dash", name="PU-Max")
             plot_iv.title = "Power/GND Clamp I-V Curves"
             plot_iv.index_axis.title = "Vin (V)"
             plot_iv.value_axis.title = "Iin (A)"
@@ -248,6 +255,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             plot_iv.legend.visible = True
             plot_iv.legend.align = "ul"
             self.plot_iv = plot_iv
+
+            if "gnd_clamp" in subDict and "power_clamp" in subDict:
+                self._zin = (gc_z * pc_z) / (gc_z + pc_z)  # Parallel combination, as both clamps are always active.
+            elif "gnd_clamp" in subDict:
+                self._zin = gc_z
+            else:
+                self._zin = pc_z
 
         # Separate AMI executables by OS.
         def is64(x):

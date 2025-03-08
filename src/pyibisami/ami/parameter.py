@@ -343,7 +343,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                 raise AMIParamError(f"Illegal type, '{param_type}', for use with Range.\n")
             if len(vals) < 3:
                 raise AMIParamError(f"Insufficient number of values, {len(vals)}, provided for Range.\n")
-            if param_type in ("Float", "UI"):
+            if param_type in ("Float", "UI", "Tap"):
                 try:
                     temp_vals = list(map(float, vals[:3]))
                 except (ValueError, TypeError) as exc:
