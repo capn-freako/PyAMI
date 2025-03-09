@@ -13,7 +13,7 @@ from typing         import Any, NewType, Optional, TypeAlias
 
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
-from traits.api import Bool, Enum, HasTraits, Range, Str, Trait, TraitType
+from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
@@ -98,24 +98,14 @@ class AMIParamConfigurator(HasTraits):
         gui_items, new_traits = make_gui(pdict)
         trait_names = []
         for trait in new_traits:
-            try:
-                self.add_trait(trait[0], trait[1])
-            except Exception as err:
-                print(f"new_traits: {new_traits}")
-                print(f"trait: {trait}")
-                raise
+            self.add_trait(trait[0], trait[1])
             trait_names.append(trait[0])
         self._param_trait_names = trait_names
         self._root_name = root_name
         self._ami_parsing_errors = err_str
         self._content = gui_items
         self._param_dict = param_dict
-        try:
-            self._info_dict = {name: p.pvalue for (name, p) in list(param_dict["Reserved_Parameters"].items())}
-        except Exception as err:
-            print(f"{err}")
-            print(f"param_dict['Reserved_Parameters']: {param_dict['Reserved_Parameters']}")
-            raise
+        self._info_dict = {name: p.pvalue for (name, p) in list(param_dict["Reserved_Parameters"].items())}
 
     def __call__(self):
         self.open_gui()
@@ -219,7 +209,8 @@ class AMIParamConfigurator(HasTraits):
             res.update(self.input_ami_param(params, pname))
         return res
 
-    def input_ami_param(self,
+    def input_ami_param(
+        self,
         params: Parameters,
         pname: ParamName,
         prefix: str = ""
@@ -261,7 +252,7 @@ class AMIParamConfigurator(HasTraits):
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs: ParamValues = {}
             for sname in param:
-                subs.update(self.input_ami_param(param, sname, prefix=(pname + "_")))  # type: ignore
+                subs.update(self.input_ami_param(param, sname, prefix=pname + "_"))  # type: ignore
             res[pname] = subs
         return res
 
@@ -530,6 +521,7 @@ def parse_ami_param_defs(param_str):  # pylint: disable=too-many-branches
 
     return (err_str, param_dict)
 
+
 def make_gui(params: Parameters) -> tuple[Group, list[TraitType]]:
     """
     Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
@@ -560,7 +552,7 @@ def make_gui(params: Parameters) -> tuple[Group, list[TraitType]]:
     return (HGroup(*gui_items), new_traits)
 
 
-def make_gui_items(
+def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
     pname: str,
     param: AMIParameter | Parameters
 ) -> tuple[list[Item | Group], list[tuple[str, TraitType]]]:
@@ -582,7 +574,7 @@ def make_gui_items(
         These will be converted into sub- ``Group`` s in the returned list of GUI items.
     """
 
-    if isinstance(param, AMIParameter):
+    if isinstance(param, AMIParameter):  # pylint: disable=no-else-return
         pusage = param.pusage
         if pusage not in ("In", "InOut"):
             return ([], [])

@@ -16,11 +16,12 @@ from typing import Any, Optional
 import numpy as np
 from numpy.random     import default_rng
 
-from pyibisami.common import *  # pylint: disable=wildcard-import,unused-wildcard-import  # noqa: F403
+from pyibisami.common import Rvec, deconv_same
 
 
-def loadWave(filename):
-    """Load a waveform file.
+def loadWave(filename: str) -> tuple[Rvec, Rvec]:
+    """
+    Load a waveform file.
 
     The file should consist of any number of lines, where each line
     contains, first, a time value and, second, a voltage value.
@@ -30,11 +31,10 @@ def loadWave(filename):
     saved from *CosmosScope*.
 
     Args:
-        filename (str): Name of waveform file to read in.
+        filename: Name of waveform file to read in.
 
     Returns:
-        ([float], [float]): A pair of *NumPy* arrays containing the time
-            and voltage values, respectively.
+        A pair of *NumPy* arrays containing the time and voltage values, respectively.
     """
 
     with open(filename, "r", encoding="utf-8") as theFile:
@@ -48,16 +48,17 @@ def loadWave(filename):
         return (np.array(time), np.array(voltage))
 
 
-def interpFile(filename, sample_per):
-    """Read in a waveform from a file, and convert it to the given sample rate,
+def interpFile(filename: str, sample_per: float) -> Rvec:
+    """
+    Read in a waveform from a file, and convert it to the given sample rate,
     using linear interpolation.
 
     Args:
-        filename (str): Name of waveform file to read in.
-        sample_per (float): New sample interval, in seconds.
+        filename: Name of waveform file to read in.
+        sample_per: New sample interval, in seconds.
 
     Returns:
-        [float]: A *NumPy* array containing the resampled waveform.
+        A *NumPy* array containing the resampled waveform.
     """
 
     impulse = loadWave(filename)
@@ -106,9 +107,9 @@ class AMIModelInitializer:
     def __init__(self, ami_params: dict, info_params: Optional[dict] = None, **optional_args):
         """
         Constructor accepts a mandatory dictionary containing the AMI
-        parameters, as well as optional initialization data overrides and
-        validates them, before using them to update the local initialization
-        data structures.
+        parameters, as well as optional information parameter dictionary
+        and initialization data overrides, and validates them, before
+        using them to update the local initialization data structures.
 
         Valid names of optional initialization data overrides:
 
@@ -219,7 +220,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
     Notes:
         1. Makes the calling of ``AMI_Close()`` automagic,
-            by calling it from the destructor.
+        by calling it from the destructor.
     """
 
     def __init__(self, filename: str):
@@ -262,10 +263,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             init_object: The model initialization data.
 
         Notes:
-            * Takes an instance of ``AMIModelInitializer`` as its only argument.
-              This allows model initialization data to be constructed once,
-              and modified incrementally in between multiple calls of
-              ``initialize``. This is useful for *PyLab* command prompt testing.
+            1. Takes an instance of ``AMIModelInitializer`` as its only argument.
+            This allows model initialization data to be constructed once,
+            and modified incrementally in between multiple calls of
+            ``initialize``. This is useful for *PyLab* command prompt testing.
 
         ToDo:
             1. Allow for non-integral number of samples per unit interval.
@@ -375,8 +376,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
     def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:  # noqa: F405
         """
-        Performs time domain processing of input waveform, using the
-        ``AMI_GetWave()`` function.
+        Performs time domain processing of input waveform, using the ``AMI_GetWave()`` function.
 
         Args:
             wave: Waveform to be processed.
@@ -386,14 +386,15 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: 0 (Means "Use existing value.")
 
         Returns:
-            (wave_out, clock_times, params_out): A tuple containing:
+            A tuple containing
+
                 - the processed waveform,
                 - the recovered slicer sampling instants, and
                 - the list of output parameter strings received from each call to ``AMI_GetWave()``.
 
         Notes:
             1. The returned clock times are given in "pre-edge-aligned" fashion,
-                which means their values are: sampling instant - ui/2.
+            which means their values are: sampling instant - ui/2.
         """
 
         if bits_per_call:
@@ -432,7 +433,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     def get_responses(  # pylint: disable=too-many-locals
         self,
         bits_per_call: int = 0,
-        # bit_gen: Optional[Iterator[int]] = None,
         pad_bits: int = 10,
         nbits: int = 200,
         calc_getw: bool = True
@@ -443,9 +443,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         Keyword Args:
             bits_per_call: Number of bits to include in the input to `GetWave()`.
                 Default: 0 (Means "use model's existing value".)
-            bit_gen: The bit generator to use for `GetWave()` input data generation.
-                Should produce integers from the set: {0,1}.
-                Default: None (Means "use randint(2)".)
             pad_bits: Number of bits to pad leading edge with when calling `GetWave()`,
                 to protect from initial garbage in `GetWave()` output.
                 Default: 10
@@ -455,19 +452,22 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: True
 
         Returns:
-            rslt: Dictionary containing the responses under the following keys:
-                "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
-                "out_resp_init": `imp_resp_init` convolved with the channel.
-                "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function (V/sample).
-                "out_resp_getw": `imp_resp_getw` convolved with the channel.
+            Dictionary containing the responses under the following keys
+
+                - "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
+                - "out_resp_init": `imp_resp_init` convolved with the channel.
+                - "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function (V/sample).
+                - "out_resp_getw": `imp_resp_getw` convolved with the channel.
 
         Notes:
             1. If either set of keys (i.e. - "..._init" or "..._getw")
-                is missing from the returned dictionary, it means that
-                that mode of operation (`AMI_Init()` or `AMI_GetWave()`)
-                was not available in the given model.
+            is missing from the returned dictionary, it means that
+            that mode of operation (`AMI_Init()` or `AMI_GetWave()`)
+            was not available in the given model.
+
             2. An empty dictionary implies that neither the `Init_Returns_Impulse`
-                nor the `GetWave_Exists` AMI reserved parameter was True.
+            nor the `GetWave_Exists` AMI reserved parameter was True.
+
             3. Note that impulse responses are returned with units: (V/sample), not (V/s).
 
         ToDo:
@@ -499,7 +499,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
             rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 
-            # h_init = np.roll(self.initOut, pad_samps) * ts
             h_init = np.roll(out_imp, pad_samps)
             s_init = np.cumsum(h_init)                 # Step response.
             p_init = s_init - np.pad(s_init[:-nspui], (nspui, 0), mode='constant', constant_values=0)
@@ -525,15 +524,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
             s_getw -= s_getw[pad_samps - 1]
             p_getw = s_getw - np.pad(s_getw[:-nspui], (nspui, 0), mode='constant', constant_values=0)
-            # h_getw = diff(s_getw[pad_samps-1:])[:len(t)]
             _s = s_getw[pad_samps:]
-            try:
-                h_getw = np.insert(np.diff(_s), 0, _s[0])
-            except Exception:
-                print(f"_s: {_s}")
-                print(f"len(s_getw): {len(s_getw)}")
-                print(f"pad_samps: {pad_samps}")
-                raise
+            h_getw = np.insert(np.diff(_s), 0, _s[0])
             len_hgw = len(h_getw)
             if len_hgw > len_h:
                 h_getw = h_getw[:len_h]

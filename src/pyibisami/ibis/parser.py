@@ -34,7 +34,7 @@ from parsec import (
 
 from pyibisami.ibis.model import Component, Model
 
-DBG = False
+DEBUG = False
 
 # Parser Definitions
 
@@ -245,10 +245,10 @@ def param():
     "Parse IBIS parameter."
     # Parameters must begin with a letter in column 1.
     pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
-    if DBG:
+    if DEBUG:
         print(f"Parsing parameter {pname}...", end="", flush=True)
     res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
-    if DBG:
+    if DEBUG:
         print(res, flush=True)
     yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
@@ -312,7 +312,6 @@ def end():
 @generate("[Ramp]")
 def ramp():
     "Parse [Ramp]."
-    # params = yield many(exclude(param, ramp_line))
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
     return dict(lines)  # .update(dict(params))
 
@@ -333,17 +332,15 @@ Model_keywords = {
 def model():
     "Parse [Model]."
     nm = yield name << ignore
-    if DBG:
+    if DEBUG:
         print(f"Parsing model: {nm}...", flush=True)
-    res = yield many1(node(Model_keywords, IBIS_keywords, debug=DBG))
-    if DBG:
+    res = yield many1(node(Model_keywords, IBIS_keywords, debug=DEBUG))
+    if DEBUG:
         print(f"[Model] {nm} contains: {dict(res).keys()}", flush=True)
     try:
         theModel = Model(dict(res))
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {str(le)}")
-    # except Exception as err:  # pylint: disable=broad-exception-caught
-    #     return fail_with(f"[Model] {nm}: {str(err)}")
     return {nm: theModel}
 
 
@@ -355,7 +352,7 @@ rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
 def package():
     "Parse package RLC values."
     rlcs = yield many1(param)
-    if DBG:
+    if DEBUG:
         print(f"rlcs: {rlcs}", flush=True)
     return dict(rlcs)
 
@@ -406,9 +403,9 @@ Component_keywords = {
 def comp():
     "Parse [Component]."
     nm = yield lexeme(name)
-    if DBG:
+    if DEBUG:
         print(f"Parsing component: {nm}", flush=True)
-    res = yield many1(node(Component_keywords, IBIS_keywords, debug=DBG))
+    res = yield many1(node(Component_keywords, IBIS_keywords, debug=DEBUG))
     try:
         Component(dict(res))
     except LookupError as le:
@@ -468,7 +465,7 @@ IBIS_kywrd_parsers.update(
 @generate("IBIS File")
 def ibis_file():
     "Parse IBIS file."
-    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DBG)) << end
+    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DEBUG)) << end
     return res
 
 

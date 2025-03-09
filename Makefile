@@ -10,12 +10,12 @@
 PROJ_NAME := PyIBIS_AMI
 PROJ_FILE := pyproject.toml
 PROJ_INFO := src/PyIBIS_AMI.egg-info/PKG-INFO
-VER_FILE := ./.proj_ver
+VER_FILE := "./.proj_ver"
 VER_GETTER := ./get_proj_ver.py
 PYTHON_EXEC := python -I
 TOX_EXEC := tox
 TOX_SKIP_ENV := format
-PYVERS := 39 310 311 312
+PYVERS := 310 311 312
 PLATFORMS := lin mac win
 
 # Put it first so that "make" without arguments is like "make help".
@@ -53,7 +53,6 @@ build: ${VER_FILE}
 	${TOX_EXEC} run -e build
 
 upload: ${VER_FILE}
-# 	source $< && ${TOX_EXEC} run -e upload
 	source ${VER_FILE} && ${TOX_EXEC} run -e upload
 
 test:

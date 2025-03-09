@@ -16,8 +16,6 @@ from enable.component_editor import ComponentEditor
 from traits.api import HasTraits, String, Trait
 from traitsui.api import Group, Item, ModalButtons, View
 
-DBG = False
-
 
 class Component(HasTraits):
     """Encapsulation of a particular component from an IBIS model file."""
@@ -107,7 +105,7 @@ class Component(HasTraits):
 class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
     """Encapsulation of a particular I/O model from an IBIS model file."""
 
-    def __init__(self, subDict):  # pylint: disable=too-many-locals,too-many-statements
+    def __init__(self, subDict):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         """
         Args:
             subDict (dict): Dictionary of sub-keywords/params.
@@ -257,7 +255,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self.plot_iv = plot_iv
 
             if "gnd_clamp" in subDict and "power_clamp" in subDict:
-                self._zin = (gc_z * pc_z) / (gc_z + pc_z)  # Parallel combination, as both clamps are always active.
+                # Parallel combination, as both clamps are always active.
+                self._zin = (gc_z * pc_z) / (gc_z + pc_z)  # pylint: disable=possibly-used-before-assignment
             elif "gnd_clamp" in subDict:
                 self._zin = gc_z
             else:
