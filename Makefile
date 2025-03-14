@@ -7,9 +7,9 @@
 
 .PHONY: dflt help check tox format lint flake8 type-check docs build upload test clean etags conda-build conda-skeleton chaco enable pyibis-ami pyibis-ami-dev pybert pybert-dev etags
 
-PROJ_NAME := PyIBIS_AMI
+PROJ_NAME := pyibis_ami
 PROJ_FILE := pyproject.toml
-PROJ_INFO := src/PyIBIS_AMI.egg-info/PKG-INFO
+PROJ_INFO := src/${PROJ_NAME}.egg-info/PKG-INFO
 VER_FILE := "./.proj_ver"
 VER_GETTER := ./get_proj_ver.py
 PYTHON_EXEC := python -I
@@ -24,7 +24,7 @@ dflt: help
 check:
 	${TOX_EXEC} run -e check
 
-${VER_FILE}: ${PROJ_FILE}
+${VER_FILE}: ${PROJ_INFO}
 	${PYTHON_EXEC} ${VER_GETTER} ${PROJ_NAME} $@
 
 ${PROJ_INFO}: ${PROJ_FILE}

@@ -13,6 +13,7 @@ def main():
     proj_name = sys.argv[1]
     file_name = sys.argv[2]
     with open(file_name, "wt") as f:
+        f.write(f"export PROJ_NAME={proj_name}\n")
         f.write(f"export PROJ_VER={version(proj_name)}\n")
 
 

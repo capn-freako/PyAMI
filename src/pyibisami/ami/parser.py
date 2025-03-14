@@ -113,7 +113,8 @@ class AMIParamConfigurator(HasTraits):
     def open_gui(self):
         """Present a customized GUI to the user, for parameter
         customization."""
-        self.configure_traits(kind='modal')
+        # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
+        self.configure_traits()
 
     def default_traits_view(self):
         "Default Traits/UI view definition."
