@@ -8,6 +8,10 @@ Original date:   February 26, 2016
 
 Copyright (c) 2016 David Banas; all rights reserved World wide.
 
+**Note:** The following use model has been deprecated!
+The preferred approach is to make *executable* model configurators,
+which draw what they need from this module.
+
 This script gets called from a makefile, when any of the following need rebuilding:
 
 * a C++ source code file
@@ -28,12 +32,18 @@ The idea here is that the ``*.IBS`` file, the ``*.AMI`` file, the C++ source fil
 and the test run configuration files should be configured from a common model
 configuration file, so as to ensure consistency between them all.
 """
+
 import importlib.util
 from datetime import date
 from pathlib import Path
+from typing import Any, NewType
 
 import click
 import em
+
+ParamDict      = NewType("ParamDict",      dict[str, Any])
+NamedParamDict = NewType("NamedParamDict", tuple[str, ParamDict])
+TestDefinition = NewType("TestDefinition", tuple[str, NamedParamDict, NamedParamDict, str])
 
 param_types = {
     "INT": {"c_type": "int", "ami_type": "Integer", "getter": "get_param_int"},
@@ -117,10 +127,26 @@ def print_code(pname, param):
     print("       ", "node_names.pop_back();")
 
 
-def mk_model(ibis_params, ami_params, model_name, description, out_dir="."):
+def mk_model(
+    ibis_params: ParamDict,
+    ami_params: ParamDict,
+    model_name: str,
+    description: str,
+    out_dir: str = "."
+) -> None:
     """
     Generate ibis, ami, and cpp files, by merging the
     device specific parameterization with the templates.
+
+    Args:
+        ibis_params: Dictionary of IBIS model parameter definitions.
+        ami_params: Dictionary of AMI parameter definitions.
+        model_name: Name given to IBIS model.
+        description: Model description.
+
+    Keyword Args:
+        out_dir: Directory in which to place created files.
+            Default: "."
     """
 
     py_file = (Path(out_dir).resolve() / model_name).with_suffix(".py")
@@ -135,9 +161,9 @@ def mk_model(ibis_params, ami_params, model_name, description, out_dir="."):
             em_file = out_file.with_suffix(".cpp.em")
 
         print(f"Building '{out_file}' from '{em_file}'...")
-        with open(out_file, "w", encoding="utf-8") as out_file:
+        with open(out_file, "w", encoding="utf-8") as o_file:
             interpreter = em.Interpreter(
-                output=out_file,
+                output=o_file,
                 globals={
                     "ami_params": ami_params,
                     "ibis_params": ibis_params,
@@ -156,8 +182,14 @@ def mk_model(ibis_params, ami_params, model_name, description, out_dir="."):
 
 def ami_config(py_file):
     """
-    Read in the ``py_file`` and cpp.em files,
-    then generate: ibis, ami, and cpp files.
+    Read in ``py_file`` and cpp.em files, then generate: ibis, ami, and cpp files.
+
+    Args:
+        py_file: name of model configuration file (<stem>.py)
+
+    Notes:
+        1. This function is deprecated! Instead, make your model configurator executable
+        and import what you need from this module. This is much cleaner.
     """
 
     file_base_name = Path(py_file).stem
@@ -171,15 +203,16 @@ def ami_config(py_file):
     mk_model(cfg.ibis_params, cfg.ami_params, cfg.kFileBaseName, cfg.kDescription, out_dir=Path(py_file).parent)
 
 
-def mk_combs(dict_items):
-    """Make all combinations possible from a list of dictionary items.
+def mk_combs(dict_items: list[tuple[str, Any]]) -> list[list[tuple[str, Any]]]:
+    """
+    Make all combinations possible from a list of dictionary items.
 
     Args:
-        dict_items([(str, [T])]): List of dictionary key/value pairs.
+        dict_items: List of dictionary key/value pairs.
             The values are lists.
 
     Return:
-        [[(str, T)]]: List of all possible combinations of key values.
+        List of all possible combinations of key values.
     """
     if not dict_items:
         return [
@@ -191,8 +224,22 @@ def mk_combs(dict_items):
     return [[kval] + rest for kval in kvals for rest in mk_combs(tail)]
 
 
-def mk_tests(test_defs, file_base_name, test_dir="test_runs"):  # pylint: disable=too-many-locals
-    """Make the test run configuration files."""
+def mk_tests(  # pylint: disable=too-many-locals
+    test_defs: dict[str, TestDefinition],
+    file_base_name: str,
+    test_dir: str = "test_runs"
+) -> None:
+    """
+    Make the test run configuration files.
+
+    Args:
+        test_defs: Dictionary of test sweep definitions.
+        file_base_name: Stem name for test run definition files.
+
+    Keyword Args:
+        test_dir: Directory in which to place the created test run definition files.
+            Default: "test_runs/"
+    """
 
     pname = Path(test_dir).resolve()
     pname.mkdir(exist_ok=True)
@@ -204,18 +251,11 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):  # pylint: disabl
         sim_str, sim_dict = sim_defs
         with open((pname / fname).with_suffix(".run"), "w", encoding="utf-8") as f:
             f.write(desc + "\n")
-            for ami_comb in mk_combs(ami_dict.items()):
-                for sim_comb in mk_combs(sim_dict.items()):
-                    try:
-                        pdict = dict(ami_comb)
-                        pdict.update(dict(sim_comb))
-                        f.write(f"\n('{ami_str.format(pdict=pdict)}_{sim_str.format(pdict=pdict)}', \\\n")
-                    except Exception as err:
-                        print(f"{err}")
-                        print(f"ami_str: {ami_str}")
-                        print(f"sim_str: {sim_str}")
-                        print(f"pdict: {pdict}")
-                        raise
+            for ami_comb in mk_combs(list(ami_dict.items())):
+                for sim_comb in mk_combs(list(sim_dict.items())):
+                    pdict = dict(ami_comb)
+                    pdict.update(dict(sim_comb))
+                    f.write(f"\n('{ami_str.format(pdict=pdict)}_{sim_str.format(pdict=pdict)}', \\\n")
                     f.write(f"  ({{'root_name': '{file_base_name}', \\\n")
                     for k, v in ami_comb:
                         f.write(f"    '{k}': {v}, \\\n")
@@ -233,22 +273,22 @@ def mk_tests(test_defs, file_base_name, test_dir="test_runs"):  # pylint: disabl
                     f.write(")\n")
 
 
-# NOTE: The following is deprecated! Instead, make your model configurator executable
-#      and import what you need from this module. This is much cleaner.
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
-# @click.option(
-#     "-d", "--test_dir", show_default=True, default="test_runs", help="Output directory for test run generation."
-# )
 @click.version_option()
 def main(py_file):
-    """Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
-
+    """
+    Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
     This command generates three files based off the input config file.
     It expects a .cpp.em file to be located in the same directory so that it can
     generate a cpp file from the config file and template file.
 
+    Args:
        py_file: name of model configuration file (*.py)
+
+    Notes:
+        1. This command is deprecated! Instead, make your model configurator executable
+        and import what you need from this module. This is much cleaner.
     """
     ami_config(py_file)
 

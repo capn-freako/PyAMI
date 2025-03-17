@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PyIBIS-AMI"
+name = "pyibis-ami"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "6.2.2"
+version = "7.1.0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           ]
 readme = "README.md"
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.10,<3.13"
 license = {text = "BSD"}
 dependencies = [
     "chaco>=6.0.0",
@@ -31,9 +31,9 @@ classifiers=[
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: System :: Emulators",
     "Topic :: Utilities",
@@ -54,7 +54,7 @@ run-notebook = "pyibisami.tools.run_notebook:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"pyibisami" = ['*.ipynb']  # <--- "" (empty string) means "all packages".
+"pyibisami" = ['*.ipynb']
 
 [tool.black]
 line-length = 119
