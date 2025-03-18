@@ -53,7 +53,7 @@ build: ${VER_FILE}
 	${TOX_EXEC} run -e build
 
 upload: ${VER_FILE}
-	source ${VER_FILE} && ${TOX_EXEC} run -e upload
+	source $< && ${TOX_EXEC} run -e upload
 
 test:
 	@for V in ${PYVERS}; do \

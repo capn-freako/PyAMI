@@ -20,8 +20,10 @@ Cvec: TypeAlias = npt.NDArray[Comp]
 PI:    float = 3.141592653589793238462643383279502884
 TWOPI: float = 2.0 * PI
 
-TestConfig: TypeAlias = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
-TestSweep:  TypeAlias = tuple[str, str, list[TestConfig]]
+# TestConfig: TypeAlias = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
+# TestSweep:  TypeAlias = tuple[str, str, list[TestConfig]]
+TestConfig = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
+TestSweep = tuple[str, str, list[TestConfig]]
 
 
 def deconv_same(y: Rvec, x: Rvec) -> Rvec:

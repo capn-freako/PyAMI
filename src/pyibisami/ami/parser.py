@@ -9,16 +9,20 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 from ctypes         import c_double
 import re
-from typing         import Any, NewType, Optional, TypeAlias
+from typing         import Any, Callable, NewType, Optional, TypeAlias
 
+import numpy as np
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
-from pyibisami.ami.model     import AMIModelInitializer
-from pyibisami.ami.parameter import AMIParamError, AMIParameter
+# from pyibisami.ami.model     import AMIModelInitializer
+# from pyibisami.ami.parameter import AMIParamError, AMIParameter
+from .model                     import AMIModelInitializer
+from .parameter                 import AMIParamError, AMIParameter
+from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
 
 # New types and aliases.
 # Parameters  = NewType('Parameters',  dict[str, AMIParameter] | dict[str, 'Parameters'])
@@ -26,8 +30,25 @@ from pyibisami.ami.parameter import AMIParamError, AMIParameter
 # See: https://stackoverflow.com/questions/70894567/using-mypy-newtype-with-type-aliases-or-protocols
 ParamName  = NewType("ParamName", str)
 ParamValue:  TypeAlias = int | float | str | list["ParamValue"]
-Parameters:  TypeAlias = dict[ParamName, AMIParameter] | dict[ParamName, 'Parameters']
-ParamValues: TypeAlias = dict[ParamName, ParamValue]   | dict[ParamName, 'ParamValues']
+Parameters:  TypeAlias = dict[ParamName, "AMIParameter | 'Parameters'"]
+ParamValues: TypeAlias = dict[ParamName, "ParamValue   | 'ParamValues'"]
+
+AmiName = NewType("AmiName", str)
+AmiAtom: TypeAlias = bool | int | float | str
+AmiExpr: TypeAlias = "AmiAtom | 'AmiNode'"
+AmiNode: TypeAlias = tuple[AmiName, list[AmiExpr]]
+AmiNodeParser: TypeAlias = Callable[[str], AmiNode]
+AmiParser:     TypeAlias = Callable[[str], tuple[AmiName, list[AmiNode]]]  # Atoms may not exist at the root level.
+
+ParseErrMsg = NewType("ParseErrMsg", str)
+AmiRootName = NewType("AmiRootName", str)
+ReservedParamDict: TypeAlias = dict[AmiReservedParameterName, AMIParameter]
+ModelSpecificDict: TypeAlias = dict[ParamName, "AMIParameter | 'ModelSpecificDict'"]
+
+__all__ = [
+    "ParamName", "ParamValue", "Parameters", "ParamValues",
+    "AmiName", "AmiAtom", "AmiExpr", "AmiNode", "AmiNodeParser", "AmiParser",
+    "ami_parse", "AMIParamConfigurator"]
 
 #####
 # AMI parameter configurator.
@@ -77,25 +98,19 @@ class AMIParamConfigurator(HasTraits):
         # to get all the Traits/UI machinery setup correctly.
         super().__init__()
 
-        # Parse the AMI file contents, storing any errors or warnings,
-        # and customize the view accordingly.
-        err_str, param_dict = parse_ami_param_defs(ami_file_contents_str)
-        if not param_dict:
-            print("Empty dictionary returned by parse_ami_param_defs()!")
-            print(f"Error message:\n{err_str}")
-            raise KeyError("Failed to parse AMI file; see console for more detail.")
-        top_branch = list(param_dict.items())[0]
-        root_name  = top_branch[0]
-        param_dict = top_branch[1]
-        if "Reserved_Parameters" not in param_dict:
-            print(f"Error: {err_str}\nParameters: {param_dict}")
-            raise KeyError("Unable to get 'Reserved_Parameters' from the parameter set.")
-        if "Model_Specific" not in param_dict:
-            print(f"Error: {err_str}\nParameters: {param_dict}")
-            raise KeyError("Unable to get 'Model_Specific' from the parameter set.")
-        pdict = param_dict["Reserved_Parameters"].copy()
-        pdict.update(param_dict["Model_Specific"])
-        gui_items, new_traits = make_gui(pdict)
+        # Parse the AMI file contents, storing any errors or warnings, and customize the view accordingly.
+        err_str, root_name, description, reserved_param_dict, model_specific_dict = parse_ami_file_contents(ami_file_contents_str)
+        assert reserved_param_dict, ValueError(
+            "\n".join([
+                "No 'Reserved_Parameters' section found!",
+                err_str
+            ]))
+        assert model_specific_dict, ValueError(
+            "\n".join([
+                "No 'Model_Specific' section found!",
+                err_str
+            ]))
+        gui_items, new_traits = make_gui(model_specific_dict)
         trait_names = []
         for trait in new_traits:
             self.add_trait(trait[0], trait[1])
@@ -104,8 +119,9 @@ class AMIParamConfigurator(HasTraits):
         self._root_name = root_name
         self._ami_parsing_errors = err_str
         self._content = gui_items
-        self._param_dict = param_dict
-        self._info_dict = {name: p.pvalue for (name, p) in list(param_dict["Reserved_Parameters"].items())}
+        self._reserved_param_dict = reserved_param_dict
+        self._model_specific_dict = model_specific_dict
+        self._description = description
 
     def __call__(self):
         self.open_gui()
@@ -187,12 +203,13 @@ class AMIParamConfigurator(HasTraits):
         return self._ami_parsing_errors
 
     @property
-    def ami_param_defs(self) -> dict[ParamName, Any]:
+    def ami_param_defs(self) -> dict[str, ReservedParamDict | ModelSpecificDict]:
         """The entire AMI parameter definition dictionary.
 
         Should *not* be passed to ``AMIModelInitializer`` constructor!
         """
-        return self._param_dict
+        return {"Reserved_Parameters": self._reserved_param_dict,
+                "Model_Specific": self._model_specific_dict}
 
     @property
     def input_ami_params(self) -> ParamValues:
@@ -203,9 +220,9 @@ class AMIParamConfigurator(HasTraits):
         Should be passed to ``AMIModelInitializer`` constructor.
         """
 
-        res = {}
-        res[ParamName("root_name")] = self._root_name
-        params = self.ami_param_defs[ParamName("Model_Specific")]
+        res: ParamValues = {}
+        res[ParamName("root_name")] = str(self._root_name)
+        params = self._model_specific_dict
         for pname in params:
             res.update(self.input_ami_param(params, pname))
         return res
@@ -260,13 +277,13 @@ class AMIParamConfigurator(HasTraits):
     @property
     def info_ami_params(self):
         "Dictionary of *Reserved* AMI parameter values."
-        return self._info_dict
+        return self._reserved_param_dict
 
     def get_init(
         self,
         bit_time:         float,
         sample_interval:  float,
-        channel_response: NDArray[float],
+        channel_response: NDArray[np.longdouble],
         ami_params: Optional[dict[str, Any]] = None
     ) -> AMIModelInitializer:
         """
@@ -343,14 +360,25 @@ node_name = tap_ix ^ symbol  # `tap_ix` is new and gives the tap position; negat
 def node():
     "Parse AMI node."
     yield lparen
-    label = yield node_name
+    label  = yield node_name
     values = yield many(expr)
     yield rparen
     return (label, values)
 
 
+@generate("AMI file")
+def root():
+    "Parse AMI file."
+    yield lparen
+    label  = yield node_name
+    values = yield many(node)
+    yield rparen
+    return (label, values)
+
+
 expr = atom | node
-ami_defs = ignore >> node
+ami = ignore >> root
+ami_parse: AmiParser = ami.parse
 
 
 def proc_branch(branch):
@@ -428,102 +456,115 @@ def proc_branch(branch):
     return results
 
 
-def parse_ami_param_defs(param_str):  # pylint: disable=too-many-branches
-    """Parse the contents of a IBIS-AMI parameter definition file.
+def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branches
+    file_contents: str
+) -> tuple[ParseErrMsg, AmiRootName, str, ReservedParamDict, ModelSpecificDict]:
+    """
+    Parse the contents of an IBIS-AMI *parameter definition* (i.e. - `*.ami`) file.
 
     Args:
-        param_str (str): The contents of the file, as a single string.
+        file_contents: The contents of the file, as a single string.
 
     Example:
         ::
 
             with open(<ami_file_name>) as ami_file:
-                param_str = ami_file.read()
-                (err_str, param_dict) = parse_ami_param_defs(param_str)
+                file_contents = ami_file.read()
+                (err_str, root_name, reserved_param_dict, model_specific_param_dict) = parse_ami_file_contents(file_contents)
 
     Returns:
-        (str, dict): A pair containing:
-            err_str:
-                - None, if parser succeeds.
-                - Helpful message, if it fails.
-            param_dict: Dictionary containing parameter definitions.
-                (Empty, on failure.)
-                It has a single key, at the top level, which is the
-                model root name. This key indexes the actual
-                parameter dictionary, which has the following
-                structure::
+        A tuple containing
 
-                    {
-                        'description'           :   <optional model description string>
-                        'Reserved_Parameters'   :   <dictionary of reserved parameter defintions>
-                        'Model_Specific'        :   <dictionary of model specific parameter definitions>
-                    }
+            1. Any error message generated by the parser. (empty on success)
 
-                The keys of the 'Reserved_Parameters' dictionary are
-                limited to those called out in the IBIS-AMI
-                specification.
+            2. AMI file "root" name.
 
-                The keys of the 'Model_Specific' dictionary can be
-                anything.
+            3. *Reserved Parameters* dictionary. (empty on failure)
 
-                The values of both are either:
-                    - instances of class *AMIParameter*, or
-                    - sub-dictionaries following the same pattern.
+                - The keys of the *Reserved Parameters* dictionary are
+                limited to those called out in the IBIS-AMI specification.
+
+                - The values of the *Reserved Parameters* dictionary
+                must be instances of class ``AMIParameter``.
+
+            4. *Model Specific Parameters* dictionary. (empty on failure)
+
+                - The keys of the *Model Specific Parameters* dictionary can be anything.
+
+                - The values of the *Model Specific Parameters* dictionary
+                may be either: an instance of class ``AMIParameter``, or a nested sub-dictionary.
     """
     try:
-        res = ami_defs.parse(param_str)
+        res = ami_parse(file_contents)
     except ParseError as pe:
-        err_str = f"Expected {pe.expected} at {pe.loc()} in:\n{pe.text[pe.index:]}"
-        return err_str, {}
+        err_str = ParseErrMsg(f"Expected {pe.expected} at {pe.loc()} in:\n{pe.text[pe.index:]}")
+        return err_str, AmiRootName(""), "", {}, {}
 
     err_str, param_dict = proc_branch(res)
     if err_str:
-        return (err_str, {"res": res, "dict": param_dict})
+        return (err_str, AmiRootName(""), "", {}, {})
+    assert len(param_dict.keys()) == 1, ValueError(
+        f"Malformed AMI parameter S-exp has top-level keys: {param_dict.keys()}!")
 
     reserved_found = False
     init_returns_impulse_found = False
     getwave_exists_found = False
     model_spec_found = False
-    params = list(param_dict.items())[0][1]
+    root_name, params = list(param_dict.items())[0]
+    description = ""
+    reserved_params_dict = {}
+    model_specific_dict = {}
+    _err_str = ""
     for label in list(params.keys()):
+        tmp_params = params[label]
         if label == "Reserved_Parameters":
             reserved_found = True
-            tmp_params = params[label]
             for param_name in list(tmp_params.keys()):
-                if param_name not in AMIParameter.RESERVED_PARAM_NAMES:
-                    err_str += f"WARNING: Unrecognized reserved parameter name, '{param_name}', found in parameter definition string!\n"
+                if param_name not in RESERVED_PARAM_NAMES:
+                    _err_str += f"WARNING: Unrecognized reserved parameter name, '{param_name}', found in parameter definition string!\n"
                     continue
                 param = tmp_params[param_name]
                 if param.pname == "AMI_Version":
                     if param.pusage != "Info" or param.ptype != "String":
-                        err_str += "WARNING: Malformed 'AMI_Version' parameter.\n"
+                        _err_str += "WARNING: Malformed 'AMI_Version' parameter.\n"
                 elif param.pname == "Init_Returns_Impulse":
                     init_returns_impulse_found = True
                 elif param.pname == "GetWave_Exists":
                     getwave_exists_found = True
+            reserved_params_dict = tmp_params
         elif label == "Model_Specific":
             model_spec_found = True
+            model_specific_dict = tmp_params
         elif label == "description":
-            pass
+            description = str(tmp_params)
         else:
-            err_str += f"WARNING: Unrecognized group with label, '{label}', found in parameter definition string!\n"
+            _err_str += f"WARNING: Unrecognized group with label, '{label}', found in parameter definition string!\n"
 
     if not reserved_found:
-        err_str += "ERROR: Reserved parameters section not found! It is required."
+        _err_str += "ERROR: Reserved parameters section not found! It is required."
 
     if not init_returns_impulse_found:
-        err_str += "ERROR: Reserved parameter, 'Init_Returns_Impulse', not found! It is required."
+        _err_str += "ERROR: Reserved parameter, 'Init_Returns_Impulse', not found! It is required."
 
     if not getwave_exists_found:
-        err_str += "ERROR: Reserved parameter, 'GetWave_Exists', not found! It is required."
+        _err_str += "ERROR: Reserved parameter, 'GetWave_Exists', not found! It is required."
 
     if not model_spec_found:
-        err_str += "WARNING: Model specific parameters section not found!"
+        _err_str += "WARNING: Model specific parameters section not found!"
 
-    return (err_str, param_dict)
+    return (ParseErrMsg(_err_str), root_name, description, reserved_params_dict, model_specific_dict)
 
 
-def make_gui(params: Parameters) -> tuple[Group, list[TraitType]]:
+# Legacy client code support:
+def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any]]:
+    "The legacy version of ``parse_ami_file_contents()``."
+    err_msg, root_name, description, reserved_params_dict, model_specific_dict = parse_ami_file_contents(file_contents)
+    return (err_msg, {root_name: {"description":         description,
+                                  "Reserved_Parameters": reserved_params_dict,
+                                  "Model_Specific":      model_specific_dict}})
+
+
+def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
     """
     Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
 
