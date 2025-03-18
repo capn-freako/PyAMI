@@ -18,8 +18,6 @@ from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
-# from pyibisami.ami.model     import AMIModelInitializer
-# from pyibisami.ami.parameter import AMIParamError, AMIParameter
 from .model                     import AMIModelInitializer
 from .parameter                 import AMIParamError, AMIParameter
 from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
