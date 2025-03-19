@@ -130,3 +130,6 @@ examples/test_results/*
 
 # MacOS system files
 .DS_Store
+
+# Sublime
+*.sublime-workspace
