@@ -14,8 +14,8 @@ from scipy.linalg       import convolution_matrix, lstsq
 
 Real = TypeVar("Real", float, float)
 Comp = TypeVar("Comp", complex, complex)
-Rvec: TypeAlias = npt.NDArray[Real]
-Cvec: TypeAlias = npt.NDArray[Comp]
+Rvec: TypeAlias = npt.NDArray["Real"]
+Cvec: TypeAlias = npt.NDArray["Comp"]
 
 PI:    float = 3.141592653589793238462643383279502884
 TWOPI: float = 2.0 * PI
