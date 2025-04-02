@@ -234,6 +234,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             OSError: If given file cannot be opened.
         """
 
+        self._filename = filename
         self._ami_mem_handle = None
         my_dll = CDLL(filename)
         self._amiInit = my_dll.AMI_Init
@@ -254,6 +255,24 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         """
         if self._ami_mem_handle:
             self._amiClose(self._ami_mem_handle)
+
+    def __str__(self):
+        return "\n\t".join([
+            f"AMIModel instance: `{self._filename}`",
+            f"Length of initOut = {len(self._initOut)}",
+            f"row_size = {self._row_size}",
+            f"num_aggressors = {self._num_aggressors}",
+            f"sample_interval = {self._sample_interval}",
+            f"bit_time = {self._bit_time}",
+            f"samps_per_bit = {self._samps_per_bit}",
+            f"bits_per_call = {self._bits_per_call}",
+            f"ami_params_in = {self._ami_params_in}",
+            f"ami_params_out = {self._ami_params_out}",
+            f"&ami_mem_handle = {byref(self._ami_mem_handle)}",
+            f"Message = {self._msg}",
+            f"AMI_Init(): {self._amiInit}",
+            f"AMI_GetWave(): {self._amiGetWave}",
+            f"AMI_Close(): {self._amiClose}",])
 
     def initialize(self, init_object: AMIModelInitializer):
         """
@@ -420,9 +439,19 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             else:
                 tmp_wave = wave[idx: idx + samps_per_call]
             _wave = Signal(*tmp_wave)
-            self._amiGetWave(
-                byref(_wave), len(_wave), byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle
-            )  # type: ignore
+            try:
+                self._amiGetWave(
+                    byref(_wave), len(_wave), byref(_clock_times),
+                    byref(self._ami_params_out), self._ami_mem_handle
+                )  # type: ignore
+            except OSError:
+                print(self)
+                print(f"byref(_wave): {byref(_wave)}")
+                print(f"len(_wave): {len(_wave)}")
+                print(f"byref(_clock_times): {byref(_clock_times)}")
+                print(f"byref(self._ami_params_out): {byref(self._ami_params_out)}")
+                print(f"self._ami_mem_handle: {self._ami_mem_handle}")
+                raise
             wave_out.extend(_wave)
             clock_times.extend(_clock_times)
             params_out.append(self.ami_params_out)
