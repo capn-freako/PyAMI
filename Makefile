@@ -9,8 +9,9 @@
 
 PROJ_NAME := PyIBIS_AMI
 PROJ_FILE := pyproject.toml
-PROJ_INFO := src/PyIBIS_AMI.egg-info/PKG-INFO
-VER_FILE := ./.proj_ver
+PROJ_INFO := src/${PROJ_NAME}.egg-info/PKG-INFO
+# VER_FILE := "./.proj_ver"  # This gets around the issue w/ `sh`, but breaks the building of `.proj_ver`.
+VER_FILE := proj_ver
 VER_GETTER := ./get_proj_ver.py
 PYTHON_EXEC := python -I
 TOX_EXEC := tox
@@ -47,14 +48,13 @@ type-check:
 	${TOX_EXEC} run -e type-check
 
 docs: ${VER_FILE}
-	source $< && ${TOX_EXEC} run -e docs
+	. $< && ${TOX_EXEC} run -e docs
 
 build: ${VER_FILE}
-	${TOX_EXEC} run -e build
+	$(source $< && ${TOX_EXEC} run -e build)
 
 upload: ${VER_FILE}
-# 	source $< && ${TOX_EXEC} run -e upload
-	source ${VER_FILE} && ${TOX_EXEC} run -e upload
+	. $< && ${TOX_EXEC} run -e upload
 
 test:
 	@for V in ${PYVERS}; do \
