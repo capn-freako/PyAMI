@@ -127,6 +127,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
         self.log("IBIS parsing errors/warnings:\n" + err_str)
         if "components" not in model_dict or not model_dict["components"]:
+            print(f":\n{model_dict}", flush=True)
             raise ValueError("This IBIS model has no components!")
         components = model_dict["components"]
         if "models" not in model_dict or not model_dict["models"]:

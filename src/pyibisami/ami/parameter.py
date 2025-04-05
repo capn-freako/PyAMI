@@ -23,65 +23,6 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
     parameter.
     """
 
-    RESERVED_PARAM_NAMES = [
-        "AMI_Version",
-        "Init_Returns_Impulse",
-        "GetWave_Exists",
-        "Use_Init_Output",
-        "Max_Init_Aggressors",
-        "Ignore_Bits",
-        "Resolve_Exists",
-        "Model_Name",
-        "Special_Param_Names",
-        "Component_Name",
-        "Signal_Name",
-        "Rx_Decision_Time",
-        "DC_Offset",
-        "Rx_Use_Clock_Input",
-        "Supporting_Files",
-        "DLL_Path",
-        "DLL_ID",
-        "Tx_Jitter",
-        "Tx_DCD",
-        "Tx_Rj",
-        "Tx_Dj",
-        "Tx_Sj",
-        "Tx_Sj_Frequency",
-        "Rx_DCD",
-        "Rx_Rj",
-        "Rx_Dj",
-        "Rx_Sj",
-        "Rx_Clock_PDF",
-        "Rx_Clock_Recovery_Mean",
-        "Rx_Clock_Recovery_Rj",
-        "Rx_Clock_Recovery_Dj",
-        "Rx_Clock_Recovery_Sj",
-        "Rx_Clock_Recovery_DCD",
-        "Rx_Receiver_Sensitivity",
-        "Rx_Noise",
-        "Rx_GaussianNoise",
-        "Rx_UniformNoise",
-        "Modulation",
-        "PAM4_Mapping",
-        "PAM4_UpperThreshold",
-        "PAM4_CenterThreshold",
-        "PAM4_LowerThreshold",
-        "PAM4_UpperEyeOffset",
-        "PAM4_CenterEyeOffset",
-        "PAM4_LowerEyeOffset",
-        "Repeater_Type",
-        "BCI_Protocol",
-        "BCI_ID",
-        "BCI_State",
-        "BCI_Message_Interval_UI",
-        "BCI_Training_UI",
-        "BCI_Training_Mode",
-        "Ts4file",
-        "Tx_V",
-        "Tx_R",
-        "Rx_R",
-    ]
-
     # Properties.
 
     # Note: They are read-only, despite the presence of apparent setters.
@@ -136,8 +77,6 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         "Process *Format* tag."
 
         form = values[0]
-        #        if(not form in ['Value', 'Range', 'List']):
-        #            raise AMIParamError ("Unrecognized format value: '{}'.".format(form))
         if len(values) < 2:
             raise AMIParamError(f"No values provided for: '{form}'.")
         self._format = form
@@ -259,13 +198,12 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         """
         Args:
             name (str): The name of the AMI parameter being created.
-            tags ([(str, [a])]): A list of pairs, each containing:
+            tags ([(str, [a])]): A list of pairs, each containing
 
                 - a parameter definition tag name
-                    (Must be one of the keys from the
-                    '_param_def_tag_procs' dictionary.)
-                - a list of values to be associated with that tag.
+                    (Must be one of the keys from the '_param_def_tag_procs' dictionary.)
 
+                - a list of values to be associated with that tag.
         """
         # Initialization
         self._usage = None
@@ -343,7 +281,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                 raise AMIParamError(f"Illegal type, '{param_type}', for use with Range.\n")
             if len(vals) < 3:
                 raise AMIParamError(f"Insufficient number of values, {len(vals)}, provided for Range.\n")
-            if param_type in ("Float", "UI"):
+            if param_type in ("Float", "UI", "Tap"):
                 try:
                     temp_vals = list(map(float, vals[:3]))
                 except (ValueError, TypeError) as exc:
