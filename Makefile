@@ -51,13 +51,13 @@ type-check:
 	${TOX_EXEC} run -e type-check
 
 docs: ${VER_FILE}
-	. $< && ${TOX_EXEC} run -e docs
+	. ./$< && ${TOX_EXEC} run -e docs
 
 build: ${VER_FILE}
-	. $< && ${TOX_EXEC} run -e build
+	. ./$< && ${TOX_EXEC} run -e build
 
 upload: ${VER_FILE}
-	. $< && ${TOX_EXEC} run -e upload
+	. ./$< && ${TOX_EXEC} run -e upload
 
 test:
 	@for V in ${PYVERS}; do \
