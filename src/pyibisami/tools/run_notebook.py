@@ -45,10 +45,10 @@ def run_notebook(
     start_time = time()
 
     # Validate input.
-    assert ibis_file.exists(), RuntimeError(
-        f"Can't find IBIS-AMI model file, {ibis_file}!")
-    assert notebook.exists(), RuntimeError(
-        f"Can't find notebook file, {notebook}!")
+    if not ibis_file.exists():
+        raise RuntimeError(f"Can't find IBIS-AMI model file, {ibis_file}!")
+    if not notebook.exists():
+        raise RuntimeError(f"Can't find notebook file, {notebook}!")
 
     # Define temp. (i.e. - parameterized) notebook and output file locations.
     tmp_dir = (

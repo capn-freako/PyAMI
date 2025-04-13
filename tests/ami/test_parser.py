@@ -85,8 +85,7 @@ class TestAMIParse:
 
     def test_no_model_specific_key(self, test_ami_config):
         edited = test_ami_config.replace("Model_Specific", "whoops")
-        # with pytest.raises(KeyError):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             ami_parser.AMIParamConfigurator(edited)
 
     def test_fetch_param_val(self, test_ami_config):

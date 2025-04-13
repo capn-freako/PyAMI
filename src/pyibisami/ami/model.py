@@ -161,10 +161,9 @@ class AMIModelInitializer:
 
     def __str__(self):
         return "\n\t".join([
-            f"AMIModelInitializer instance:",
+            "AMIModelInitializer instance:",
             f"`ami_params`: {self.ami_params}",
-            f"`info_params`: {self.ami_params}",
-            ])
+            f"`info_params`: {self.ami_params}"])
 
     def _getChannelResponse(self):
         return list(map(float, self._init_data["channel_response"]))
