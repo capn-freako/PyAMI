@@ -20,8 +20,8 @@ class AmiReservedParameterName():
     def __post_init__(self):
         "Validate parameter name."
 
-        assert self.pname in RESERVED_PARAM_NAMES, ValueError(
-            f"Parameter name: {self.pname}, is not an IBIS-AMI reserved parameter name!")
+        if self.pname not in RESERVED_PARAM_NAMES:
+            raise ValueError(f"Parameter name: {self.pname}, is not an IBIS-AMI reserved parameter name!")
 
 
 RESERVED_PARAM_NAMES = [

@@ -97,17 +97,23 @@ class AMIParamConfigurator(HasTraits):
         super().__init__()
 
         # Parse the AMI file contents, storing any errors or warnings, and customize the view accordingly.
-        err_str, root_name, description, reserved_param_dict, model_specific_dict = parse_ami_file_contents(ami_file_contents_str)
-        assert reserved_param_dict, ValueError(
-            "\n".join([
-                "No 'Reserved_Parameters' section found!",
-                err_str
-            ]))
-        assert model_specific_dict, ValueError(
-            "\n".join([
-                "No 'Model_Specific' section found!",
-                err_str
-            ]))
+        (err_str,
+         root_name,
+         description,
+         reserved_param_dict,
+         model_specific_dict) = parse_ami_file_contents(ami_file_contents_str)
+        if not reserved_param_dict:
+            raise ValueError(
+                "\n".join([
+                    "No 'Reserved_Parameters' section found!",
+                    err_str
+                ]))
+        if not model_specific_dict:
+            raise ValueError(
+                "\n".join([
+                    "No 'Model_Specific' section found!",
+                    err_str
+                ]))
         gui_items, new_traits = make_gui(model_specific_dict)
         trait_names = []
         for trait in new_traits:
@@ -501,8 +507,8 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
     err_str, param_dict = proc_branch(res)
     if err_str:
         return (err_str, AmiRootName(""), "", {}, {})
-    assert len(param_dict.keys()) == 1, ValueError(
-        f"Malformed AMI parameter S-exp has top-level keys: {param_dict.keys()}!")
+    if len(param_dict.keys()) != 1:
+        raise ValueError(f"Malformed AMI parameter S-exp has top-level keys: {param_dict.keys()}!")
 
     reserved_found = False
     init_returns_impulse_found = False
