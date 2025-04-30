@@ -335,6 +335,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         def sexpr(pname, pval):
             """Create an S-expression from a parameter name/value pair, calling
             recursively as needed to elaborate sub-parameter dictionaries."""
+            if isinstance(pval, str):
+                return f'({pname} "{pval}")'
             if isinstance(pval, dict):
                 subs = []
                 for sname in pval:
