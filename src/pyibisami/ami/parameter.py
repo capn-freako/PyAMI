@@ -257,7 +257,6 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             param_format = "Value"
             self._format_rem = [self._value]
 
-
         # Check for 'Default' used with parameter type 'Out'.
         if (param_usage == "Out") and (param_default is not None):
             raise AMIParamError("'Default' may not be used with parameter type 'Out'!\n")
