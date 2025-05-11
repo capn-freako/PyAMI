@@ -60,47 +60,51 @@ print("C_pkg    %5.2fp   %5.2fp   %5.2fp" % (c_pkg[0] * 1.e12, c_pkg[1] * 1.e12,
 }
 
 [Pin]  signal_name        model_name            R_pin  L_pin  C_pin
-1p     Tx_1_P             @(model_name)
-1n     Tx_1_N             @(model_name)
-2p     Tx_2_P             @(model_name)
-2n     Tx_2_N             @(model_name)
-3p     Tx_3_P             @(model_name)
-3n     Tx_3_N             @(model_name)
+@{
+if model_type.startswith("Output") or model_type == "Repeater":
+    for n in range(3):
+        print(f"{n + 1}p     Tx_{n + 1}_P             {model_name}_Tx")
+        print(f"{n + 1}n     Tx_{n + 1}_N             Tx")
+if model_type.startswith("Input") or model_type == "Repeater":
+    for n in range(3):
+        print(f"{n + 4}p     Tx_{n + 4}_P             Rx")
+        print(f"{n + 4}n     Tx_{n + 4}_N             Rx")
+}
 
 [Diff_Pin] inv_pin vdiff tdelay_typ tdelay_min tdelay_max
-1p           1n     0.1V     NA         NA         NA
-2p           2n     0.1V     NA         NA         NA
-3p           3n     0.1V     NA         NA         NA
-
-[Model]   @(model_name)
-Model_type   @(model_type)
+@{
+if model_type.startswith("Output") or model_type == "Repeater":
+    for n in range(3):
+        print(f"{n + 1}p     {n + 1}n     0.1V    NA    NA    NA")
+if model_type.startswith("Input") or model_type == "Repeater":
+    for n in range(3):
+        print(f"{n + 4}p     {n + 4}n     0.1V    NA    NA    NA")
+}
 
 @{
-print("C_comp    %5.2fp   %5.2fp   %5.2fp" % (c_comp[0] * 1.e12, c_comp[1] * 1.e12, c_comp[2] * 1.e12))
-if(model_type == 'Output'):
+if model_type == "Repeater":
+print("[Repeater Pin]  tx_non_inv_pin")
+for n in range(3):
+    print(f"       {n + 4}p              {n + 1}p")
+}
+
+@{
+if model_type.startswith("Output") or model_type == "Repeater":
+    print("[Model]   {model_name}_Tx")
+    print("Model_type   Output_diff
+    print("C_comp    %5.2fp   %5.2fp   %5.2fp" % (c_comp[0] * 1.e12, c_comp[1] * 1.e12, c_comp[2] * 1.e12))
     print("Cref  = {}".format(c_ref))
     print("Vref  = {}".format(v_ref))
     print("Vmeas = {}".format(v_meas))
     print("Rref  = {}".format(r_ref))
-else:
-    print("Vinl = {}".format(voltage_range[0] / 2. - 0.025))
-    print("Vinh = {}".format(voltage_range[0] / 2. + 0.025))
-}
-
-[Algorithmic Model]
-Executable linux_gcc4.1.2_32          @(model_name)_x86.so         @(model_name).ami
-Executable linux_gcc4.1.2_64          @(model_name)_x86_amd64.so   @(model_name).ami
-Executable Windows_VisualStudio_32    @(model_name)_x86.dll        @(model_name).ami
-Executable Windows_VisualStudio_64    @(model_name)_x86_amd64.dll  @(model_name).ami
-[End Algorithmic Model]
-
-@{
-print("[Temperature_Range]    %5.1f    %5.1f    %5.1f" % (temperature_range[0], temperature_range[1], temperature_range[2]))
-print("[Voltage_Range]        %5.2f    %5.2f    %5.2f" % (voltage_range[0],     voltage_range[1],     voltage_range[2]))
-}
-
-@{
-if(model_type == 'Output'):
+    print("")
+    print("[Algorithmic Model]")
+    print("Executable linux_gcc4.1.2_32        {model_name}_tx_x86.so         {model_name}_tx.ami")
+    print("Executable linux_gcc4.1.2_64        {model_name}_tx_x86_amd64.so   {model_name}_tx.ami")
+    print("Executable Windows_VisualStudio_32  {model_name}_tx_x86.dll        {model_name}_tx.ami")
+    print("Executable Windows_VisualStudio_64  {model_name}_tx_x86_amd64.dll  {model_name}_tx.ami")
+    print("[End Algorithmic Model]")
+    print("")
     print("[Pulldown]")
     print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], -10., -10., -10.))
     for v in [k * voltage_range[0] for k in range(2)]:
@@ -121,7 +125,23 @@ if(model_type == 'Output'):
     print("dV/dt_r    %5.3f/%5.2fp    %5.3f/%5.2fp    %5.3f/%5.2fp" % (dv[0], dt[0], dv[1], dt[1], dv[2], dt[2]))
     print("dV/dt_f    %5.3f/%5.2fp    %5.3f/%5.2fp    %5.3f/%5.2fp" % (dv[0], dt[0], dv[1], dt[1], dv[2], dt[2]))
     print("")
-else:
+}
+
+@{
+if model_type.startswith("Input") or model_type == "Repeater":
+    print("[Model]   {model_name}_Rx")
+    print("Model_type   Input_diff
+    print("C_comp    %5.2fp   %5.2fp   %5.2fp" % (c_comp[0] * 1.e12, c_comp[1] * 1.e12, c_comp[2] * 1.e12))
+    print("Vinl = {}".format(voltage_range[0] / 2. - 0.025))
+    print("Vinh = {}".format(voltage_range[0] / 2. + 0.025))
+    print("")
+    print("[Algorithmic Model]")
+    print("Executable linux_gcc4.1.2_32        {model_name}_rx_x86.so         {model_name}_rx.ami")
+    print("Executable linux_gcc4.1.2_64        {model_name}_rx_x86_amd64.so   {model_name}_rx.ami")
+    print("Executable Windows_VisualStudio_32  {model_name}_rx_x86.dll        {model_name}_rx.ami")
+    print("Executable Windows_VisualStudio_64  {model_name}_rx_x86_amd64.dll  {model_name}_rx.ami")
+    print("[End Algorithmic Model]")
+    print("")
     print("[GND Clamp]")
     print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], -10., -10., -10.))
     for v in [k * voltage_range[0] for k in range(3)]:
@@ -134,6 +154,12 @@ else:
         i = v / array(impedance) / 2
         print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, -i[0], -i[1], -i[2]))
     print("")
+}
+
+
+@{
+print("[Temperature_Range]    %5.1f    %5.1f    %5.1f" % (temperature_range[0], temperature_range[1], temperature_range[2]))
+print("[Voltage_Range]        %5.2f    %5.2f    %5.2f" % (voltage_range[0],     voltage_range[1],     voltage_range[2]))
 }
 
 [END]
