@@ -248,9 +248,17 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         # Check for mutual exclusivity of 'Format Value' and 'Default'.
         elif (param_format == "Value") and (param_default is not None):
             self._msg += "'Format Value' and 'Default' both found! (They are mutually exclusive.)\n"
+        # Canonicalize Boolean if necessary.
+        elif (param_format == "List") and (param_type == "Boolean"):
+            if param_default:
+                self._value = param_default
+            else:
+                self._value = "False"
+            param_format = "Value"
+            self._format_rem = [self._value]
 
         # Check for 'Default' used with parameter type 'Out'.
-        if (param_type == "Out") and (param_default is not None):
+        if (param_usage == "Out") and (param_default is not None):
             raise AMIParamError("'Default' may not be used with parameter type 'Out'!\n")
 
         # Complete the instance.

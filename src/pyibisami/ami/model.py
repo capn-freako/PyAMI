@@ -159,6 +159,12 @@ class AMIModelInitializer:
                 if key in self._init_data:
                     self._init_data[key] = optional_args[key]
 
+    def __str__(self):
+        return "\n\t".join([
+            "AMIModelInitializer instance:",
+            f"`ami_params`: {self.ami_params}",
+            f"`info_params`: {self.ami_params}"])
+
     def _getChannelResponse(self):
         return list(map(float, self._init_data["channel_response"]))
 
@@ -317,20 +323,20 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             "bit_time"
         ]
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
-        assert self._info_params, RuntimeError(
-            f"`info_params` is None!\n`init_object: {init_object}"
-        )  # pylint: disable=attribute-defined-outside-init
 
         # Check GetWave() consistency if possible.
         if init_object.info_params and init_object.info_params["GetWave_Exists"]:
-            assert self._amiGetWave, RuntimeError(
-                "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
-            )
+            if not self._amiGetWave:
+                raise RuntimeError(
+                    "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
+                )
 
         # Construct the AMI parameters string.
         def sexpr(pname, pval):
             """Create an S-expression from a parameter name/value pair, calling
             recursively as needed to elaborate sub-parameter dictionaries."""
+            if isinstance(pval, str):
+                return f'({pname} "{pval}")'
             if isinstance(pval, dict):
                 subs = []
                 for sname in pval:
