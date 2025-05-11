@@ -83,9 +83,9 @@ if model_type.startswith("Input") or model_type == "Repeater":
 
 @{
 if model_type == "Repeater":
-print("[Repeater Pin]  tx_non_inv_pin")
-for n in range(3):
-    print(f"       {n + 4}p              {n + 1}p")
+    print("[Repeater Pin]  tx_non_inv_pin")
+    for n in range(3):
+        print(f"       {n + 4}p              {n + 1}p")
 }
 
 @{
