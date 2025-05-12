@@ -48,6 +48,7 @@ OF THIS MODEL, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 This IBIS file was generated using the template file: "generic.ibs.em".
 
 [Copyright]    @(copyright)
+
 [Component]    @(component)
 [Manufacturer] @(manufacturer)
 
@@ -64,11 +65,11 @@ print("C_pkg    %5.2fp   %5.2fp   %5.2fp" % (c_pkg[0] * 1.e12, c_pkg[1] * 1.e12,
 if model_type.startswith("Output") or model_type == "Repeater":
     for n in range(3):
         print(f"{n + 1}p     Tx_{n + 1}_P             {model_name}_Tx")
-        print(f"{n + 1}n     Tx_{n + 1}_N             Tx")
+        print(f"{n + 1}n     Tx_{n + 1}_N             {model_name}_Tx")
 if model_type.startswith("Input") or model_type == "Repeater":
     for n in range(3):
-        print(f"{n + 4}p     Tx_{n + 4}_P             Rx")
-        print(f"{n + 4}n     Tx_{n + 4}_N             Rx")
+        print(f"{n + 4}p     Rx_{n + 4}_P             {model_name}_Rx")
+        print(f"{n + 4}n     Rx_{n + 4}_N             {model_name}_Rx")
 }
 
 [Diff_Pin] inv_pin vdiff tdelay_typ tdelay_min tdelay_max
@@ -90,76 +91,86 @@ if model_type == "Repeater":
 
 @{
 if model_type.startswith("Output") or model_type == "Repeater":
-    print("[Model]   {model_name}_Tx")
-    print("Model_type   Output_diff
-    print("C_comp    %5.2fp   %5.2fp   %5.2fp" % (c_comp[0] * 1.e12, c_comp[1] * 1.e12, c_comp[2] * 1.e12))
-    print("Cref  = {}".format(c_ref))
-    print("Vref  = {}".format(v_ref))
-    print("Vmeas = {}".format(v_meas))
-    print("Rref  = {}".format(r_ref))
+    print(f"[Model]   {model_name}_Tx")
+    print("Model_type   Output")
+    print(f"C_comp    {c_comp[0]*1.e12:5.2f}p   {c_comp[1]*1.e12:5.2f}p   {c_comp[2]*1.e12:5.2f}p")
+    print(f"Cref  = {c_ref}")
+    print(f"Vref  = {v_ref}")
+    print(f"Vmeas = {v_meas}")
+    print(f"Rref  = {r_ref}")
     print("")
     print("[Algorithmic Model]")
-    print("Executable linux_gcc4.1.2_32        {model_name}_tx_x86.so         {model_name}_tx.ami")
-    print("Executable linux_gcc4.1.2_64        {model_name}_tx_x86_amd64.so   {model_name}_tx.ami")
-    print("Executable Windows_VisualStudio_32  {model_name}_tx_x86.dll        {model_name}_tx.ami")
-    print("Executable Windows_VisualStudio_64  {model_name}_tx_x86_amd64.dll  {model_name}_tx.ami")
+    print(f"Executable linux_gcc4.1.2_32        {model_name}_tx_x86.so         {model_name}_tx.ami")
+    print(f"Executable linux_gcc4.1.2_64        {model_name}_tx_x86_amd64.so   {model_name}_tx.ami")
+    print(f"Executable Windows_VisualStudio_32  {model_name}_tx_x86.dll        {model_name}_tx.ami")
+    print(f"Executable Windows_VisualStudio_64  {model_name}_tx_x86_amd64.dll  {model_name}_tx.ami")
     print("[End Algorithmic Model]")
     print("")
     print("[Pulldown]")
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], -10., -10., -10.))
+    print(f"{-1.*voltage_range[0]:-5.2f}    -10.0    -10.0    -10.0")
     for v in [k * voltage_range[0] for k in range(2)]:
         i = v / array(impedance)
-        print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, i[0], i[1], i[2]))
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (2. * voltage_range[0], 10., 10., 10.))
+        print(f"{v:-5.2f}    {i[0]:-10.3e}    {i[1]:-10.3e}    {i[2]:-10.3e}")
+    print(f"{2.*voltage_range[0]:-5.2f}    10.0    10.0    10.0")
 
     print("[Pullup]")
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], 10., 10., 10.))
+    print(f"{-1.*voltage_range[0]:-5.2f}    10.0    10.0    10.0")
     for v in [k * voltage_range[0] for k in range(2)]:
         i = -1. * v / array(impedance)
-        print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, i[0], i[1], i[2]))
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (2. * voltage_range[0], -10., -10., -10.))
+        print(f"{v:-5.2f}    {i[0]:-10.3e}    {i[1]:-10.3e}    {i[2]:-10.3e}")
+    print(f"{2.*voltage_range[0]:-5.2f}    -10.0    -10.0    -10.0")
 
     print("[Ramp]")
     dv = 0.6 * array([v * 50. / (50. + z) for (v, z) in zip(voltage_range, impedance)])
     dt = 1.e12 * dv / array(slew_rate)
-    print("dV/dt_r    %5.3f/%5.2fp    %5.3f/%5.2fp    %5.3f/%5.2fp" % (dv[0], dt[0], dv[1], dt[1], dv[2], dt[2]))
-    print("dV/dt_f    %5.3f/%5.2fp    %5.3f/%5.2fp    %5.3f/%5.2fp" % (dv[0], dt[0], dv[1], dt[1], dv[2], dt[2]))
+    print(f"dV/dt_r    {dv[0]:5.3f}/{dt[0]:5.2f}p    {dv[1]:5.3f}/{dt[1]:5.2f}p    {dv[2]:5.3f}/{dt[2]:5.2f}p")
+    print(f"dV/dt_f    {dv[0]:5.3f}/{dt[0]:5.2f}p    {dv[1]:5.3f}/{dt[1]:5.2f}p    {dv[2]:5.3f}/{dt[2]:5.2f}p")
     print("")
+    print("[GND Clamp]")
+    print(f"{-1.*voltage_range[0]:-5.2f}    0.0    0.0    0.0")
+    for v in [k * voltage_range[0] for k in range(3)]:
+        i = v / array(impedance) / 2
+        print(f"{v:-5.2f}    0.0  0.0  0.0")
+    print("")
+    print("[Power Clamp]")
+    print(f"{-1.*voltage_range[0]:-5.2f}    0.0    0.0    0.0")
+    for v in [k * voltage_range[0] for k in range(3)]:
+        i = v / array(impedance) / 2
+        print(f"{v:-5.2f}    0.0  0.0  0.0")
+    print("")
+    print(f"[Temperature_Range]    {temperature_range[0]:5.1f}    {temperature_range[1]:5.1f}    {temperature_range[2]:5.1f}")
+    print(f"[Voltage_Range]        {voltage_range[0]:5.2f}    {voltage_range[1]:5.2f}    {voltage_range[2]:5.2f}")
 }
 
 @{
 if model_type.startswith("Input") or model_type == "Repeater":
-    print("[Model]   {model_name}_Rx")
-    print("Model_type   Input_diff
-    print("C_comp    %5.2fp   %5.2fp   %5.2fp" % (c_comp[0] * 1.e12, c_comp[1] * 1.e12, c_comp[2] * 1.e12))
-    print("Vinl = {}".format(voltage_range[0] / 2. - 0.025))
-    print("Vinh = {}".format(voltage_range[0] / 2. + 0.025))
+    print(f"[Model]   {model_name}_Rx")
+    print("Model_type   Input")
+    print(f"C_comp    {c_comp[0]*1.e12:5.2f}p   {c_comp[1]*1.e12:5.2f}p   {c_comp[2]*1.e12:5.2f}p")
+    print(f"Vinl = {voltage_range[0]/2.-0.025}")
+    print(f"Vinh = {voltage_range[0]/2.+0.025}")
     print("")
     print("[Algorithmic Model]")
-    print("Executable linux_gcc4.1.2_32        {model_name}_rx_x86.so         {model_name}_rx.ami")
-    print("Executable linux_gcc4.1.2_64        {model_name}_rx_x86_amd64.so   {model_name}_rx.ami")
-    print("Executable Windows_VisualStudio_32  {model_name}_rx_x86.dll        {model_name}_rx.ami")
-    print("Executable Windows_VisualStudio_64  {model_name}_rx_x86_amd64.dll  {model_name}_rx.ami")
+    print(f"Executable linux_gcc4.1.2_32        {model_name}_rx_x86.so         {model_name}_rx.ami")
+    print(f"Executable linux_gcc4.1.2_64        {model_name}_rx_x86_amd64.so   {model_name}_rx.ami")
+    print(f"Executable Windows_VisualStudio_32  {model_name}_rx_x86.dll        {model_name}_rx.ami")
+    print(f"Executable Windows_VisualStudio_64  {model_name}_rx_x86_amd64.dll  {model_name}_rx.ami")
     print("[End Algorithmic Model]")
     print("")
     print("[GND Clamp]")
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], -10., -10., -10.))
+    print(f"{-1.*voltage_range[0]:-5.2f}    -10.0    -10.0    -10.0")
     for v in [k * voltage_range[0] for k in range(3)]:
         i = v / array(impedance) / 2
-        print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, i[0], i[1], i[2]))
+        print(f"{v:-5.2f}    {i[0]:-10.3e}    {i[1]:-10.3e}    {i[2]:-10.3e}")
     print("")
     print("[Power Clamp]")
-    print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (-1. * voltage_range[0], 10., 10., 10.))
+    print(f"{-1.*voltage_range[0]:-5.2f}    10.0    10.0    10.0")
     for v in [k * voltage_range[0] for k in range(3)]:
         i = v / array(impedance) / 2
-        print("%-5.2f    %-10.3e    %-10.3e    %-10.3e" % (v, -i[0], -i[1], -i[2]))
+        print(f"{v:-5.2f}    {-i[0]:-10.3e}    {-i[1]:-10.3e}    {-i[2]:-10.3e}")
     print("")
-}
-
-
-@{
-print("[Temperature_Range]    %5.1f    %5.1f    %5.1f" % (temperature_range[0], temperature_range[1], temperature_range[2]))
-print("[Voltage_Range]        %5.2f    %5.2f    %5.2f" % (voltage_range[0],     voltage_range[1],     voltage_range[2]))
+    print(f"[Temperature_Range]    {temperature_range[0]:5.1f}    {temperature_range[1]:5.1f}    {temperature_range[2]:5.1f}")
+    print(f"[Voltage_Range]        {voltage_range[0]:5.2f}    {voltage_range[1]:5.2f}    {voltage_range[2]:5.2f}")
 }
 
 [END]
