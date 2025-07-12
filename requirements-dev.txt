@@ -11,6 +11,7 @@ pylint
 pre-commit
 mypy
 tox
+build
 
 # Documentation tooling
 sphinx
