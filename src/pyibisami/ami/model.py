@@ -325,7 +325,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
 
         # Check GetWave() consistency if possible.
-        if init_object.info_params and init_object.info_params["GetWave_Exists"]:
+        if init_object.info_params and init_object.info_params["GetWave_Exists"] and init_object.info_params["GetWave_Exists"].pvalue:
             if not self._amiGetWave:
                 raise RuntimeError(
                     "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
