@@ -651,7 +651,7 @@ def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
                     val = default if default else param.pvalue[0]
                     the_trait = Enum([val] + param.pvalue)
             case _:
-                raise ValueError(f"Unrecognized AMI parameter format: {pformat}!")
+                raise ValueError(f"Unrecognized AMI parameter format: {pformat}, for parameter `{pname}` of type `{param.ptype}` and usage `{param.pusage}`!")
         if the_trait.metadata:
             the_trait.metadata.update({"transient": False})  # Required to support modal dialogs.
         else:

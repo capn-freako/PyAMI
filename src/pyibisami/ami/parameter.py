@@ -256,6 +256,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                 self._value = "False"
             param_format = "Value"
             self._format_rem = [self._value]
+        self._format = param_format
 
         # Check for 'Default' used with parameter type 'Out'.
         if (param_usage == "Out") and (param_default is not None):
@@ -282,7 +283,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                     self._value = False
                 else:
                     raise AMIParamError(f"Couldn't read Boolean from '{value_str}'.\n")
-            else:
+            else:  # `String`
                 self._value = value_str.strip('"')
         elif param_format == "Range":
             if param_type not in ("Float", "Integer", "UI", "Tap"):
