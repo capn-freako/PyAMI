@@ -15,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
-from traitsui.api import Group, HGroup, Item, VGroup, View
+from traitsui.api import Group, HFlow, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
 from .model                     import AMIModelInitializer
@@ -605,7 +605,7 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
         gui_items.extend(gui_item)
         new_traits.extend(new_trait)
 
-    return (HGroup(*gui_items), new_traits)
+    return (HFlow(*gui_items), new_traits)
 
 
 def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
