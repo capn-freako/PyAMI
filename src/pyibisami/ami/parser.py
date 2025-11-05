@@ -102,6 +102,12 @@ class AMIParamConfigurator(HasTraits):
          description,
          reserved_param_dict,
          model_specific_dict) = parse_ami_file_contents(ami_file_contents_str)
+        if err_str:
+            raise RuntimeError(
+                "\n".join([
+                    "AMI parsing error:",
+                    err_str
+                ]))
         if not reserved_param_dict:
             raise ValueError(
                 "\n".join([
@@ -338,10 +344,13 @@ def lexeme(p):
 def int2tap(x):
     """Convert integer to tap position."""
     x = x.strip()
-    if x[0] == "-":
-        res = "pre" + x[1:]
-    else:
-        res = "post" + x
+    match x[0]:
+        case "-":
+            res = "pre" + x[1:]
+        case "+":
+            res = "post" + x[1:]
+        case _:
+            res = "post" + x
     return res
 
 
@@ -350,7 +359,8 @@ rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 integ = lexeme(regex(r"[-+]?[0-9]+"))
 nat = lexeme(regex(r"[0-9]+"))
-tap_ix = (integ << whitespace).parsecmap(int2tap)
+# tap_ix = (integ << whitespace).parsecmap(int2tap)  # Doesn't work!
+tap_ix = integ.parsecmap(int2tap)
 symbol = lexeme(regex(r"[0-9a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
@@ -501,7 +511,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
     try:
         res = ami_parse(file_contents)
     except ParseError as pe:
-        err_str = ParseErrMsg(f"Expected {pe.expected} at {pe.loc()} in:\n{pe.text[pe.index:]}")
+        err_str = ParseErrMsg(f"Expected {pe.expected} at {pe.loc()} in:{pe.text[pe.index: pe.index + 20]}")
         return err_str, AmiRootName(""), "", {}, {}
 
     err_str, param_dict = proc_branch(res)
