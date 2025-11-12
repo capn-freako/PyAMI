@@ -107,6 +107,7 @@ def run_notebook(
 @click.option("--debug", is_flag=True, help="Provide extra debugging information.")
 @click.option("--is_tx", is_flag=True, help="Flags a Tx model.")
 @click.option("--nspui", default=32, show_default=True, help="Number of samples per unit interval.")
+@click.option("--no-nspui-swp", is_flag=True, help="Skip samples per UI sweep.")
 @click.option("--nbits", default=200, show_default=True, help="Number of bits to run in simulations.")
 @click.option("--plot-t-max", default=0.5e-9, show_default=True, help="Maximum time value for plots (s).")
 @click.option("--f-max",  default=40e9, show_default=True, help="Maximum frequency for transfer functions (Hz).")
@@ -117,18 +118,20 @@ def run_notebook(
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def main(notebook, out_dir, params, ibis_file, bit_rate, debug, is_tx, nspui, nbits,
+def main(notebook, out_dir, params, ibis_file, bit_rate,
+         debug, is_tx, nspui, no_nspui_swp, nbits,
          plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
     run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
-        out_dir=out_dir,
+        out_dir=Path(out_dir).resolve(),
         notebook_params={
             'ibis_dir': ".",
             'ibis_file': ibis_file,
             'debug': debug,
             'is_tx': is_tx,
             'nspui': nspui,
+            'no_nspui_swp': no_nspui_swp,
             'nbits': nbits,
             'plot_t_max': plot_t_max,
             'f_max': f_max,

@@ -332,16 +332,26 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 )
 
         # Construct the AMI parameters string.
-        def sexpr(pname, pval):
-            """Create an S-expression from a parameter name/value pair, calling
-            recursively as needed to elaborate sub-parameter dictionaries."""
+        def sexpr(pname: str, pval: Any) -> str:
+            """
+            Create an S-expression from a parameter name/value pair, calling
+            recursively as needed to elaborate sub-parameter dictionaries.
+
+            Args:
+                pname: Parameter name.
+                pval: Parameter value.
+
+            Returns:
+                A string containing the S-expression constructed.
+            """
             if isinstance(pval, str):
                 return f'({pname} "{pval}")'
             if isinstance(pval, dict):
                 subs = []
                 for sname in pval:
                     subs.append(sexpr(sname, pval[sname]))
-                return sexpr(pname, " ".join(subs))
+                # return sexpr(pname, " ".join(subs))
+                return f"({pname} {' '.join(subs)})"
             return f"({pname} {pval})"
 
         ami_params_in = f"({init_object.ami_params['root_name']} "
