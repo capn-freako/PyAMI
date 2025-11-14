@@ -209,7 +209,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
         elif mtype == "input":
             if "gnd_clamp" not in subDict and "power_clamp" not in subDict:
-                raise LookupError("Missing clamp curves!")
+                # raise LookupError("Missing clamp curves!")
+                pass
 
             plotdata = ArrayPlotData()
 
@@ -220,6 +221,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 plotdata.set_data("gc_ityps", gc_ityps)
                 plotdata.set_data("gc_imins", gc_imins)
                 plotdata.set_data("gc_imaxs", gc_imaxs)
+            else:
+                gc_z = 2e6
 
             if "power_clamp" in subDict:
                 pc_vs, pc_ityps, pc_imins, pc_imaxs, pc_zs = proc_iv(subDict["power_clamp"])
@@ -232,6 +235,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 plotdata.set_data("pc_ityps", pc_ityps)
                 plotdata.set_data("pc_imins", pc_imins)
                 plotdata.set_data("pc_imaxs", pc_imaxs)
+            else:
+                pc_z = 2e6
 
             plot_iv = Plot(plotdata)  # , padding_left=75)
             # The 'line_style' trait of a LinePlot instance must be 'dash' or 'dot dash' or 'dot' or 'long dash' or 'solid'.
