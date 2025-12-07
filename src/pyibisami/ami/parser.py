@@ -594,16 +594,42 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
     Notes:
         1. The dictionary passed through ``params`` may have sub-dictionaries.
         The window layout will reflect this nesting.
+        2. Some AMI files are written to encode the AMI parameter hierarchy
+        via some parameter naming scheme. This function makes a primitive attempt
+        to decode one particular example of this: ``<grp>_<param>``.
     """
 
     gui_items: list[Item | Group] = []
     new_traits: list[tuple[str, TraitType]] = []
+
+    # Place parameters with a common prefix in their names,
+    # but no pre-existing enclosing group, in a ``VGroup``.
+    # - Generate grouped parameter names and list of unique group names.
     pnames = list(params.keys())
-    pnames.sort()
-    for pname in pnames:
-        gui_item, new_trait = make_gui_items(pname, params[pname])
-        gui_items.extend(gui_item)
-        new_traits.extend(new_trait)
+    pnames_split = list(map(lambda n: n.split('_'), pnames))
+    group_names = list(map(lambda xs: xs[0], pnames_split))
+    grouped_pnames = list(zip(pnames, group_names))
+    # The following doesn't preserve the parameter ordering of the AMI file!
+    # for group_name in set(group_names):  # Iterate over unique group names.
+    unique_group_names = []
+    for group_name in group_names:
+        if group_name not in unique_group_names:
+            unique_group_names.append(group_name)
+    # - Process all parameters, trapping those from a non-explicit group for special processing.
+    for group_name in unique_group_names:
+        pnames_in_group = [pname for pname, grp_name in grouped_pnames if grp_name == group_name]
+        if len(pnames_in_group) > 1:
+            _gui_items: list[Item | Group] = []
+            for pname in pnames_in_group:
+                gui_item, new_trait = make_gui_items(pname, params[pname])
+                _gui_items.extend(gui_item)
+                new_traits.extend(new_trait)
+            gui_items.append(VGroup(*_gui_items, label=group_name, show_border=True))
+        else:
+            pname = pnames_in_group[0]
+            gui_item, new_trait = make_gui_items(pname, params[pname])
+            gui_items.extend(gui_item)
+            new_traits.extend(new_trait)
 
     return (HGroup(*gui_items), new_traits)
 
