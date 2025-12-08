@@ -91,8 +91,11 @@ def word(p):
 @generate("remainder of line")
 def rest_line():
     "Parse remainder of line."
-    chars = yield many(none_of("\n\r")) << ignore  # So that we still function as a lexeme.
-    return "".join(chars)
+    chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
+    rslt = "".join(chars)
+    if DEBUG:
+        print(f"rest_line(): {rslt}", flush=True)
+    return rslt
 
 
 skip_line = lexeme(rest_line).result("(Skipped.)")
@@ -348,6 +351,17 @@ def model():
 rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
 
 
+@generate("[Manufacturer]")
+def manufacturer():
+    "Parse manufacturer."
+    rslt = yield rest_line
+    if not rslt:
+        rslt = "(n/a)"
+    if DEBUG:
+        print(f"Manufacturer: {rslt}", flush=True)
+    return rslt
+
+
 @generate("[Package]")
 def package():
     "Parse package RLC values."
@@ -392,7 +406,7 @@ def pins():
 
 
 Component_keywords = {
-    "manufacturer": rest_line,
+    "manufacturer": manufacturer,
     "package": package,
     "pin": pins,
     "diff_pin": skip_keyword,
@@ -494,6 +508,9 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
             model_dict:
                 Dictionary containing keyword definitions (empty upon failure).
     """
+
+    global DEBUG  # pylint: disable=W0603
+    DEBUG = debug
 
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
