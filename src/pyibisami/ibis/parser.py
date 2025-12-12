@@ -93,8 +93,6 @@ def rest_line():
     "Parse remainder of line."
     chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
     rslt = "".join(chars)
-    if DEBUG:
-        print(f"rest_line(): {rslt}", flush=True)
     return rslt
 
 
@@ -165,9 +163,6 @@ def ratio():
     return None
 
 
-ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
-    ratio, 1, 3
-)
 ex_line = (
     word(string("Executable"))
     >> (  # noqa: W503
@@ -312,11 +307,21 @@ def end():
 
 
 # [Model]
+load_line = string("R_load = ") >> number
+
+ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
+    ratio, 1, 3
+)
+
+
 @generate("[Ramp]")
 def ramp():
     "Parse [Ramp]."
+    load = yield optional(load_line, 50)
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
-    return dict(lines)  # .update(dict(params))
+    rslt = dict(lines)
+    rslt.update({"load": load})
+    return rslt
 
 
 Model_keywords = {
