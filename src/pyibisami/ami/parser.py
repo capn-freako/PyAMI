@@ -632,7 +632,16 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
             gui_items.extend(gui_item)
             new_traits.extend(new_trait)
 
-    return (HGroup(*gui_items), new_traits)
+    # Finally, split into two rows if necessary.
+    MAX_ITEMS_PER_ROW = 8
+    if len(gui_items) > MAX_ITEMS_PER_ROW:
+        rslt_grp = VGroup(
+            HGroup(*(gui_items[:MAX_ITEMS_PER_ROW])),
+            HGroup(*(gui_items[MAX_ITEMS_PER_ROW:])))
+    else:
+        rslt_grp = HGroup(*gui_items)
+
+    return (rslt_grp, new_traits)
 
 
 def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
