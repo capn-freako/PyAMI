@@ -579,7 +579,7 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
                                   "Model_Specific":      model_specific_dict}})
 
 
-def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
+def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:  # pylint: disable=too-many-locals
     """
     Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
 

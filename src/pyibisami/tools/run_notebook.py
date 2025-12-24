@@ -120,7 +120,7 @@ def run_notebook(
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def main(notebook, out_dir, params, ibis_file, bit_rate,
+def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-many-locals
          debug, is_tx, nspui, no_nspui_swp, nbits,
          plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."

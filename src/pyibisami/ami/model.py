@@ -355,7 +355,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             return f"({pname} {pval})"
 
         root_name = init_object.ami_params['root_name']
-        self._root_name = root_name
+        self._root_name = root_name  # pylint: disable=attribute-defined-outside-init
         ami_params_in = f"({root_name} "
         for item in list(init_object.ami_params.items()):
             if not item[0] == "root_name":
@@ -626,11 +626,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     ami_params_in = property(_getAmiParamsIn, doc="The AMI parameter string passed to AMI_Init() by initialize().")
 
     def _getAmiParamsOut(self):
-        pout = self._ami_params_out.value
-        if pout:
-            return pout.decode()
-        else:
-            return f"({self.root_name} )"
+        pout: str = self._ami_params_out.value
+        if pout:  # pylint: disable=using-constant-test
+            return pout.decode()  # pylint: disable=no-member
+        return f"({self.root_name} )"
 
     ami_params_out = property(
         _getAmiParamsOut, doc="The AMI parameter string returned by either `AMI_Init()` or `AMI_GetWave()`."

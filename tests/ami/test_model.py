@@ -46,7 +46,7 @@ class Test_AMIModel(object):
             "(example_tx (tx_tap_units 27) (taps[0] 0) (taps[1] 27) (taps[2] 0) "
             "(taps[3] 0) (tap_weights_[0] -0) (tap_weights_[1] 1.0989) (tap_weights_[2] -0) "
             "(tap_weights_[3] -0)\n"
-        ).encode("utf-8")
+        )  #.encode("utf-8")
 
 
 class Test_AMIModelInitializer(object):
