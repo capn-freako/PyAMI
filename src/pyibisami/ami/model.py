@@ -354,7 +354,9 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 return f"({pname} {' '.join(subs)})"
             return f"({pname} {pval})"
 
-        ami_params_in = f"({init_object.ami_params['root_name']} "
+        root_name = init_object.ami_params['root_name']
+        self._root_name = root_name  # pylint: disable=attribute-defined-outside-init
+        ami_params_in = f"({root_name} "
         for item in list(init_object.ami_params.items()):
             if not item[0] == "root_name":
                 ami_params_in += sexpr(item[0], item[1])
@@ -551,7 +553,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
             rslt["out_resp_init"] = (t, h_init, s_init, p_init, f, H_init)
 
-        if calc_getw and self.info_params["GetWave_Exists"]:
+        if calc_getw and self.info_params["GetWave_Exists"].pvalue:
             # Get model's step response.
             rng = default_rng()
             u = np.concatenate(
@@ -580,6 +582,11 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             rslt["out_resp_getw"] = (t, h_getw, s_getw, p_getw, f, H_getw)
 
         return rslt
+
+    @property
+    def root_name(self):
+        """AMI parameter tree root name."""
+        return self._root_name
 
     def _getInitOut(self):
         return list(map(float, self._initOut))
@@ -619,7 +626,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     ami_params_in = property(_getAmiParamsIn, doc="The AMI parameter string passed to AMI_Init() by initialize().")
 
     def _getAmiParamsOut(self):
-        return self._ami_params_out.value
+        pout: str = self._ami_params_out.value
+        if pout:  # pylint: disable=using-constant-test
+            return pout.decode()  # pylint: disable=no-member
+        return f"({self.root_name} )"
 
     ami_params_out = property(
         _getAmiParamsOut, doc="The AMI parameter string returned by either `AMI_Init()` or `AMI_GetWave()`."

@@ -91,8 +91,9 @@ def word(p):
 @generate("remainder of line")
 def rest_line():
     "Parse remainder of line."
-    chars = yield many(none_of("\n\r")) << ignore  # So that we still function as a lexeme.
-    return "".join(chars)
+    chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
+    rslt = "".join(chars)
+    return rslt
 
 
 skip_line = lexeme(rest_line).result("(Skipped.)")
@@ -162,9 +163,6 @@ def ratio():
     return None
 
 
-ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
-    ratio, 1, 3
-)
 ex_line = (
     word(string("Executable"))
     >> (  # noqa: W503
@@ -309,11 +307,21 @@ def end():
 
 
 # [Model]
+load_line = string("R_load = ") >> number
+
+ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
+    ratio, 1, 3
+)
+
+
 @generate("[Ramp]")
 def ramp():
     "Parse [Ramp]."
+    load = yield optional(load_line, 50)
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
-    return dict(lines)  # .update(dict(params))
+    rslt = dict(lines)
+    rslt.update({"load": load})
+    return rslt
 
 
 Model_keywords = {
@@ -346,6 +354,17 @@ def model():
 
 # [Component]
 rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
+
+
+@generate("[Manufacturer]")
+def manufacturer():
+    "Parse manufacturer."
+    rslt = yield rest_line
+    if not rslt:
+        rslt = "(n/a)"
+    if DEBUG:
+        print(f"Manufacturer: {rslt}", flush=True)
+    return rslt
 
 
 @generate("[Package]")
@@ -392,7 +411,7 @@ def pins():
 
 
 Component_keywords = {
-    "manufacturer": rest_line,
+    "manufacturer": manufacturer,
     "package": package,
     "pin": pins,
     "diff_pin": skip_keyword,
@@ -494,6 +513,9 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
             model_dict:
                 Dictionary containing keyword definitions (empty upon failure).
     """
+
+    global DEBUG  # pylint: disable=W0603
+    DEBUG = debug
 
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.

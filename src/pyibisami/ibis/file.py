@@ -139,7 +139,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait("comp", Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
-        self.pins = self.get_pins()  # the thing above it (file) can't change.
+        self.pins = self.get_pins()                                     # the thing above it (file) can't change.
         self.add_trait("pin", Enum(self.pins[0], values="pins"))
         (mname, _) = self.pin_
         self.models = self.get_models(mname)
@@ -191,7 +191,8 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     def __call__(self):
         """Present a customized GUI to the user, for model selection, etc."""
-        self.edit_traits(kind="livemodal")
+        # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
+        self.configure_traits()
 
     # Logger & Pop-up
     def log(self, msg, alert=False):
@@ -228,7 +229,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             resizable=False,
             buttons=ModalButtons,
             title="PyBERT IBIS Model Selector",
-            id="pybert.pybert_ami.model_selector",
+            id="pybert_ibis_model_selector",
         )
         return view
 

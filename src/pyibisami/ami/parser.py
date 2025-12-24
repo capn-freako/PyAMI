@@ -15,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
-from traitsui.api import Group, HFlow, Item, VGroup, View
+from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
 from .model                     import AMIModelInitializer
@@ -360,7 +360,8 @@ number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 integ = lexeme(regex(r"[-+]?[0-9]+"))
 nat = lexeme(regex(r"[0-9]+"))
 # tap_ix = (integ << whitespace).parsecmap(int2tap)  # Doesn't work!
-tap_ix = integ.parsecmap(int2tap)
+# tap_ix = integ.parsecmap(int2tap)  # Breaks parsing of node names that begin with a numeral!
+tap_ix = integ.parsecmap(int2tap) << whitespace
 symbol = lexeme(regex(r"[0-9a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
@@ -578,7 +579,7 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
                                   "Model_Specific":      model_specific_dict}})
 
 
-def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
+def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:  # pylint: disable=too-many-locals
     """
     Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
 
@@ -594,18 +595,53 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[TraitType]]:
     Notes:
         1. The dictionary passed through ``params`` may have sub-dictionaries.
         The window layout will reflect this nesting.
+        2. Some AMI files are written to encode the AMI parameter hierarchy
+        via some parameter naming scheme. This function makes a primitive attempt
+        to decode one particular example of this: ``<grp>_<param>``.
     """
 
     gui_items: list[Item | Group] = []
     new_traits: list[tuple[str, TraitType]] = []
-    pnames = list(params.keys())
-    pnames.sort()
-    for pname in pnames:
-        gui_item, new_trait = make_gui_items(pname, params[pname])
-        gui_items.extend(gui_item)
-        new_traits.extend(new_trait)
 
-    return (HFlow(*gui_items), new_traits)
+    # Place parameters with a common prefix in their names,
+    # but no pre-existing enclosing group, in a ``VGroup``.
+    # - Generate grouped parameter names and list of unique group names.
+    pnames = list(params.keys())
+    pnames_split = list(map(lambda n: n.split('_'), pnames))
+    group_names = list(map(lambda xs: xs[0], pnames_split))
+    grouped_pnames = list(zip(pnames, group_names))
+    # The following doesn't preserve the parameter ordering of the AMI file!
+    # for group_name in set(group_names):  # Iterate over unique group names.
+    unique_group_names = []
+    for group_name in group_names:
+        if group_name not in unique_group_names:
+            unique_group_names.append(group_name)
+    # - Process all parameters, trapping those from a non-explicit group for special processing.
+    for group_name in unique_group_names:
+        pnames_in_group = [pname for pname, grp_name in grouped_pnames if grp_name == group_name]
+        if len(pnames_in_group) > 1:
+            _gui_items: list[Item | Group] = []
+            for pname in pnames_in_group:
+                gui_item, new_trait = make_gui_items(pname, params[pname])
+                _gui_items.extend(gui_item)
+                new_traits.extend(new_trait)
+            gui_items.append(VGroup(*_gui_items, label=group_name, show_border=True))
+        else:
+            pname = pnames_in_group[0]
+            gui_item, new_trait = make_gui_items(pname, params[pname])
+            gui_items.extend(gui_item)
+            new_traits.extend(new_trait)
+
+    # Finally, split into two rows if necessary.
+    MAX_ITEMS_PER_ROW = 8
+    if len(gui_items) > MAX_ITEMS_PER_ROW:
+        rslt_grp = VGroup(
+            HGroup(*(gui_items[:MAX_ITEMS_PER_ROW])),
+            HGroup(*(gui_items[MAX_ITEMS_PER_ROW:])))
+    else:
+        rslt_grp = HGroup(*gui_items)
+
+    return (rslt_grp, new_traits)
 
 
 def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches

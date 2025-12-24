@@ -13,6 +13,8 @@ Copyright (c) 2025 David Banas; all rights reserved World wide.
 import os
 from pathlib    import Path
 import subprocess
+import sys
+import shlex
 from time       import time
 from typing     import Any, Optional
 
@@ -118,10 +120,12 @@ def run_notebook(
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def main(notebook, out_dir, params, ibis_file, bit_rate,
+def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-many-locals
          debug, is_tx, nspui, no_nspui_swp, nbits,
          plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
+    arguments_list = sys.argv
+    full_command_line = "run-notebook " + " ".join(shlex.quote(arg) for arg in arguments_list[1:])
     run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
         out_dir=Path(out_dir).resolve(),
@@ -140,6 +144,7 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,
             'fig_y': fig_y,
             'bit_rate': bit_rate,
             'params': params,
+            'full_command_line': full_command_line,
         })
 
 
