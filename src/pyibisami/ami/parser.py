@@ -696,6 +696,8 @@ def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
                 else:
                     val = default if default else param.pvalue[0]
                     the_trait = Enum([val] + param.pvalue)
+            case "Corner":
+                the_trait = Trait(param.pvalue[0])  # Using `Typ` value, for now.
             case _:
                 raise ValueError(f"Unrecognized AMI parameter format: {pformat}, for parameter `{pname}` of type `{param.ptype}` and usage `{param.pusage}`!")
         if the_trait.metadata:

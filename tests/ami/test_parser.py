@@ -54,6 +54,12 @@ def test_ami_config():
              (Range 0 0 10 )
              (Description "Second post-tap." )
          )
+         (corner_test
+             (Usage In )
+             (Type Integer )
+             (Format Corner 1 0 2 )
+             (Description "Dummy parameter, using `Corner` formatting." )
+         )
     )
 
 )
@@ -78,7 +84,7 @@ class TestAMIParse:
         ami = ami_parser.AMIParamConfigurator(test_ami_config)
         assert ami._root_name == "example_tx"
         assert ami._ami_parsing_errors == ""
-        test_keys = ("tx_tap_units", "tx_tap_np1", "tx_tap_nm1", "tx_tap_nm2")
+        test_keys = ("tx_tap_units", "tx_tap_np1", "tx_tap_nm1", "tx_tap_nm2", "corner_test")
         assert all(key in ami.ami_param_defs["Model_Specific"] for key in test_keys)
         assert ami.ami_param_defs["Model_Specific"]["tx_tap_units"].pvalue == 27
         assert ami.ami_param_defs["Reserved_Parameters"]["AMI_Version"].pvalue == "5.1"
