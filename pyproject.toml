@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyibis-ami"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "7.3.2"
+version = "7.3.3"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           ]
 readme = "README.md"
@@ -84,6 +84,11 @@ ignore = [
     "D107", # Missing docstring in __init__
 ]
 
+[tool.ruff]
+exclude = [
+    "*.ipynb"
+]
+
 [[tool.mypy.overrides]]
 module = [
     "chaco.*",
@@ -99,3 +104,24 @@ module = [
     "traitsui.*"
 ]
 ignore_missing_imports = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+publish-url = "https://upload.pypi.org/legacy/"
+
+[[tool.uv.index]]
+name = "test"
+url = "https://test.pypi.org/simple"
+publish-url = "https://test.pypi.org/legacy/"
+
+[dependency-groups]
+dev = [
+    "m2r2>=0.3.4",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-xdist>=3.8.0",
+    "sphinx>=8.1.3",
+    "sphinx-rtd-theme>=3.1.0",
+    "typing-extensions>=4.15.0",
+]

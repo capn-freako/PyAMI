@@ -5,18 +5,14 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check tox format lint flake8 type-check docs upload test clean distclean
+.PHONY: dflt help check lint type-check docs build upload upload_test test310 test311 test312 test clean distclean
 
-PROJ_NAME := pyibis_ami
-PROJ_FILE := pyproject.toml
-PROJ_INFO := src/${PROJ_NAME}.egg-info/PKG-INFO
-VER_FILE := proj_ver
-VER_GETTER := ./get_proj_ver.py
-PYTHON_EXEC := python -I
-TOX_EXEC := tox
-TOX_SKIP_ENV := format
-PYVERS := 310 311 312
-PLATFORMS := lin mac win
+SRC_DIR := src/pyibisami
+DOCS_DIR := docs
+UV_EXEC := uv
+UVX_EXEC := uvx --isolated
+PYVERS := 3.10 3.11 3.12
+PROJ_VER := $(shell ${UV_EXEC} version | cut -f 2 -d ' ') 
 
 # Put it first so that "make" without arguments is like "make help".
 dflt: help
@@ -25,48 +21,34 @@ dflt: help
 $(MAKEFILE_LIST): ;
 
 check:
-	${TOX_EXEC} run -e check
-
-# Auto-versioning should now be complete, even for docs generation.
-${VER_FILE}: ${PROJ_INFO}
-	${PYTHON_EXEC} ${VER_GETTER} ${PROJ_NAME} $@
-
-${PROJ_INFO}: ${PROJ_FILE}
-	${PYTHON_EXEC} -m build
-	${PYTHON_EXEC} -m pip install -e .
-
-# For the most part, this makefile is just a switching junction for Tox.
-tox:
-	TOX_SKIP_ENV="${TOX_SKIP_ENV}" ${TOX_EXEC} -m test
-
-format:
-	${TOX_EXEC} run -e format
+	${UVX_EXEC} -w packaging>=24.2 validate-pyproject pyproject.toml
 
 lint:
-	${TOX_EXEC} run -e lint
-
-flake8:
-	${TOX_EXEC} run -e flake8
+	${UVX_EXEC} ruff check ${SRC_DIR}
+	${UVX_EXEC} flake8 --ignore=E501,E272,E241,E222,E221 ${SRC_DIR}
 
 type-check:
-	${TOX_EXEC} run -e type-check
+	${UVX_EXEC} -w mypy python -m mypy ${SRC_DIR}
 
-docs: ${VER_FILE}
-	. ./$< && ${TOX_EXEC} run -e docs
+docs:
+	pushd ${DOCS_DIR}; PROJ_VER=${PROJ_VER} ${UV_EXEC} run sphinx-build -j auto -b html source/ build/; popd
 
-build: ${VER_FILE}
-	${TOX_EXEC} run -e build
-	${PYTHON_EXEC} -m pip freeze >requirements.txt
+build:
+	${UV_EXEC} build --clear --no-create-gitignore
 
-upload: ${VER_FILE}
-	. ./$< && ${TOX_EXEC} run -e upload
+upload: build
+	${UVX_EXEC} uv-publish --repo pypi dist/*
 
-test:
-	@for V in ${PYVERS}; do \
-		for P in ${PLATFORMS}; do \
-			${TOX_EXEC} run -e "py$$V-$$P"; \
-		done; \
-	done
+upload_test: build
+	${UVX_EXEC} uv-publish --repo testpypi dist/*
+
+test310:
+	${UV_EXEC} run --python 3.10 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
+test311:
+	${UV_EXEC} run --python 3.11 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
+test312:
+	${UV_EXEC} run --python 3.12 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
+test: test310 test311 test312
 
 clean:
 	rm -rf .tox build/ docs/build/ .mypy_cache .pytest_cache .venv src/*.egg-info
@@ -76,25 +58,18 @@ distclean: clean
 
 help:
 	@echo "Available targets:"
-	@echo ""
-	@echo "\tPip Targets"
-	@echo "\t==========="
-	@echo "\ttox: Run all Tox environments."
+	@echo "=================="
 	@echo "\tcheck: Validate the 'pyproject.toml' file."
-	@echo "\tformat: Run Tox 'format' environment."
-	@echo "\t\tThis will run EXTREME reformatting on the code. Use with caution!"
-	@echo "\tlint: Run Tox 'lint' environment. (Runs 'pylint' on the source code.)"
-	@echo "\tflake8: Run Tox 'flake8' environment. (Runs 'flake8' on the source code.)"
-	@echo "\ttype-check: Run Tox 'type-check' environment. (Runs 'mypy' on the source code.)"
-	@echo "\tdocs: Run Tox 'docs' environment. (Runs 'sphinx' on the source code.)"
+	@echo "\tlint: Run 'ruff' and 'flake8' over the source code."
+	@echo "\ttype-check: Run type checking, via 'mypy', on the source code."
+	@echo "\tdocs: Run 'sphinx' on the source code, to generate documentation."
 	@echo "\t\tTo view the resultant API documentation, open 'docs/build/index.html' in a browser."
-	@echo "\tupload: Run Tox 'upload' environment."
-	@echo "\t\tUploads source tarball and wheel to PyPi."
-	@echo "\t\t(Only David Banas can do this.)"
-	@echo "\ttest: Run Tox testing for all supported Python versions."
+	@echo "\tbuild: Build both the source tarball and wheel."
+	@echo "\tupload: Upload both the source tarball and wheel to PyPi."
+	@echo "\tupload_test: Upload both the source tarball and wheel to TestPyPi."
+	@echo "\ttest310: Run tests, using Python 3.10."
+	@echo "\ttest311: Run tests, using Python 3.11."
+	@echo "\ttest312: Run tests, using Python 3.12."
+	@echo "\ttest: Run tests, using all above Python versions."
 	@echo "\tclean: Remove all previous build results, virtual environments, and cache contents."
 	@echo "\tdistclean: Runs a 'make clean' and removes 'dist/'."
-	@echo ""
-	@echo "\tMisc. Targets"
-	@echo "\t============="
-	@echo "\tcheck: Test the project TOML file integrity."
