@@ -5,7 +5,7 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check lint type-check docs build upload upload_test test310 test311 test312 test clean distclean
+.PHONY: dflt help check format lint type-check docs build upload upload_test test310 test311 test312 test clean distclean
 
 SRC_DIR := src/pyibisami
 DOCS_DIR := docs
@@ -13,6 +13,7 @@ UV_EXEC := uv
 UVX_EXEC := uvx --isolated
 PYVERS := 3.10 3.11 3.12
 PROJ_VER := $(shell ${UV_EXEC} version | cut -f 2 -d ' ') 
+TEST_EXP ?= tests
 
 # Put it first so that "make" without arguments is like "make help".
 dflt: help
@@ -22,6 +23,10 @@ $(MAKEFILE_LIST): ;
 
 check:
 	${UVX_EXEC} -w packaging>=24.2 validate-pyproject pyproject.toml
+
+format:
+	${UVX_EXEC} isort src/ tests/
+	${UVX_EXEC} black src/ tests/
 
 lint:
 	${UVX_EXEC} ruff check ${SRC_DIR}
@@ -42,13 +47,12 @@ upload: build
 upload_test: build
 	${UVX_EXEC} uv-publish --repo testpypi dist/*
 
-test310:
-	${UV_EXEC} run --python 3.10 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
-test311:
-	${UV_EXEC} run --python 3.11 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
-test312:
-	${UV_EXEC} run --python 3.12 pytest -vv --cov=pyibisami --cov-report=html --cov-report=term-missing tests ${TEST_EXP}
-test: test310 test311 test312
+test:
+	@for VERSION in $(PYVERS); do \
+        $(UV_EXEC) run --python $$VERSION pytest -vv \
+            --cov=pyibisami --cov-report=html \
+            --cov-report=term-missing $(TEST_EXP); \
+    done
 
 clean:
 	rm -rf .tox build/ docs/build/ .mypy_cache .pytest_cache .venv src/*.egg-info
@@ -60,6 +64,7 @@ help:
 	@echo "Available targets:"
 	@echo "=================="
 	@echo "\tcheck: Validate the 'pyproject.toml' file."
+	@echo "\tformat: Reformats all Python source code. USE CAUTION!"
 	@echo "\tlint: Run 'ruff' and 'flake8' over the source code."
 	@echo "\ttype-check: Run type checking, via 'mypy', on the source code."
 	@echo "\tdocs: Run 'sphinx' on the source code, to generate documentation."
