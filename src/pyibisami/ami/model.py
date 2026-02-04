@@ -626,7 +626,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     ami_params_in = property(_getAmiParamsIn, doc="The AMI parameter string passed to AMI_Init() by initialize().")
 
     def _getAmiParamsOut(self):
-        pout: str = self._ami_params_out.value
+        pout = self._ami_params_out.value
         if pout:  # pylint: disable=using-constant-test
             return pout.decode()  # pylint: disable=no-member
         return f"({self.root_name} )"

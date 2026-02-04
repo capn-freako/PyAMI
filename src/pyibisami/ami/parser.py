@@ -33,8 +33,7 @@ ParamValues: TypeAlias = dict[ParamName, "'ParamValue'   | 'ParamValues'"]
 
 AmiName = NewType("AmiName", str)
 AmiAtom: TypeAlias = bool | int | float | str
-AmiExpr: TypeAlias = "'AmiAtom' | 'AmiNode'"
-AmiNode: TypeAlias = tuple[AmiName, list[AmiExpr]]
+AmiNode: TypeAlias = tuple[AmiName, list[AmiAtom] | list['AmiNode']]
 AmiNodeParser: TypeAlias = Callable[[str], AmiNode]
 AmiParser:     TypeAlias = Callable[[str], tuple[AmiName, list[AmiNode]]]  # Atoms may not exist at the root level.
 
@@ -45,7 +44,7 @@ ModelSpecificDict: TypeAlias = dict[ParamName, "'AMIParameter' | 'ModelSpecificD
 
 __all__ = [
     "ParamName", "ParamValue", "Parameters", "ParamValues",
-    "AmiName", "AmiAtom", "AmiExpr", "AmiNode", "AmiNodeParser", "AmiParser",
+    "AmiName", "AmiAtom", "AmiNode", "AmiNodeParser", "AmiParser",
     "ami_parse", "AMIParamConfigurator"]
 
 #####
