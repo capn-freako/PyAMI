@@ -7,7 +7,9 @@ Original date:   December 17, 2016
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 
+from __future__     import annotations
 from ctypes         import c_double
+from dataclasses    import dataclass
 import re
 from typing         import Any, Callable, NewType, Optional, TypeAlias
 
@@ -31,12 +33,25 @@ ParamValue:  TypeAlias = int | float | str | list["ParamValue"]
 Parameters:  TypeAlias = dict[ParamName, "'AMIParameter' | 'Parameters'"]
 ParamValues: TypeAlias = dict[ParamName, "'ParamValue'   | 'ParamValues'"]
 
+# AMI parameter tree structure.
 AmiName = NewType("AmiName", str)
 AmiAtom: TypeAlias = bool | int | float | str
-AmiNode: TypeAlias = tuple[AmiName, list[AmiAtom] | list['AmiNode']]
+
+@dataclass(frozen=True)
+class AmiLeaf:
+    name: AmiName
+    values: list[AmiAtom]
+
+@dataclass(frozen=True)
+class AmiBranch:
+    name: AmiName
+    children: list["AmiNode"]
+
+AmiNode:       TypeAlias = AmiLeaf | AmiBranch
 AmiNodeParser: TypeAlias = Callable[[str], AmiNode]
 AmiParser:     TypeAlias = Callable[[str], tuple[AmiName, list[AmiNode]]]  # Atoms may not exist at the root level.
 
+# Local definitions.
 ParseErrMsg = NewType("ParseErrMsg", str)
 AmiRootName = NewType("AmiRootName", str)
 ReservedParamDict: TypeAlias = dict[AmiReservedParameterName, AMIParameter]
