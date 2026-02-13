@@ -37,15 +37,18 @@ ParamValues: TypeAlias = dict[ParamName, "'ParamValue'   | 'ParamValues'"]
 AmiName = NewType("AmiName", str)
 AmiAtom: TypeAlias = bool | int | float | str
 
+
 @dataclass(frozen=True)
 class AmiLeaf:
     name: AmiName
     values: list[AmiAtom]
 
+
 @dataclass(frozen=True)
 class AmiBranch:
     name: AmiName
     children: list["AmiNode"]
+
 
 AmiNode:       TypeAlias = AmiLeaf | AmiBranch
 AmiNodeParser: TypeAlias = Callable[[str], AmiNode]

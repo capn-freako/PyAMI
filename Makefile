@@ -5,7 +5,7 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check format lint type-check docs build upload upload_test test310 test311 test312 test clean distclean
+.PHONY: dflt help check format lint type-check docs build upload upload_test test clean distclean
 
 SRC_DIR := src/pyibisami
 DOCS_DIR := docs
