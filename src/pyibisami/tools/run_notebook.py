@@ -26,8 +26,8 @@ NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
 def run_notebook(
     ibis_file: Path,
     notebook: Path,
+    notebook_params: dict[str, Any],
     out_dir: Optional[Path] = None,
-    notebook_params: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Run a Jupyter notebook on the target IBIS-AMI model.
@@ -36,12 +36,11 @@ def run_notebook(
         ibis_file: The ``*.ibs`` file to test.
             (Presumably, an IBIS-AMI model.)
         notebook: The *Jupyter* notebook to use for testing the model.
+        notebook_params: A dictionary of parameter overrides for the notebook.
 
     Keyword Args:
         out_dir: The directory into which to place the resultant HTML file.
             Default: None (Use the directory containing the ``*.ibs`` file.)
-        notebook_params: An optional dictionary of parameter overrides for the notebook.
-            Default: None
     """
 
     start_time = time()
@@ -72,15 +71,15 @@ def run_notebook(
     print(f"sending HTML output to: {html_file}...")
 
     try:
-        extra_args = []
-        if notebook_params:
-            extra_args = [tok for item in notebook_params.items()
-                              for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
+        # This unconventional syntax avoids the need for flattening a list of lists.
+        extra_args = [tok for item in notebook_params.items()
+                          for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
         subprocess.run(['papermill', str(notebook), str(tmp_notebook)] + extra_args, check=True)
     except Exception:
         print(f"notebook: {notebook}")
         print(f"tmp_notebook: {tmp_notebook}")
         raise
+
     subprocess.run(
         ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
         check=True)
@@ -126,9 +125,11 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
     arguments_list = sys.argv
     full_command_line = "run-notebook " + " ".join(shlex.quote(arg) for arg in arguments_list[1:])
+    if out_dir:
+        out_dir=Path(out_dir).resolve()
     run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
-        out_dir=Path(out_dir).resolve(),
+        out_dir=out_dir,
         notebook_params={
             'ibis_dir': ".",
             'ibis_file': ibis_file,
