@@ -20,14 +20,71 @@ from typing     import Any, Optional
 
 import click
 
+from ..ami.parser import AMIParamConfigurator, ParamName
+from ..ibis.file  import IBISModel
+
 NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
+
+
+def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
+    """
+    Create a parameter sweep specification template file for an IBIS-AMI model.
+
+    Args:
+        ibis_file: The ``*.ibs`` file defining the IBIS-AMI model of interest.
+        is_tx: True for Tx model.
+        debug: True for debugging mode.
+
+    Returns:
+        The path to the created parameter sweep specification template file.
+    """
+
+    # Import the `*.ibs` file.
+    try:
+        ibis = IBISModel(ibis_file, is_tx, debug=debug, gui=False)
+        dName = ibis_file.parent
+        assert ibis.ami_file, RuntimeError(
+            "Missing AMI file definition in IBIS file!"
+        )
+        ami_file = dName / ibis.ami_file
+    except Exception as err:
+        raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
+
+    # Import the `*.ami` file.
+    try:
+        with open(ami_file, mode="r", encoding="utf-8") as pfile:
+            pcfg = AMIParamConfigurator(pfile.read())
+    except Exception as err:
+        raise RuntimeError(f"Failed to open/import AMI file: {ami_file}!") from err
+    if pcfg.ami_parsing_errors:
+        print(f"Non-fatal parsing errors:\n{pcfg.ami_parsing_errors}")
+
+    # Write parameter sweep specification template file.
+    root_name = str(pcfg.input_ami_params[ParamName("root_name")])
+    run_file_path = Path(root_name + ".run").resolve()
+    with open(run_file_path, mode="wt", encoding="utf-8") as run_file:
+        run_file.write(f"Template for specifying `{root_name}` parameter sweeps.\n")
+        run_file.write("\n('Defaults', \\\n")
+        run_file.write(
+            ", \\\n   ".join(
+                [f"  ({{'root_name' : '{root_name}'"] +
+                [f" '{ami_param_name}': {pcfg.input_ami_params[ami_param_name]}"
+                    for ami_param_name in pcfg.input_ami_params
+                    if ami_param_name != "root_name"
+                ] +
+                ["}, {} \\\n"]
+                ))
+        run_file.write("  ) \\\n")
+        run_file.write(")\n")
+
+    return run_file_path
 
 
 def run_notebook(
     ibis_file: Path,
     notebook: Path,
+    notebook_params: dict[str, Any],
     out_dir: Optional[Path] = None,
-    notebook_params: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Run a Jupyter notebook on the target IBIS-AMI model.
@@ -36,12 +93,11 @@ def run_notebook(
         ibis_file: The ``*.ibs`` file to test.
             (Presumably, an IBIS-AMI model.)
         notebook: The *Jupyter* notebook to use for testing the model.
+        notebook_params: A dictionary of parameter overrides for the notebook.
 
     Keyword Args:
         out_dir: The directory into which to place the resultant HTML file.
             Default: None (Use the directory containing the ``*.ibs`` file.)
-        notebook_params: An optional dictionary of parameter overrides for the notebook.
-            Default: None
     """
 
     start_time = time()
@@ -51,6 +107,14 @@ def run_notebook(
         raise RuntimeError(f"Can't find IBIS-AMI model file, {ibis_file}!")
     if not notebook.exists():
         raise RuntimeError(f"Can't find notebook file, {notebook}!")
+    if "params" not in notebook_params or notebook_params["params"] == "":
+        dummy_run_file_name = mk_dummy_run_file(
+            ibis_file, notebook_params["is_tx"], notebook_params["debug"])
+        notebook_params["params"] = dummy_run_file_name
+        print("\nNOTE: Since you provided no parameter sweep information,")
+        print(f'a "dummy" sweep file has been created: {dummy_run_file_name}.')
+        print("You may use this file as a template for creating parameter sweep specifications.")
+        print("")
 
     # Define temp. (i.e. - parameterized) notebook and output file locations.
     tmp_dir = (
@@ -72,15 +136,15 @@ def run_notebook(
     print(f"sending HTML output to: {html_file}...")
 
     try:
-        extra_args = []
-        if notebook_params:
-            extra_args = [tok for item in notebook_params.items()
-                              for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
+        # This unconventional syntax avoids the need for flattening a list of lists.
+        extra_args = [tok for item in notebook_params.items()
+                          for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
         subprocess.run(['papermill', str(notebook), str(tmp_notebook)] + extra_args, check=True)
     except Exception:
         print(f"notebook: {notebook}")
         print(f"tmp_notebook: {tmp_notebook}")
         raise
+
     subprocess.run(
         ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
         check=True)
@@ -126,9 +190,11 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
     arguments_list = sys.argv
     full_command_line = "run-notebook " + " ".join(shlex.quote(arg) for arg in arguments_list[1:])
+    if out_dir:
+        out_dir=Path(out_dir).resolve()
     run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
-        out_dir=Path(out_dir).resolve(),
+        out_dir=out_dir,
         notebook_params={
             'ibis_dir': ".",
             'ibis_file': ibis_file,

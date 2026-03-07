@@ -1,0 +1,22 @@
+Template for specifying `example_rx` parameter sweeps.
+
+('Defaults', \
+  ({'root_name' : 'example_rx', \
+    'ctle_mode': 0, \
+    'ctle_freq': 5000000000.0, \
+    'ctle_mag': 0.0, \
+    'ctle_bandwidth': 12000000000.0, \
+    'ctle_dcgain': 0.0, \
+    'dfe_mode': 0, \
+    'dfe_ntaps': 5, \
+    'dfe_tap1': 0.0, \
+    'dfe_tap2': 0.0, \
+    'dfe_tap3': 0.0, \
+    'dfe_tap4': 0.0, \
+    'dfe_tap5': 0.0, \
+    'dfe_vout': 1.0, \
+    'dfe_gain': 0.1, \
+    'debug': {'dbg_enable': False, 'dump_dfe_adaptation': False, 'dump_adaptation_input': False}, \
+   }, {} \
+  ) \
+)

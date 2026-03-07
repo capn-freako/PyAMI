@@ -16,6 +16,7 @@ dependencies = [
     "empy>=3.3.4",
     "importlib_resources",
     "jupyter",
+    "lxml-html-clean>=0.4.4",
     "matplotlib>=3.6.1",
     "numpy>=1.26,<1.27",
     "papermill",
