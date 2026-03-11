@@ -98,6 +98,7 @@ class AMIModelInitializer:
 
     _init_data = {
         "channel_response": (c_double * 128)(0.0, 1.0, 0.0),
+        "interconnect_network": None,
         "row_size": 128,
         "num_aggressors": 0,
         "sample_interval": c_double(25.0e-12),
@@ -120,6 +121,14 @@ class AMIModelInitializer:
             crosstalk (FEXT) channels.
 
             Default) a single 128 element vector containing an ideal impulse
+
+        - interconnect_network
+            a 2-port *SciKit-RF* network describing only the external
+            interconnect between Tx and Rx.
+            Used in conjunction with the model's own internal analog
+            termination, to form the complete analog channel response.
+
+            Default) None
 
         - row_size
             integer giving the size of the rows in ``channel_response``.
@@ -149,15 +158,11 @@ class AMIModelInitializer:
         self.ami_params.update(ami_params)
         self.info_params = info_params
 
-        # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
-        # before ``channel_response``, since ``channel_response`` depends upon ``sample_interval``,
-        # when ``h`` is a file name, and overwrites ``row_size``, in any case.
-        keys = list(optional_args.keys())
-        keys.sort(reverse=True)
-        if keys:
-            for key in keys:
-                if key in self._init_data:
-                    self._init_data[key] = optional_args[key]
+        for key in optional_args.keys():
+            if key in self._init_data:
+                self._init_data[key] = optional_args[key]
+            else:
+                raise KeyError(f"Unrecognized keyword argument: {key}!")
 
     def __str__(self):
         return "\n\t".join([
