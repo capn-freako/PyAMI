@@ -5,7 +5,7 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check format lint type-check docs build upload upload_test test310 test311 test312 test clean distclean
+.PHONY: dflt help check format lint type-check docs build upload upload_test test clean distclean
 
 SRC_DIR := src/pyibisami
 DOCS_DIR := docs
@@ -39,7 +39,7 @@ docs:
 	pushd ${DOCS_DIR}; PROJ_VER=${PROJ_VER} ${UV_EXEC} run sphinx-build -j auto -b html source/ build/; popd
 
 build:
-	${UV_EXEC} build --clear --no-create-gitignore
+	${UV_EXEC} build --clear --no-create-gitignore --out-dir dist
 
 upload: build
 	${UVX_EXEC} uv-publish --repo pypi dist/*
@@ -72,9 +72,6 @@ help:
 	@echo "\tbuild: Build both the source tarball and wheel."
 	@echo "\tupload: Upload both the source tarball and wheel to PyPi."
 	@echo "\tupload_test: Upload both the source tarball and wheel to TestPyPi."
-	@echo "\ttest310: Run tests, using Python 3.10."
-	@echo "\ttest311: Run tests, using Python 3.11."
-	@echo "\ttest312: Run tests, using Python 3.12."
-	@echo "\ttest: Run tests, using all above Python versions."
+	@echo "\ttest: Run tests, using all supported Python versions."
 	@echo "\tclean: Remove all previous build results, virtual environments, and cache contents."
 	@echo "\tdistclean: Runs a 'make clean' and removes 'dist/'."
