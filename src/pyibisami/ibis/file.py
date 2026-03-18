@@ -140,7 +140,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait("comp", Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
         self.pins = self.get_pins()                                     # the thing above it (file) can't change.
-        self.add_trait("pin", Enum(self.pins[0], values="pins"))
+        try:
+            self.add_trait("pin", Enum(self.pins[0], values="pins"))
+        except Exception as err:
+            raise ValueError(f"self.pins: {self.pins}") from err
         (mname, _) = self.pin_
         self.models = self.get_models(mname)
         self.add_trait("mod", Enum(self.models[0], values="models"))
