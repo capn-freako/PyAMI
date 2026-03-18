@@ -61,7 +61,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
 
     # Write parameter sweep specification template file.
     root_name = str(pcfg.input_ami_params[ParamName("root_name")])
-    run_file_path = Path(root_name + ".run").resolve()
+    run_file_path = (Path("test_runs") / Path(root_name) / Path("defaults").with_suffix(".run")).resolve()
     with open(run_file_path, mode="wt", encoding="utf-8") as run_file:
         run_file.write(f"Template for specifying `{root_name}` parameter sweeps.\n")
         run_file.write("\n('Defaults', \\\n")
@@ -84,7 +84,7 @@ def run_notebook(
     ibis_file: Path,
     notebook: Path,
     notebook_params: dict[str, Any],
-    out_dir: Optional[Path] = None,
+    out_dir: Path
 ) -> None:
     """
     Run a Jupyter notebook on the target IBIS-AMI model.
@@ -94,10 +94,7 @@ def run_notebook(
             (Presumably, an IBIS-AMI model.)
         notebook: The *Jupyter* notebook to use for testing the model.
         notebook_params: A dictionary of parameter overrides for the notebook.
-
-    Keyword Args:
         out_dir: The directory into which to place the resultant HTML file.
-            Default: None (Use the directory containing the ``*.ibs`` file.)
     """
 
     start_time = time()
@@ -107,6 +104,8 @@ def run_notebook(
         raise RuntimeError(f"Can't find IBIS-AMI model file, {ibis_file}!")
     if not notebook.exists():
         raise RuntimeError(f"Can't find notebook file, {notebook}!")
+    if not out_dir.exists():
+        raise RuntimeError(f"Can't find output directory, {out_dir}!")
     if "params" not in notebook_params or notebook_params["params"] == "":
         dummy_run_file_name = mk_dummy_run_file(
             ibis_file, notebook_params["is_tx"], notebook_params["debug"])
@@ -126,14 +125,13 @@ def run_notebook(
     tmp_dir = Path(tmp_dir)
     tmp_dir.mkdir(exist_ok=True)
     tmp_notebook = tmp_dir.joinpath(notebook.stem + "_papermill").with_suffix(".ipynb")
-    out_dir = out_dir or ibis_file.resolve().parent
-    out_dir.mkdir(exist_ok=True)
     html_file = Path(out_dir.joinpath(ibis_file.name)).with_suffix(".html")
 
     # Run the notebook.
     print(f"Testing IBIS-AMI model: {ibis_file},")
-    print(f"using notebook: {notebook},")
-    print(f"sending HTML output to: {html_file}...")
+    print(f"\tusing notebook: {notebook},")
+    print(f"\twith parameter sweeps: {notebook_params["params"]},")
+    print(f"\tsending HTML output to: {html_file}...")
 
     try:
         # This unconventional syntax avoids the need for flattening a list of lists.
@@ -178,8 +176,8 @@ def run_notebook(
 @click.option("--plot-t-max", default=0.5e-9, show_default=True, help="Maximum time value for plots (s).")
 @click.option("--f-max",  default=40e9, show_default=True, help="Maximum frequency for transfer functions (Hz).")
 @click.option("--f-step", default=10e6, show_default=True, help="Frequency step for transfer functions (Hz).")
-@click.option("--fig-x", default=10, show_default=True, help="x-dimmension for plot figures (in).")
-@click.option("--fig-y", default=3, show_default=True, help="y-dimmension for plot figures (in).")
+@click.option("--fig-x", default=10, show_default=True, help="x-dimension for plot figures (in).")
+@click.option("--fig-y", default=3, show_default=True, help="y-dimension for plot figures (in).")
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
@@ -191,7 +189,10 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
     arguments_list = sys.argv
     full_command_line = "run-notebook " + " ".join(shlex.quote(arg) for arg in arguments_list[1:])
     if out_dir:
-        out_dir=Path(out_dir).resolve()
+        out_dir = Path(out_dir).resolve()
+    else:
+        out_dir = Path(ibis_file).resolve().parent
+    out_dir.mkdir(exist_ok=True)
     run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
         out_dir=out_dir,

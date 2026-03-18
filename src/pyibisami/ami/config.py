@@ -41,9 +41,14 @@ from typing import Any, NewType
 import click
 import em
 
-ParamDict      = NewType("ParamDict",      dict[str, Any])
-NamedParamDict = NewType("NamedParamDict", tuple[str, ParamDict])
+from ..ami.parser import ParamValues
+
+# ParamDict      = NewType("ParamDict",      dict[str, Any])
+# ParamDict      = NewType("ParamDict",      dict[str, ParamValues])
+# NamedParamDict = NewType("NamedParamDict", tuple[str, ParamDict])
+NamedParamDict = NewType("NamedParamDict", tuple[str, ParamValues])
 TestDefinition = NewType("TestDefinition", tuple[str, NamedParamDict, NamedParamDict, str])
+# tuple[str, tuple[str, ParamValues], tuple[str, dict[Never, Never]], str]
 
 param_types = {
     "INT": {"c_type": "int", "ami_type": "Integer", "getter": "get_param_int"},
@@ -128,8 +133,10 @@ def print_code(pname, param):
 
 
 def mk_model(
-    ibis_params: ParamDict,
-    ami_params: ParamDict,
+    # ibis_params: ParamDict,
+    # ami_params: ParamDict,
+    ibis_params: ParamValues,
+    ami_params: ParamValues,
     model_name: str,
     description: str,
     out_dir: str = "."

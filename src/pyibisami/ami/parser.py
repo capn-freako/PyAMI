@@ -29,8 +29,8 @@ from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_
 # ParamValues = NewType('ParamValues', dict[str, list[Any]]    | dict[str, 'ParamValues'])
 # See: https://stackoverflow.com/questions/70894567/using-mypy-newtype-with-type-aliases-or-protocols
 ParamName  = NewType("ParamName", str)
-ParamValue:  TypeAlias = int | float | str | list["ParamValue"]
 Parameters:  TypeAlias = dict[ParamName, "'AMIParameter' | 'Parameters'"]
+ParamValue:  TypeAlias = int | float | str | list["ParamValue"]
 ParamValues: TypeAlias = dict[ParamName, "'ParamValue'   | 'ParamValues'"]
 
 # AMI parameter tree structure.
