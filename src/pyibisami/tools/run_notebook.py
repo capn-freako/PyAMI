@@ -62,6 +62,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
     # Write parameter sweep specification template file.
     root_name = str(pcfg.input_ami_params[ParamName("root_name")])
     run_file_path = (Path("test_runs") / Path(root_name) / Path("defaults").with_suffix(".run")).resolve()
+    run_file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(run_file_path, mode="wt", encoding="utf-8") as run_file:
         run_file.write(f"Template for specifying `{root_name}` parameter sweeps.\n")
         run_file.write("\n('Defaults', \\\n")
@@ -130,7 +131,7 @@ def run_notebook(
     # Run the notebook.
     print(f"Testing IBIS-AMI model: {ibis_file},")
     print(f"\tusing notebook: {notebook},")
-    print(f"\twith parameter sweeps: {notebook_params["params"]},")
+    print(f"\twith parameter sweeps: {notebook_params['params']},")
     print(f"\tsending HTML output to: {html_file}...")
 
     try:
