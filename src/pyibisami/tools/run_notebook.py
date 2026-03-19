@@ -15,6 +15,7 @@ from pathlib    import Path
 import subprocess
 import sys
 import shlex
+from tempfile   import NamedTemporaryFile
 from time       import time
 from typing     import Any, Optional
 
@@ -117,15 +118,10 @@ def run_notebook(
         print("")
 
     # Define temp. (i.e. - parameterized) notebook and output file locations.
-    tmp_dir = (
-        os.environ.get("TMP") or os.environ.get("TEMP") or  # noqa: W504
-        (Path(os.environ.get("HOME")).joinpath("tmp")  # type: ignore
-            if os.environ.get("HOME")
-            else "/tmp")
-    )
-    tmp_dir = Path(tmp_dir)
-    tmp_dir.mkdir(exist_ok=True)
-    tmp_notebook = tmp_dir.joinpath(notebook.stem + "_papermill").with_suffix(".ipynb")
+    tmp_notebook = NamedTemporaryFile(
+        suffix='.ipynb',
+        prefix=(notebook.stem + "_papermill"),
+        delete_on_close=False)
     html_file = Path(out_dir.joinpath(ibis_file.name)).with_suffix(".html")
 
     # Run the notebook.
@@ -134,19 +130,15 @@ def run_notebook(
     print(f"\twith parameter sweeps: {notebook_params['params']},")
     print(f"\tsending HTML output to: {html_file}...")
 
-    try:
-        # This unconventional syntax avoids the need for flattening a list of lists.
-        extra_args = [tok for item in notebook_params.items()
-                          for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
-        subprocess.run(['papermill', str(notebook), str(tmp_notebook)] + extra_args, check=True)
-    except Exception:
-        print(f"notebook: {notebook}")
-        print(f"tmp_notebook: {tmp_notebook}")
-        raise
-
-    subprocess.run(
-        ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
-        check=True)
+    # This unconventional syntax avoids the need for flattening a list of lists.
+    extra_args = [tok for item in notebook_params.items()
+                      for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
+    
+    with tmp_notebook as tmp_file:
+        subprocess.run(['papermill', str(notebook), tmp_notebook.name] + extra_args, check=True)
+        subprocess.run(
+            ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook.name],
+            check=True)
 
     run_time = int(time() - start_time)  # integer seconds
     hours, rem_secs  = divmod(run_time, 3600)
