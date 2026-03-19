@@ -10,14 +10,13 @@ Original Date:   January 31, 2025
 Copyright (c) 2025 David Banas; all rights reserved World wide.
 """
 
-import os
 from pathlib    import Path
 import subprocess
 import sys
 import shlex
 from tempfile   import NamedTemporaryFile
 from time       import time
-from typing     import Any, Optional
+from typing     import Any
 
 import click
 
@@ -69,13 +68,12 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
         run_file.write("\n('Defaults', \\\n")
         run_file.write(
             ", \\\n   ".join(
-                [f"  ({{'root_name' : '{root_name}'"] +
+                [f"  ({{'root_name' : '{root_name}'"] +  # noqa: W504
                 [f" '{ami_param_name}': {pcfg.input_ami_params[ami_param_name]}"
                     for ami_param_name in pcfg.input_ami_params
-                    if ami_param_name != "root_name"
-                ] +
+                    if ami_param_name != "root_name"] +  # noqa: W504
                 ["}, {} \\\n"]
-                ))
+            ))
         run_file.write("  ) \\\n")
         run_file.write(")\n")
 
@@ -133,8 +131,8 @@ def run_notebook(
     # This unconventional syntax avoids the need for flattening a list of lists.
     extra_args = [tok for item in notebook_params.items()
                       for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
-    
-    with tmp_notebook as tmp_file:
+
+    with tmp_notebook:
         subprocess.run(['papermill', str(notebook), tmp_notebook.name] + extra_args, check=True)
         subprocess.run(
             ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook.name],
