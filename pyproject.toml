@@ -21,6 +21,7 @@ dependencies = [
     "numpy>=1.26,<1.27",
     "papermill",
     "parsec>=3.15",
+    "reportlab>=4.4.10",
     "scipy>=1.9",
 ]
 keywords=["ibis-ami"]

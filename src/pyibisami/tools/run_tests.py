@@ -18,75 +18,7 @@ import numpy as np
 
 from pyibisami.ami.model    import AMIModel
 from pyibisami.common       import TestSweep
-
-
-def plot_name(tst_name, n=0):
-    """Plot name generator keeps multiple tests from overwriting each other's
-    plots."""
-    while True:
-        n += 1
-        yield f"{tst_name}_plot_{n}.png"
-
-
-def hsv2rgb(hue=0, saturation=1.0, value=1.0):
-    """Convert a HSV number to and RGB one."""
-    if value < 0:
-        value = 0.0
-    elif value > 1.0:
-        value = 1.0
-    if saturation == 0:
-        return (value, value, value)
-    if saturation < 0:
-        saturation = 0
-    elif saturation > 1.0:
-        saturation = 1.0
-    hue = hue % 360
-    H = float(hue)
-    S = float(saturation)
-    V = float(value)
-    H_i = np.floor(H / 60.0)
-    f = (H / 60.0) - H_i
-    p = V * (1.0 - S)
-    q = V * (1.0 - f * S)
-    t = V * (1.0 - (1.0 - f) * S)
-    if H_i == 0:
-        R = V
-        G = t
-        B = p
-    elif H_i == 1:
-        R = q
-        G = V
-        B = p
-    elif H_i == 2:
-        R = p
-        G = V
-        B = t
-    elif H_i == 3:
-        R = p
-        G = q
-        B = V
-    elif H_i == 4:
-        R = t
-        G = p
-        B = V
-    else:
-        R = V
-        G = p
-        B = q
-    return (R, G, B)
-
-
-def color_picker(num_hues=3, first_hue=0):
-    """Yields pairs of colors having the same hue, but different intensities.
-
-    The first color is fully bright and saturated, and the second is
-    half bright and half saturated. Originally, the intent was to have
-    the second color used for the `reference` waveform in plots.
-    """
-    hue = first_hue
-    while True:
-        yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.75, 0.75))
-        hue += 360 // num_hues
+from pyibisami.util.tool_helpers import plot_name, color_picker
 
 
 def expand_params(input_parameters: str) -> list[TestSweep]:
