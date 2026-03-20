@@ -133,3 +133,6 @@ examples/test_results/*
 
 # Sublime
 *.sublime-workspace
+
+# Local stuff
+local/

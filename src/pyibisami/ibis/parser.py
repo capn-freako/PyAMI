@@ -307,7 +307,7 @@ def end():
 
 
 # [Model]
-load_line = string("R_load = ") >> number
+load_line = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << skip_line
 
 ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
     ratio, 1, 3
