@@ -28,7 +28,7 @@ from reportlab.pdfgen import canvas
 from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table
 
 import pyibisami
-from ..util.reportlab_combinators import title_page
+from ..util.reportlab_combinators import get_ibis_contents, title_page
 
 # Define the PDF document dimensions and grab some pre-defined styles.
 PAGE_WIDTH, PAGE_HEIGHT = letter
@@ -40,7 +40,7 @@ spacer = Spacer(1, 0.25*inch)
 
 
 def test_ibis_ami_models(
-    ibis_file: Path, bit_rate: float, models_to_test: Optional[list[str]] = None,
+    ibis_file: Path, bit_rate: float, model: Optional[str] = None,
     debug: bool = False
 ) -> None:
     """
@@ -51,7 +51,7 @@ def test_ibis_ami_models(
         bit_rate: The bit rate to use for testing.
 
     Keyword Args:
-        models_to_test: List of model names to test.
+        model: Name of model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
         debug: Include debugging output when ``True``.
             Default = ``False``
@@ -80,6 +80,10 @@ def test_ibis_ami_models(
         # title page
         pages = title_page(ibis_file)
 
+        # Fetch/print IBIS file contents.
+        model, flowables = get_ibis_contents(ibis_file)
+        pages.extend(flowables)
+
         # golden parser results
         pages.append(Paragraph("IBIS Golden Parser Results", styles['Heading1']))
         pages.append(page_break)
@@ -97,12 +101,13 @@ def test_ibis_ami_models(
 @click.command(context_settings={"ignore_unknown_options": False,
                                  "help_option_names": ["-h", "--help"]})
 @click.option("--debug", is_flag=True, help="Provide extra debugging information.")
+@click.option("--model", type=str, default=None, help="Limit testing to just the named model.")
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("bit_rate", type=float)
 @click.version_option(package_name="PyIBIS-AMI")
-def main(ibis_file, bit_rate, debug):
+def main(ibis_file, bit_rate, model, debug):
     ibis_file_path = Path(ibis_file, exists=True).resolve()
-    test_ibis_ami_models(ibis_file_path, bit_rate, debug=debug)
+    test_ibis_ami_models(ibis_file_path, bit_rate, debug=debug, model=model)
 
 
 if __name__ == "__main__":

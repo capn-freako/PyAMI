@@ -45,9 +45,9 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     The intended use model is as follows:
 
      1. Instantiate this class only once per IBIS model file.
-        When instantiating, provide the unprocessed contents of the IBIS
-        file, as a single string. This class will take care of getting
-        that string parsed properly, and report any errors or warnings
+        When instantiating, provide the name of the IBIS file.
+        This class will take care of opening that file,
+        parsing its contents, and reporting any errors or warnings
         it encounters, in its ``ibis_parsing_errors`` property.
 
      2. When you want to let the user select a particular component/pin/model,
