@@ -23,12 +23,13 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Flowable, PageBreak, Paragraph, Spacer
 
 from ..ami.model import AMIModel
+from ..ami.parser import AMIParamConfigurator
 from ..ibis.file import IBISModel
 from ..ibis.model import Model
 
 styles = getSampleStyleSheet()
 page_break = PageBreak()
-
+spacer = Spacer(inch, 0.2*inch)
 
 def preformatted(text: str) -> str:
     """
@@ -182,15 +183,50 @@ def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
     if not ami_files:
         return [Paragraph(f"Error: Model does not provide AMI files for this machine/system combination: {machine}/{system}!", styles['Normal'])]
 
+    # Attempt to create the AMI model and its configurator.
     dll_file, ami_file = list(map(lambda f: ibis_file_dir / Path(f), ami_files))
     try:
         ami_model = AMIModel(str(dll_file))
     except Exception as err:
         return [Paragraph(err, styles['Normal'])] + [Paragraph(f"Error loading AMI DLL/SO: {dll_file}!", styles['Normal'])]
+    try:
+        with open(ami_file, mode="r", encoding="utf-8") as pfile:
+            pcfg = AMIParamConfigurator(pfile.read())
+        if pcfg.ami_parsing_errors:
+            flowables.append(
+                Paragraph(preformatted(f"Non-fatal AMI file parsing errors:\n{pcfg.ami_parsing_errors}"),
+                          styles['Normal']))
+        has_getwave = pcfg.fetch_param_val(["Reserved_Parameters", "GetWave_Exists"]) or False
+        ignore_bits = pcfg.fetch_param_val(["Reserved_Parameters", "Ignore_Bits"]) or 0
+        returns_impulse = pcfg.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"]) or False
+        has_ts4 = True if pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]) else False
+        root_name = pcfg.input_ami_params["root_name"]
+    except Exception as err:
+        flowables.append(Paragraph(err, styles['Normal']))
+        flowables.append(Paragraph(f"Error loading AMI parameter file: {ami_file}!", styles['Normal']))
+        return flowables
 
-    return [Paragraph("So far, so good.", styles['Normal'])]
+    # Summarize results.
+    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", styles['Heading3'])]
+    flowables.append(Paragraph("Model import was successful.", styles['Normal']))
+    if has_getwave:
+        flowables.append(Paragraph("Model has a `AMI_GetWave()` function.", styles['Normal']))
+        flowables.append(Paragraph(f"&nbsp;&nbsp;The first {ignore_bits} returned bits should be ignored.", styles['Normal']))
+    else:
+        flowables.append(Paragraph("Model has no `AMI_GetWave()` function.", styles['Normal']))
+    if returns_impulse:
+        flowables.append(Paragraph("Model's `AMI_Init()` function returns an impulse response.", styles['Normal']))
+    else:
+        flowables.append(Paragraph("Model's `AMI_Init()` function does not return an impulse response.", styles['Normal']))
+    if has_ts4:
+        flowables.append(Paragraph("Model includes on-die S-parameters.", styles['Normal']))
+    else:
+        flowables.append(Paragraph("Model does not include on-die S-parameters.", styles['Normal']))
+
+    return flowables
 
     # Test w/ perfect channel.
+    channel_response = array([1.0] + [0. for n in range(row_size - 1)]) / sample_interval  # Kronecker delta
 
     # - Init() vs. GetWave()
     # - samples per bit
