@@ -400,5 +400,17 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     @property
     def mtype(self):
-        """Model type."""
+        "Model type."
         return self._mtype
+
+    @property
+    def is_ami(self):
+        "AMI model flag."
+        return ("algorithmic_model" in self._subDict)
+
+    @property
+    def ami_files(self):
+        return {
+            "32-bit": {"lin": self._exec32Lins, "win": self._exec32Wins},
+            "64-bit": {"lin": self._exec64Lins, "win": self._exec64Wins}
+        }

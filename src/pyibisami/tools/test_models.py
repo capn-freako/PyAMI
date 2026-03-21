@@ -25,10 +25,15 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table
+from reportlab.platypus import (
+    Flowable, Image, PageBreak, Paragraph,
+    Preformatted, SimpleDocTemplate, Spacer, Table)
 
 import pyibisami
-from ..util.reportlab_combinators import get_ibis_contents, title_page
+from ..util.reportlab_combinators import(
+    get_ibis_contents, golden_parser_results, model_test_results,
+    preformatted, title_page,
+)
 
 # Define the PDF document dimensions and grab some pre-defined styles.
 PAGE_WIDTH, PAGE_HEIGHT = letter
@@ -40,7 +45,7 @@ spacer = Spacer(1, 0.25*inch)
 
 
 def test_ibis_ami_models(
-    ibis_file: Path, bit_rate: float, model: Optional[str] = None,
+    ibis_file: Path, bit_rate: float, model_name: Optional[str] = None,
     debug: bool = False
 ) -> None:
     """
@@ -51,13 +56,14 @@ def test_ibis_ami_models(
         bit_rate: The bit rate to use for testing.
 
     Keyword Args:
-        model: Name of model to test.
+        model_name: Name of model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
         debug: Include debugging output when ``True``.
             Default = ``False``
     """
 
-    pdf_filename = str((ibis_file.parent / (ibis_file.stem + "_test_results")).with_suffix('.pdf'))
+    ibis_file_dir = ibis_file.parent
+    pdf_filename = str((ibis_file_dir / (ibis_file.stem + "_test_results")).with_suffix('.pdf'))
     title = Paragraph(f"<em>PyIBIS-AMI</em> v{pyibisami.__version__} - IBIS-AMI Model Testing Report", title_style)
     pageinfo = f"Model Testing Report for: {ibis_file}"
 
@@ -81,16 +87,14 @@ def test_ibis_ami_models(
         pages = title_page(ibis_file)
 
         # Fetch/print IBIS file contents.
-        model, flowables = get_ibis_contents(ibis_file)
+        ibis_model, flowables = get_ibis_contents(ibis_file)
         pages.extend(flowables)
 
         # golden parser results
-        pages.append(Paragraph("IBIS Golden Parser Results", styles['Heading1']))
-        pages.append(page_break)
+        pages.extend(golden_parser_results(ibis_file))
 
-        # pages.append(image)
-        # pages.append(spacer)
-        # pages.append(table)
+        # individual model test results
+        pages.extend(model_test_results(ibis_file_dir, ibis_model, bit_rate, model_name, debug))
 
         doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 
@@ -107,7 +111,7 @@ def test_ibis_ami_models(
 @click.version_option(package_name="PyIBIS-AMI")
 def main(ibis_file, bit_rate, model, debug):
     ibis_file_path = Path(ibis_file, exists=True).resolve()
-    test_ibis_ami_models(ibis_file_path, bit_rate, debug=debug, model=model)
+    test_ibis_ami_models(ibis_file_path, bit_rate, debug=debug, model_name=model)
 
 
 if __name__ == "__main__":

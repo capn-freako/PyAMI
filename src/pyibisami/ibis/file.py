@@ -34,6 +34,7 @@ from traitsui.message import message
 
 from pyibisami.ibis.parser import parse_ibis_file
 
+# ToDo: The ``is_tx`` flag, as well as the AMI files should have _model_, not _file_, scope.
 
 class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     """HasTraits subclass for wrapping and interacting with an IBIS model.
