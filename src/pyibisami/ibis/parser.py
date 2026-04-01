@@ -12,6 +12,8 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 import re
 
+from typing import Any, Generator, Iterable, Optional, TypeAlias, TypeVar
+
 from parsec import (
     ParseError,
     Parser,
@@ -35,6 +37,9 @@ from parsec import (
 from pyibisami.ibis.model import Component, Model
 
 DEBUG = False
+
+T = TypeVar('T')
+GenParser: TypeAlias = Generator[Parser, Any, T]
 
 # Parser Definitions
 
@@ -71,7 +76,7 @@ def logf(p: Parser, preStr: str = "") -> Parser:
     return fn
 
 
-def lexeme(p):
+def lexeme(p: Parser) -> Parser:
     """Lexer for words.
 
     Skips all ignored characters after word, including newlines.
@@ -79,7 +84,7 @@ def lexeme(p):
     return p << ignore
 
 
-def word(p):
+def word(p: Parser) -> Parser:
     """Line limited word lexer.
 
     Only skips space after words; dosen't skip comments or newlines.
@@ -89,25 +94,25 @@ def word(p):
 
 
 @generate("remainder of line")
-def rest_line():
+def rest_line() -> GenParser[str]:  # type: ignore
     "Parse remainder of line."
     chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
     rslt = "".join(chars)
     return rslt
 
 
-skip_line = lexeme(rest_line).result("(Skipped.)")
-name_only = regex(r"[_a-zA-Z0-9/\.()#-]+")
-name = word(name_only)
-symbol = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
-true = lexeme(string("True")).result(True)
-false = lexeme(string("False")).result(False)
-quoted_string = lexeme(regex(r'"[^"]*"'))
-skip_keyword = (skip_line >> many(none_of("[") >> skip_line)).result(
+skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
+name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
+name: Parser = word(name_only)
+symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
+true: Parser = lexeme(string("True")).result(True)
+false: Parser = lexeme(string("False")).result(False)
+quoted_string: Parser = lexeme(regex(r'"[^"]*"'))
+skip_keyword: Parser = (skip_line >> many(none_of("[") >> skip_line)).result(
     "(Skipped.)"
 )  # Skip over everything until the next keyword begins.
 
-IBIS_num_suf = {
+IBIS_num_suf: dict[str, str] = {
     "T": "e12",
     "k": "e3",
     "n": "e-9",
@@ -121,7 +126,7 @@ IBIS_num_suf = {
 
 
 @generate("number")
-def number():
+def number() -> GenParser[float]:
     "Parse an IBIS numerical value."
     s = yield (regex(r"[-+]?[0-9]*\.?[0-9]+(([eE][-+]?[0-9]+)|([TknGmpMuf][a-zA-Z]*))?") << many(letter()) << ignore)
     m = re.search(r"[^\d]+$", s)
@@ -137,11 +142,11 @@ def number():
     return res
 
 
-na = word(string("NA") | string("na")).result(None)
+na: Parser = word(string("NA") | string("na")).result(None)
 
 
 @generate("typminmax")
-def typminmax():
+def typminmax() -> GenParser[list[float]]:
     "Parse Typ/Min/Max values."
     typ = yield number
     minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
@@ -151,11 +156,11 @@ def typminmax():
     return res
 
 
-vi_line = (number + typminmax) << ignore
+vi_line: Parser = (number + typminmax) << ignore
 
 
 @generate("ratio")
-def ratio():
+def ratio() -> GenParser[Optional[float]]:
     "Parse ratio."
     [num, den] = yield (separated(number, string("/"), 2, maxt=2, end=False) | na.result([0, 0]))
     if den:
@@ -163,7 +168,7 @@ def ratio():
     return None
 
 
-ex_line = (
+ex_line: Parser = (
     word(string("Executable"))
     >> (  # noqa: W503
         (
@@ -180,11 +185,11 @@ ex_line = (
 )
 
 
-def manyTrue(p):
+def manyTrue(p: Parser) -> Parser:
     "Run a parser multiple times, filtering ``False`` results."
 
     @generate("manyTrue")
-    def fn():
+    def fn() -> GenParser[list[T]]:
         "many(p) >> filter(True)"
         nodes = yield many(p)
         res = list(filter(None, nodes))
@@ -193,11 +198,11 @@ def manyTrue(p):
     return fn
 
 
-def many1True(p):
+def many1True(p: Parser) -> Parser:
     "Run a parser at least once, filtering ``False`` results."
 
     @generate("many1True")
-    def fn():
+    def fn() -> GenParser[list[T]]:
         "many1(p) >> filter(True)"
         nodes = yield many1(p)
         res = list(filter(None, nodes))
@@ -209,7 +214,7 @@ def many1True(p):
 # IBIS file parser:
 
 
-def keyword(kywrd=""):
+def keyword(kywrd="") -> Parser:
     """Parse an IBIS keyword.
 
     Keyword Args:
@@ -222,7 +227,7 @@ def keyword(kywrd=""):
     """
 
     @generate("IBIS keyword")
-    def fn():
+    def fn() -> GenParser[str]:
         "Parse IBIS keyword."
         yield regex(r"^\[", re.MULTILINE)
         wordlets = yield sepBy1(name_only, one_of(" _"))  # ``name`` gobbles up trailing space, which we don't want.
@@ -232,14 +237,14 @@ def keyword(kywrd=""):
         if kywrd:
             if res.lower() == kywrd.lower():
                 return res
-            return fail_with(f"Expecting: {kywrd}; got: {res}.")
+            return fail_with(f"Expecting: {kywrd}; got: {res}.")  # type: ignore
         return res
 
     return fn
 
 
 @generate("IBIS parameter")
-def param():
+def param() -> GenParser[tuple[str, Any]]:
     "Parse IBIS parameter."
     # Parameters must begin with a letter in column 1.
     pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
@@ -252,13 +257,17 @@ def param():
     return (pname.lower(), res)
 
 
-def node(valid_keywords, stop_keywords, debug=False):
-    """Build a node-specific parser.
+def node(
+    valid_keywords: dict[str, Parser],
+    stop_keywords: Iterable[str],
+    debug: bool = False
+) -> Parser:
+    """
+    Build a node-specific parser.
 
     Args:
-        valid_keywords (dict): A dictionary with keys matching those
-            keywords we want parsed. The values are the parsers for
-            those keywords.
+        valid_keywords: A dictionary with keys matching those keywords we want parsed.
+            The values are the parsers for those keywords.
         stop_keywords: Any iterable with primary values (i.e. - those
             tested by the ``in`` function) matching those keywords we want
             to stop the parsing of this node and pop us back up the
@@ -300,22 +309,23 @@ def node(valid_keywords, stop_keywords, debug=False):
 
 # [End]
 @generate("[End]")
-def end():
+def end() -> GenParser[Any]:
     "Parse [End]."
     yield keyword("End")
     return eof
 
 
 # [Model]
-load_line = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << skip_line
+load_line: Parser = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << skip_line
 
-ramp_line = string("dV/dt_") >> ((string("r").result("rising") | string("f").result("falling")) << ignore) + times(
-    ratio, 1, 3
+ramp_line: Parser = (
+    string("dV/dt_")
+        >> ((string("r").result("rising") | string("f").result("falling"))
+        << ignore) + times(ratio, 1, 3)
 )
 
-
 @generate("[Ramp]")
-def ramp():
+def ramp() -> GenParser[dict[str, Any]]:
     "Parse [Ramp]."
     load = yield optional(load_line, 50)
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
@@ -324,7 +334,7 @@ def ramp():
     return rslt
 
 
-Model_keywords = {
+Model_keywords: dict[str, Parser] = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
@@ -403,6 +413,7 @@ def pins():
         m = mod.upper()
         return m not in ("POWER", "GND", "NC")
 
+    # Parse the section header.
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
     rlcs = yield optional(count(rlc, 3), [])
     prs = yield many1(pin(rlcs))
@@ -482,21 +493,25 @@ IBIS_kywrd_parsers.update(
 
 
 @generate("IBIS File")
-def ibis_file():
+def ibis_file() -> GenParser[Any]:
     "Parse IBIS file."
     res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DEBUG)) << end
     return res
 
 
-def parse_ibis_file(ibis_file_contents_str, debug=False):
-    """Parse the contents of an IBIS file.
+def parse_ibis_file(
+    ibis_file_contents_str: str,
+    debug: bool = False
+) -> tuple[str, dict[str, Any]]:
+    """
+    Parse the contents of an IBIS file.
 
     Args:
-        ibis_file_contents_str (str): The contents of the IBIS file, as a single string.
+        ibis_file_contents_str: The contents of the IBIS file, as a single string.
 
     Keyword Args:
-        debug (bool): Output debugging info to console when true.
-            Default = False
+        debug: Output debugging info to console when ``True``.
+            Default = ``False``
 
     Example:
         ::
@@ -506,12 +521,10 @@ def parse_ibis_file(ibis_file_contents_str, debug=False):
                 (err_str, model_dict)  = parse_ibis_file(ibis_file_contents_str)
 
     Returns:
-        (str, dict): A pair containing:
+        A pair containing
 
-            err_str:
-                A message describing the nature of any parse failure that occured.
-            model_dict:
-                Dictionary containing keyword definitions (empty upon failure).
+        - A message describing the nature of any parse failure that occured.
+        - A dictionary containing keyword definitions (empty upon failure).
     """
 
     global DEBUG  # pylint: disable=W0603

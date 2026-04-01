@@ -522,7 +522,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             2. Implement `ignore_bits`.
         """
 
-        rslt = {}
+        rslt: dict[str, Any] = {}
 
         # Capture needed parameter definitions.
         ui = self.bit_time

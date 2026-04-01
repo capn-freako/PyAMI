@@ -7,13 +7,40 @@ Original Date:   March 20, 2026
 Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
-from typing import Generator, NewType
-
 import numpy as np
+
+from pathlib    import Path
+from tempfile   import NamedTemporaryFile
+from typing     import Any, Callable, Generator, NewType
+
+from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Flowable, Image, Paragraph
+
+from ..common import TestSweep
+from ..ami.model import AMIModel, AMIModelInitializer
 
 EPS = 0.0001  # Used to test floats for "== 0".
 
 RGB = NewType("RGB", tuple[float, float, float])
+
+RED   = RGB((1.0, 0.0, 0.0))
+GREEN = RGB((0.0, 1.0, 0.0))
+BLUE  = RGB((0.0, 0.0, 1.0))
+WHITE = RGB((1.0, 1.0, 1.0))
+BLACK = RGB((0.0, 0.0, 0.0))
+
+try:
+    plt.rcParams['axes.titlesize'] = 8
+    plt.rcParams['xtick.labelsize'] = 7
+    plt.rcParams['ytick.labelsize'] = 7
+    plt.rcParams['axes.labelsize'] = 7
+except:
+    print(f"Available keys: {plt.rcParams.keys()}")
+
+styles = getSampleStyleSheet()
 
 
 def plot_name(tst_name: str, n: int = 0) -> Generator[str, None, None]:
@@ -124,3 +151,153 @@ def color_picker(num_hues: int = 3, first_hue: float = 0.0) -> Generator[tuple[R
         if hues_fetched == num_hues:
             return
         hue += 360 // num_hues
+
+
+def plot_resps(
+    fig: Figure,
+    resps: dict[str, Any],
+    lbl: str,
+    clr: RGB
+) -> None:
+    """
+    Plot one or two sets of responses.
+
+    Args:
+        fig: The plot figure to target.
+        resps: The model responses to plot.
+        lbl: The plot label to use.
+        clrs: The plot hue to use, in bright and dim intensities.
+    """
+
+    plt.figure(fig)
+    color = "#%02X%02X%02X" % (int(clr[0] * 0xFF), int(clr[1] * 0xFF), int(clr[2] * 0xFF))
+    if 'out_resp_init' in resps:
+        t, h, s, p, f, H = resps['out_resp_init']
+        plt.subplot(131)
+        plt.plot(t*1e9, s, label=lbl, color=color)
+        plt.subplot(132)
+        plt.plot(t*1e9, p, label=lbl, color=color)
+        plt.subplot(133)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color)
+    if 'out_resp_getw' in resps:
+        t, h, s, p, f, H = resps['out_resp_getw']
+        plt.subplot(131)
+        plt.plot(t*1e9, s, linestyle='dashed', color=color)
+        plt.subplot(132)
+        plt.plot(t*1e9, p, linestyle='dashed', color=color)
+        plt.subplot(133)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), linestyle='dashed', color=color)
+
+
+def init_vs_getwave(
+    model: AMIModel,
+    initializer: AMIModelInitializer,
+    fig: Figure,
+    color: RGB,
+    label: str,
+) -> None:
+    """
+    Run the `AMI_Init()` vs. `AMI_GetWave()` comparison,
+    for a particular AMI parameter sweep program.
+
+    Args:
+        model: The AMI model to test.
+        initializer: The AMI model initializer to use.
+        fig: Plotting figure to use.
+        color: Plot color to use.
+        label: Plot label to use.
+
+    Returns:
+        Nothing
+    """
+
+    model.initialize(initializer)
+    plot_resps(fig, model.get_responses(), label, color)
+
+
+def plot_sweeps(
+    func: Callable[[AMIModel, AMIModelInitializer, Figure, RGB, str], None],
+    model: AMIModel,
+    initializer: AMIModelInitializer,
+    sweeps: list[TestSweep],
+    fig_x: float = 6,
+    fig_y: float = 1.5,
+    plot_t_max: float = 1e-9
+) -> list[Flowable]:
+    """
+    Run a common testing/plotting function over several parameter sweeps.
+
+    Args:
+        func: Testing/plotting function.
+        model: AMI model to test.
+        initializer: AMI model initializer to use/modify.
+        sweeps: Parameter sweep definitions.
+
+    Keyword Args:
+        fix_x: x-dimmension of plot (in.).
+            Default: 6
+        fix_y: y-dimmension of plot (in.).
+            Default: 1.5
+        plot_t_max: Plot time axis right bound (s).
+            Default: 1 ns
+
+    Returns:
+        A list of _ReportLab_ ``Flowable``s, alternating between
+
+        - a _ReportLab_ ``Paragraph`` containing the sweep description, and
+        - a _ReportLab_ ``Image`` containing the plots for the described sweep.
+    """
+
+    rslts = []
+    for sweep in sweeps:
+        cfg_name    = sweep[0]
+        description = sweep[1]
+        cfg_list    = sweep[2]
+        colors      = color_picker(num_hues=len(cfg_list))
+
+        desc = f"Running sweep `{cfg_name}`: {description}"
+        fig = plt.figure(figsize=(fig_x, fig_y))
+        # Accommodating both new and old style IBIS-AMI model configuration:
+        for color, fields in zip(colors, cfg_list):
+            label = fields[0]
+            ami_params = fields[1][0]
+            sim_params = fields[1][1]
+            initializer.ami_params.update(ami_params)
+            if "channel_response" in sim_params:
+                initializer.channel_response = sim_params["channel_response"]
+            if "row_size" in sim_params:
+                initializer.row_size = sim_params["row_size"]
+            if "num_aggressors" in sim_params:
+                initializer.num_aggressors = sim_params["num_aggressors"]
+            if "sample_interval" in sim_params:
+                initializer.sample_interval = sim_params["sample_interval"]
+            if "bit_time" in sim_params:
+                initializer.bit_time = sim_params["bit_time"]
+            func(model, initializer, fig, color[0], label)
+
+        plt.subplot(131)
+        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
+        plt.title("Step Resp. (V)")
+        plt.xlabel("Time (ns)")
+        plt.grid()
+        plt.subplot(132)
+        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
+        plt.title("Pulse Resp. (V)")
+        plt.xlabel("Time (ns)")
+        plt.grid()
+        plt.subplot(133)
+        plt.title("Frequency Resp. (dB)")
+        plt.xlabel("Frequency (GHz)")
+        plt.grid()
+        plt.tight_layout()
+
+        # ToDo: Can we figure out how to comment out the `delete=False` line below?
+        with NamedTemporaryFile(suffix='.jpg', prefix=(cfg_name),
+                                delete_on_close=False,  # Deleted after use in a context manager.
+                                delete=False,           # Debugging missing files.
+                               ) as tmp_file:
+            plt.savefig(tmp_file)
+            rslts.extend([Paragraph(desc, styles['Normal']),
+                          Image(tmp_file.name, width=(fig_x+1)*inch, height=(fig_y+1)*inch)])
+
+    return rslts

@@ -16,6 +16,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 import platform
 from datetime import datetime
+from typing import Optional
 
 from traits.api import (
     Any,
@@ -32,7 +33,8 @@ from traits.api import (
 from traitsui.api import HGroup, Item, ModalButtons, VGroup, View, spring
 from traitsui.message import message
 
-from pyibisami.ibis.parser import parse_ibis_file
+from .model import Component, Model
+from .parser import parse_ibis_file
 
 # ToDo: The ``is_tx`` flag, as well as the AMI files should have _model_, not _file_, scope.
 
@@ -67,7 +69,15 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     via the ``model_dict`` property.
     """
 
-    _log = ""
+    _file_name: str = ""
+    _ibis_ver: float = 0.0
+    _file_rev: str = ""
+    _date: str = ""
+    _model_dict: dict[str, Any] = {}
+    _models: dict[str, Model] = {}
+    _model_selectors: dict[str, list[str]] = {}
+    _components: dict[str, Component] = {}
+    _log: str = ""
 
     pin_ = Property(Any, depends_on=["pin"])
     pin_rlcs = Property(Dict, depends_on=["pin"])
@@ -75,16 +85,65 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     pins = List  # Always holds the list of valid pin selections, given a component selection.
     models = List  # Always holds the list of valid model selections, given a pin selection.
 
-    def get_models(self, mname):
-        """Return the list of models associated with a particular name."""
-        model_dict = self._model_dict
-        if "model_selectors" in model_dict and mname in model_dict["model_selectors"]:
-            return list(map(lambda pr: pr[0], model_dict["model_selectors"][mname]))
-        return [mname]
+    def get_model(self, mname: str) -> Model:
+        """
+        Retrieve the named model if it exists.
+
+        Args:
+            mname: The name of the model to fetch.
+
+        Returns:
+            The ``Model`` object with the given name.
+
+        Raises:
+            ``KeyError`` if the given model name can't be found.
+        """
+
+        return self._models[mname]
+
+    def get_model_names(self, mname: str) -> list[str]:
+        """
+        Return the list of models associated with a particular name.
+
+        Args:
+            mname: The name of the requested model or model selector.
+
+        Returns:
+            A list of actual model names associated with the requested name.
+
+        Notes:
+            1. The caller may provide the name of either a model or model selector.
+            2. An empty list is returned if the given name is unrecognized.
+        """
+
+        if mname in self._model_selectors:
+            return list(map(lambda pr: pr[0], self._model_selectors[mname]))
+        else:
+            if mname in self._models:
+                return [mname]
+            else:
+                return []
+
+    def get_models(self, mname: str) -> list[str]:
+        """Deprecated synonym of ``get_model_names``"""
+        return self.get_model_names(mname)
 
     def get_pins(self):
-        """Get the list of appropriate pins, given our type (i.e. - Tx or Rx)."""
-        pins = self.comp_.pins
+        return list(self.comp_.pins)
+
+    def get_pins_qualified(self, is_tx: bool, comp_name: Optional[str] = None) -> list[Any]:
+        """
+        Get the list of appropriate pins, given requested type (i.e. - Tx or Rx).
+
+        Args:
+            is_tx: Return Tx pins when ``True``; Rx pins when ``False``.
+
+        Keyword Args:
+            comp_name: Fetch the pins for the named component when given;
+                otherwise, use the currently selected component.
+                Default: ``None``
+        """
+        pins = self.comp_.pins  # type: ignore
 
         def pin_ok(pname):
             (mname, _) = pins[pname]
@@ -126,17 +185,25 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         with open(ibis_file_name, "r", encoding="utf-8") as file:
             ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
+        self._file_name = model_dict["file_name"]
+        self._ibis_ver = model_dict["ibis_ver"]
+        self._file_rev = model_dict["file_rev"]
+        self._date = model_dict["date"]
         self.log("IBIS parsing errors/warnings:\n" + err_str)
         if "components" not in model_dict or not model_dict["components"]:
-            print(f":\n{model_dict}", flush=True)
+            if debug:
+                print(f":\n{model_dict}", flush=True)
             raise ValueError("This IBIS model has no components!")
         components = model_dict["components"]
         if "models" not in model_dict or not model_dict["models"]:
+            if debug:
+                print(f":\n{model_dict}", flush=True)
             raise ValueError("This IBIS model has no models!")
-        models = model_dict["models"]
         self._model_dict = model_dict
-        self._models = models
-        self._is_tx = is_tx
+        self._models = model_dict["models"]
+        self._components = components
+        if "model_selectors" in model_dict:
+            self._model_selectors = model_dict["model_selectors"]
 
         # Add Traits for various attributes found in the IBIS file.
         self.add_trait("comp", Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
@@ -166,31 +233,27 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self.log("Done.")
 
     def __str__(self):
-        return f"IBIS Model '{self._model_dict['file_name']}'"
+        return f"IBIS Model '{self._file_name}'"
 
     def info(self):
         """Basic information about the IBIS model."""
-        res = ""
-        try:
-            for k in ["ibis_ver", "file_name", "file_rev"]:
-                res += k + ":\t" + str(self._model_dict[k]) + "\n"
-        except Exception as err:
-            print(f"{err}")
-            print(self._model_dict)
-            raise
-        res += "date" + ":\t\t" + str(self._model_dict["date"]) + "\n"
+        res = "\n".join([
+            f"ibis_ver:\t{self._ibis_ver}",
+            f"file_name:\t{self._file_name}",
+            f"file_rev:\t{self._file_rev}"])
+        res += f"\ndate:\t\t{self._date}\n"
         res += "\nComponents:"
         res += "\n=========="
-        for c in list(self._model_dict["components"]):
-            res += "\n" + c + ":\n" + "---\n" + str(self._model_dict["components"][c]) + "\n"
+        for c in self._components:
+            res += f"\nc:\n---\n{self._components[c]}\n"
         res += "\nModel Selectors:"
         res += "\n===============\n"
-        for s in list(self._model_dict["model_selectors"]):
+        for s in self._model_selectors:
             res += f"{s}\n"
         res += "\nModels:"
         res += "\n======"
-        for m in list(self._model_dict["models"]):
-            res += "\n" + m + ":\n" + "---\n" + str(self._model_dict["models"][m])
+        for m in self._models:
+            res += f"\n{m}:\n---\n{self._models[m]}"
         return res
 
     def __call__(self):

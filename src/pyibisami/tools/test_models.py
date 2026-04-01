@@ -30,6 +30,8 @@ from reportlab.platypus import (
     Preformatted, SimpleDocTemplate, Spacer, Table)
 
 import pyibisami
+from ..tools.run_notebook import mk_dummy_run_file
+from ..tools.run_tests import expand_params
 from ..util.reportlab_combinators import(
     get_ibis_contents, golden_parser_results, model_test_results,
     preformatted, title_page,
@@ -45,7 +47,7 @@ spacer = Spacer(1, 0.25*inch)
 
 
 def test_ibis_ami_models(
-    ibis_file: Path, bit_rate: float, model_name: Optional[str] = None,
+    ibis_file: Path, model_name: str, bit_rate: float, nspui: int, params: str,
     debug: bool = False
 ) -> None:
     """
@@ -53,11 +55,12 @@ def test_ibis_ami_models(
 
     Args:
         ibis_file: The ``*.ibs`` file to test.
+        model_name: The particular model to test.
         bit_rate: The bit rate to use for testing.
+        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
+        params: Test parameter sweep definitions.
 
     Keyword Args:
-        model_name: Name of model to test.
-            Default = ``None`` (Means test all IBIS-AMI models found.)
         debug: Include debugging output when ``True``.
             Default = ``False``
     """
@@ -79,39 +82,49 @@ def test_ibis_ami_models(
         canvas.drawString(inch, 0.75 * inch, "Page %d - %s" % (doc.page, pageinfo))
         canvas.restoreState()
 
-    # Add the flowables to the canvas
-    def go():
-        doc = SimpleDocTemplate(pdf_filename)
+    doc = SimpleDocTemplate(pdf_filename)
 
-        # title page
-        pages = title_page(ibis_file)
+    # title page
+    pages = title_page(ibis_file)
 
-        # Fetch/print IBIS file contents.
-        ibis_model, flowables = get_ibis_contents(ibis_file)
-        pages.extend(flowables)
+    # Fetch/print IBIS file contents.
+    ibis_model, flowables = get_ibis_contents(ibis_file)
+    pages.extend(flowables)
 
-        # golden parser results
-        pages.extend(golden_parser_results(ibis_file))
+    # golden parser results
+    pages.extend(golden_parser_results(ibis_file))
 
-        # individual model test results
-        pages.extend(model_test_results(ibis_file_dir, ibis_model, bit_rate, model_name, debug))
+    # individual model test results
+    model = ibis_model.get_model(model_name)
+    if not params:
+        dummy_run_file_name = mk_dummy_run_file(
+            ibis_file, model.mtype.lower() == "output", debug)
+        params = str(dummy_run_file_name)
+        print("\nNOTE: Since you provided no parameter sweep information,")
+        print(f'a "dummy" sweep file has been created: {dummy_run_file_name}.')
+        print("You may use this file as a template for creating parameter sweep specifications.")
+        print("")
+    param_defs = expand_params(params)
+    pages.extend(model_test_results(ibis_file_dir, ibis_model, bit_rate, nspui, param_defs, model_name, debug))
 
-        doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
-
-    go()
+    doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 
 
 # CLI definition
 @click.command(context_settings={"ignore_unknown_options": False,
                                  "help_option_names": ["-h", "--help"]})
-@click.option("--debug", is_flag=True, help="Provide extra debugging information.")
-@click.option("--model", type=str, default=None, help="Limit testing to just the named model.")
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
+@click.option("--params", "-p", type=str, default='',
+    help='Directory (or, file) containing configuration sweeps.',
+)
+@click.option("--nspui", "-n", type=int, default=32)
 @click.argument("ibis_file", type=click.Path(exists=True))
-@click.argument("bit_rate", type=float)
+@click.argument("model",     type=str)
+@click.argument("bit_rate",  type=float)
 @click.version_option(package_name="PyIBIS-AMI")
-def main(ibis_file, bit_rate, model, debug):
+def main(ibis_file, model, bit_rate, nspui, params, debug):
     ibis_file_path = Path(ibis_file, exists=True).resolve()
-    test_ibis_ami_models(ibis_file_path, bit_rate, debug=debug, model_name=model)
+    test_ibis_ami_models(ibis_file_path, model, bit_rate, nspui, params, debug=debug)
 
 
 if __name__ == "__main__":

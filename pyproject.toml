@@ -23,6 +23,7 @@ dependencies = [
     "parsec>=3.15",
     "reportlab>=4.4.10",
     "scipy>=1.9",
+    "types-reportlab>=4.4.10.20260223",
 ]
 keywords=["ibis-ami"]
 classifiers=[
@@ -50,7 +51,7 @@ PyPi = "https://pypi.org/project/PyIBIS-AMI/"
 ami-config = "pyibisami.ami.config:main"
 run-tests = "pyibisami.tools.run_tests:main"
 run-notebook = "pyibisami.tools.run_notebook:main"
-test-models = "pyibisami.tools.test_models:main"
+test-model = "pyibisami.tools.test_models:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -121,6 +122,7 @@ publish-url = "https://test.pypi.org/legacy/"
 [dependency-groups]
 dev = [
     "m2r2>=0.3.4",
+    "mypy>=1.19.1",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "pytest-xdist>=3.8.0",

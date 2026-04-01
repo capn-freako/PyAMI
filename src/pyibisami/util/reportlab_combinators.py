@@ -20,12 +20,15 @@ import scipy as sp
 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Flowable, PageBreak, Paragraph, Spacer
+from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, Spacer
 
+from ..common import TestSweep
 from ..ami.model import AMIModel
-from ..ami.parser import AMIParamConfigurator
+from ..ami.parser import AMIParamConfigurator, ParamName
 from ..ibis.file import IBISModel
 from ..ibis.model import Model
+
+from .tool_helpers import init_vs_getwave, plot_sweeps
 
 styles = getSampleStyleSheet()
 page_break = PageBreak()
@@ -115,13 +118,30 @@ def golden_parser_results(ibis_file: Path) -> list[Flowable]:
     return flowables
 
 
-def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
+def test_ami_model(
+    model: Model,
+    ibis_file_dir: Path,
+    param_defs: list[TestSweep],
+    bit_rate: float,
+    nspui: int,
+    fig_x: float = 6,
+    fig_y: float = 1.5,
+) -> list[Flowable]:
     """
     Test an individual IBIS-AMI model.
 
     Args:
         model: The IBIS-AMI model to test.
         ibis_file_dir: Parent directory of ``*.ibs`` file being tested.
+        param_defs: List of parameter definition sets to sweep over.
+        bit_rate: Bit rate to use for testing.
+        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
+
+    Keyword Args:
+        fix_x: x-dimmension of plot (in.).
+            Default: 10
+        fix_y: y-dimmension of plot (in.).
+            Default: 3
 
     Returns:
         A list of *ReportLab* ``Flowable``s describing the test results.
@@ -183,12 +203,14 @@ def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
     if not ami_files:
         return [Paragraph(f"Error: Model does not provide AMI files for this machine/system combination: {machine}/{system}!", styles['Normal'])]
 
+    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", styles['Heading3'])]
+
     # Attempt to create the AMI model and its configurator.
     dll_file, ami_file = list(map(lambda f: ibis_file_dir / Path(f), ami_files))
     try:
         ami_model = AMIModel(str(dll_file))
     except Exception as err:
-        return [Paragraph(err, styles['Normal'])] + [Paragraph(f"Error loading AMI DLL/SO: {dll_file}!", styles['Normal'])]
+        return [Paragraph(str(err), styles['Normal']), Paragraph(f"Error loading AMI DLL/SO: {dll_file}!", styles['Normal'])]
     try:
         with open(ami_file, mode="r", encoding="utf-8") as pfile:
             pcfg = AMIParamConfigurator(pfile.read())
@@ -200,14 +222,13 @@ def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
         ignore_bits = pcfg.fetch_param_val(["Reserved_Parameters", "Ignore_Bits"]) or 0
         returns_impulse = pcfg.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"]) or False
         has_ts4 = True if pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]) else False
-        root_name = pcfg.input_ami_params["root_name"]
+        root_name = pcfg.input_ami_params[ParamName("root_name")]
     except Exception as err:
-        flowables.append(Paragraph(err, styles['Normal']))
+        flowables.append(Paragraph(str(err), styles['Normal']))
         flowables.append(Paragraph(f"Error loading AMI parameter file: {ami_file}!", styles['Normal']))
         return flowables
 
     # Summarize results.
-    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", styles['Heading3'])]
     flowables.append(Paragraph("Model import was successful.", styles['Normal']))
     if has_getwave:
         flowables.append(Paragraph("Model has a `AMI_GetWave()` function.", styles['Normal']))
@@ -223,12 +244,18 @@ def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
     else:
         flowables.append(Paragraph("Model does not include on-die S-parameters.", styles['Normal']))
 
-    return flowables
-
     # Test w/ perfect channel.
-    channel_response = array([1.0] + [0. for n in range(row_size - 1)]) / sample_interval  # Kronecker delta
+    flowables.append(Paragraph("Testing w/ Perfect Channel", styles['Heading3']))
+    bit_interval = 1.0 / bit_rate
+    sample_interval = bit_interval / nspui
+    channel_response = np.array([1.0] + [0.0] * (nspui - 1) + [0.0] * 19 * nspui) / sample_interval  # Kronecker delta
 
     # - Init() vs. GetWave()
+    initializer = pcfg.get_init(
+        bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+    flowables.extend(plot_sweeps(init_vs_getwave, ami_model, initializer, param_defs,
+                                 fig_x=fig_x, fig_y=fig_y))
+
     # - samples per bit
     # - linearity check
     # - GetWave() input length sensitivity
@@ -237,9 +264,15 @@ def test_ami_model(model: Model, ibis_file_dir: Path) -> list[Flowable]:
 
     # Test w/ reflective channel.
 
+    return flowables
+
+
 def model_test_results(
-    ibis_file_dir: Path, ibis_model: IBISModel, bit_rate: float,
-    model_name: Optional[str] = None, debug: bool=False
+    ibis_file_dir: Path, ibis_model: IBISModel,
+    bit_rate: float, nspui: int,
+    param_defs: list[TestSweep],
+    model_name: Optional[str] = None,
+    debug: bool=False
 ) -> list[Flowable]:
     """
     Test a subset of the IBIS-AMI models in the ``*.ibs`` file.
@@ -248,6 +281,8 @@ def model_test_results(
         ibis_file_dir: The parent directory of the ``*.ibs`` file being tested.
         ibis_model: The read and parsed ``*.ibs`` file.
         bit_rate: The desired bit rate for testing.
+        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
+        param_defs: The list of parameter sweep definitions to use for this test.
 
     Keyword Args:
         model_name: The name of a particular model to test.
@@ -274,13 +309,14 @@ def model_test_results(
             model_name: Name of model to test.
 
         Returns:
-            Nothing
+            List of _ReportLab_ ``Flowable``s describing the model testing results.
         """
         flowables.append(Paragraph(f"Testing Model: {model_name}", styles['Heading2']))
         model = ibis_model.model_dict['models'][model_name]
         flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
-        flowables.extend(test_ami_model(model, ibis_file_dir))
+        flowables.extend(test_ami_model(model, ibis_file_dir, param_defs, bit_rate, nspui))
         flowables.append(page_break)
+        return flowables
 
     if model_name:
         if model_name not in ibis_model.model_dict['models']:

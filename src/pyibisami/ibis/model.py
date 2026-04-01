@@ -33,23 +33,12 @@ class Component(HasTraits):
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
 
-        # Fetch available keyword/parameter definitions.
-        def maybe(name):
-            return subDict[name] if name in subDict else None
-
-        self._mfr = maybe("manufacturer")
-        self._pkg = maybe("package")
-        self._pins = maybe("pin")
-        self._diffs = maybe("diff_pin")
-
-        # Check for the required keywords.
-        if not self._mfr:
-            raise LookupError("Missing [Manufacturer]!")
-        if not self._pkg:
-            print(self._mfr)
-            raise LookupError("Missing [Package]!")
-        if not self._pins:
-            raise LookupError("Missing [Pin]!")
+        # Fetch available keyword/parameter definitions,
+        # flagging an error if any required keywords are missing.
+        self._mfr = subDict["manufacturer"]    # Will flag error if missing.
+        self._pkg = subDict["package"]
+        self._pins = subDict["pin"]
+        self._diffs = subDict.get("diff_pin")  # Won't flag error; returns `None`.
 
         # Set up the GUI.
         self.add_trait("manufacturer", String(self._mfr))
