@@ -28,7 +28,7 @@ from ..ami.parser import AMIParamConfigurator, ParamName
 from ..ibis.file import IBISModel
 from ..ibis.model import Model
 
-from .ami_tests import ami_tst_init_vs_getwave
+from .ami_tests import ami_tst_init_vs_getwave, ami_tst_samples_per_bit
 from .tool_helpers import (
     init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length,
     bold, ital, fixed, page_break, spacer,
@@ -289,19 +289,12 @@ def test_ami_model(
     )
 
     # - samples per bit
-    flowables.extend([
-        page_break,
-        Paragraph("Samples per Bit", H4),
-        Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
-                   i.e., number of samples per bit (or, symbol).", P),
-        spacer,
-    ])
-    initializer = pcfg.get_init(
-        bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-    flowables.extend(plot_sweeps(samples_per_bit, ami_model, initializer, param_defs,
-                                 fig_x=fig_x, fig_y=fig_y))
-    flowables.append(
-        Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
+    flowables.extend(
+        ami_tst_samples_per_bit(
+            ami_model, pcfg, bit_interval, sample_interval,
+            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
+        )
+    )
 
     # - GetWave() input length sensitivity
     flowables.extend([

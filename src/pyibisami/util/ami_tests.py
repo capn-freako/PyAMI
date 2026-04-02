@@ -96,3 +96,47 @@ def ami_tst_init_vs_getwave(
     ])
 
     return flowables
+
+
+def ami_tst_samples_per_bit(
+    ami_model: AMIModel, pcfg: AMIParamConfigurator,
+    bit_interval: float, sample_interval:float,
+    channel_response: Rvec, param_defs: list[TestSweep],
+    fig_x: float = 6, fig_y: float = 3,
+) -> list[Flowable]:
+    """
+    Compare model responses at different over-sampling rates.
+
+    Args:
+        ami_model: The AMI model to test.
+        pcfg: The AMI model configurator to use/modify.
+        bit_interval: The unit interval (s).
+        sample_interval: Time between adjacent signal vector elements (s).
+        channel_response: Analog channel impulse response (V/sample).
+        param_defs: List of AMI/simulation parameter sets to sweep over.
+
+    Keyword Args:
+        fig_x: x-dimension of resultant plot figure (in.).
+            Default: 6
+        fig_y: y-dimension of resultant plot figure (in.).
+            Default: 3
+
+    Returns:
+        A list of _ReportLab_ ``Flowable``s comprising the results of this test.
+    """
+
+    flowables: list[Flowable] = [
+        page_break,
+        Paragraph("Samples per Bit", H4),
+        Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
+                   i.e., number of samples per bit (or, symbol).", P),
+        spacer,
+    ]
+    initializer = pcfg.get_init(
+        bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+    flowables.extend(plot_sweeps(samples_per_bit, ami_model, initializer, param_defs,
+                                 fig_x=fig_x, fig_y=fig_y))
+    flowables.append(
+        Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
+
+    return flowables
