@@ -140,3 +140,52 @@ def ami_tst_samples_per_bit(
         Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
 
     return flowables
+
+
+def ami_tst_getwave_input_length(
+    ami_model: AMIModel, pcfg: AMIParamConfigurator,
+    bit_interval: float, sample_interval:float,
+    channel_response: Rvec, param_defs: list[TestSweep],
+    fig_x: float = 6, fig_y: float = 3,
+) -> list[Flowable]:
+    """
+    Compare ``AMI_GetWave()`` outputs for different input lengths.
+
+    Args:
+        ami_model: The AMI model to test.
+        pcfg: The AMI model configurator to use/modify.
+        bit_interval: The unit interval (s).
+        sample_interval: Time between adjacent signal vector elements (s).
+        channel_response: Analog channel impulse response (V/sample).
+        param_defs: List of AMI/simulation parameter sets to sweep over.
+
+    Keyword Args:
+        fig_x: x-dimension of resultant plot figure (in.).
+            Default: 6
+        fig_y: y-dimension of resultant plot figure (in.).
+            Default: 3
+
+    Returns:
+        A list of _ReportLab_ ``Flowable``s comprising the results of this test.
+    """
+
+    flowables: list[Flowable] = [
+        page_break,
+        Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
+        Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
+                  may exhibit sensitivity to the length of its input. And this is undesireable. \
+                  Here, we try to flush that out if it's occurring.", P),
+        spacer,
+    ]
+    if ami_model.has_getwave:
+        initializer = pcfg.get_init(
+            bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+        flowables.extend(plot_sweeps(check_getwave_input_length, ami_model, initializer, param_defs,
+                                     fig_x=fig_x, fig_y=fig_y, finalize=False))
+        flowables.append(
+            Paragraph("You should see very little difference in either domain \
+                      between the various plots in either chart above.", P))
+    else:
+        flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
+
+    return flowables
