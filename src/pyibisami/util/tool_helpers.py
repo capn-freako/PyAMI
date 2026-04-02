@@ -15,9 +15,10 @@ from typing     import Any, Callable, Generator, NewType
 
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import Flowable, Image, Paragraph
+from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, Spacer
 
 from ..common import TestSweep
 from ..ami.model import AMIModel, AMIModelInitializer
@@ -33,16 +34,63 @@ WHITE = RGB((1.0, 1.0, 1.0))
 BLACK = RGB((0.0, 0.0, 0.0))
 
 try:
-    plt.rcParams['axes.titlesize'] = 8
+    plt.rcParams['axes.titlesize'] = 10
     plt.rcParams['xtick.labelsize'] = 7
     plt.rcParams['ytick.labelsize'] = 7
-    plt.rcParams['axes.labelsize'] = 7
+    plt.rcParams['axes.labelsize'] = 8
 except:
     print(f"Available keys: {plt.rcParams.keys()}")
 
+# ReportLab Platypus abbreviations
+page_break = PageBreak()
+spacer = Spacer(inch, 0.15*inch)
 styles = getSampleStyleSheet()
+P  = styles['Normal']
+H1 = styles['Heading1']
+H2 = styles['Heading2']
+H3 = styles['Heading3']
+H4 = styles['Heading4']
+bold_style = ParagraphStyle(
+    name='BoldStyle',
+    parent=styles['Normal'],
+    fontName='Helvetica-Bold', # Specify the bold variant here
+    # fontSize=12
+)
+caption_style = ParagraphStyle(
+    name='CaptionStyle',
+    parent=styles['Normal'],
+    fontName='Helvetica-Bold', # Specify the bold variant here
+    fontSize=10,
+    alignment=TA_CENTER,
+)
+indented_style = ParagraphStyle(
+    name='IndentedStyle',
+    parent=styles['Normal'],
+    leftIndent=50,
+)
 
 
+def tag(html_tag: str, text: str) -> str:
+    """Apply given HTML tag to text."""
+    return f"<{html_tag}>{text}</{html_tag}>"
+
+
+def bold(text: str) -> str:
+    """Embolden text, using HTML `<strong>` tag."""
+    return tag("strong", text)
+
+
+def ital(text: str) -> str:
+    """Italicize text, using HTML `<em>` tag."""
+    return tag("em", text)
+
+
+def fixed(text: str) -> str:
+    """Render text in fixed width font, using HTML `<pre>` tag."""
+    return tag("kbd", text)
+
+
+# General purpose utilities.
 def plot_name(tst_name: str, n: int = 0) -> Generator[str, None, None]:
     """
     Plot name generator keeps multiple tests from overwriting each other's plots.
@@ -179,7 +227,7 @@ def plot_resps(
     if 'out_resp_init' in resps:
         t, h, s, p, f, H = resps['out_resp_init']
         plt.subplot(121)
-        plt.plot(t*1e9, s, label=lbl, color=color_dim)
+        plt.plot(t*1e9, s, color=color_dim)
         plt.plot(t*1e9, p, label=lbl, color=color_bright)
         plt.subplot(122)
         plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color_bright)
@@ -258,7 +306,7 @@ def plot_sweeps(
         cfg_list    = sweep[2]
         colors      = color_picker(num_hues=len(cfg_list))
 
-        desc = f"Running sweep `{cfg_name}`: {description}"
+        desc = f"Running sweep `{cfg_name}`: {ital(f'{description}')}"
         fig = plt.figure(figsize=(fig_x, fig_y))
         # Accommodating both new and old style IBIS-AMI model configuration:
         for color, fields in zip(colors, cfg_list):
@@ -283,10 +331,12 @@ def plot_sweeps(
         plt.title("Step & Pulse Resp. (V)")
         plt.xlabel("Time (ns)")
         plt.grid()
+        plt.legend()
         plt.subplot(122)
         plt.title("Frequency Resp. (dB)")
         plt.xlabel("Frequency (GHz)")
         plt.grid()
+        plt.legend()
         plt.tight_layout()
 
         # ToDo: Can we figure out how to comment out the `delete=False` line below?
