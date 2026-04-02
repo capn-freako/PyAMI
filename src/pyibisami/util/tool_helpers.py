@@ -20,8 +20,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, Spacer
 
-from ..common import TestSweep
+from ..common import Rvec, TestSweep
 from ..ami.model import AMIModel, AMIModelInitializer
+
+from .model_testing import do_samples_per_bit
 
 EPS = 0.0001  # Used to test floats for "== 0".
 
@@ -208,13 +210,13 @@ def plot_resps(
     clr: RGB
 ) -> None:
     """
-    Plot one or two sets of responses.
+    Plot available responses.
 
     Args:
         fig: The plot figure to target.
         resps: The model responses to plot.
         lbl: The plot label to use.
-        clrs: The plot hue to use, in bright and dim intensities.
+        clrs: The plot hue to use, in full brightness.
     """
 
     plt.figure(fig)
@@ -264,6 +266,40 @@ def init_vs_getwave(
 
     model.initialize(initializer)
     plot_resps(fig, model.get_responses(), label, color)
+
+
+def samples_per_bit(
+    model: AMIModel,
+    initializer: AMIModelInitializer,
+    fig: Figure,
+    color: RGB,
+    label: str,
+) -> None:
+    """
+    Run the `samples per bit` comparison, for a particular AMI parameter config.
+
+    Args:
+        model: The AMI model to test.
+        initializer: The AMI model initializer to use.
+        fig: Plotting figure to use.
+        color: Plot color to use.
+            (Ignored; see below.)
+        label: Plot label to use.
+
+    Returns:
+        Nothing
+
+    Notes:
+        1. The ``color`` parameter is ignored here.
+        However, the function signature must be as it is, for use w/ ``plot_sweeps()``.
+    """
+
+    model_responses = do_samples_per_bit(
+        model, initializer, np.array(initializer.channel_response),
+        initializer.sample_interval, 1 / initializer.bit_time, 20)
+    
+    for ((model_response, osf), color) in zip(model_responses, [RED, GREEN, BLUE]):
+        plot_resps(fig, model_response, f"{osf}x", color)
 
 
 def plot_sweeps(
