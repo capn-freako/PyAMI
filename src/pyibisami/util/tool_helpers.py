@@ -10,6 +10,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 import numpy as np
 
 from pathlib    import Path
+from random     import randrange
 from tempfile   import NamedTemporaryFile
 from typing     import Any, Callable, Generator, NewType
 
@@ -302,6 +303,78 @@ def samples_per_bit(
         plot_resps(fig, model_response, f"{osf}x", color)
 
 
+def check_getwave_input_length(
+    model: AMIModel,
+    initializer: AMIModelInitializer,
+    fig: Figure,
+    color: RGB,
+    label: str,
+) -> None:
+    """
+    Check sensitivity of ``AMI_GetWave()`` to varying input length,
+    for the given channel impulse response.
+
+    Args:
+        model: The AMI model to test.
+        initializer: The AMI model initializer to use.
+        fig: Plotting figure to use.
+        color: Plot color to use.
+            (Ignored; see below.)
+        label: Plot label to use.
+
+    Returns:
+        Nothing
+    """
+
+    sample_interval = initializer.sample_interval
+    channel_response = initializer.channel_response
+    bit_time = initializer.bit_time
+
+    nspui = int(bit_time / sample_interval)
+
+    u = (np.array([randrange(2) for n in range(1_000)]) * 2 - 1).repeat(nspui)
+    len_u = len(u)
+    t = np.array([n * sample_interval for n in range(len_u)])
+    f0 = 1 / (sample_interval * len_u)
+    f = np.array([n * f0 for n in range(len_u)])
+    plt.figure(fig)
+    model.initialize(initializer)
+    for n, bits_per_call in enumerate([randrange(8, 512) for n in range(5)] + [511, 513]):
+        input_len = bits_per_call * nspui
+        smpl_cnt = 0
+        ys = np.array([])
+        while smpl_cnt < len_u:
+            if smpl_cnt + input_len > len_u:
+                x = u[smpl_cnt :]
+            else:
+                x = u[smpl_cnt : smpl_cnt + input_len]
+            y, _, _ = model.getWave(x)
+            ys = np.concatenate((ys, y))
+            smpl_cnt += input_len
+        # if n:
+        plt.subplot(121)
+        plt.plot(t * 1e9, ys, label=str(bits_per_call))
+        plt.subplot(122)
+        Ys = np.fft.fft(ys)
+        plt.semilogx(f[:len_u // 2] / 1e9, 20 * np.log10(np.abs(Ys[:len_u // 2])),
+                     label=str(bits_per_call))
+    
+    plt.subplot(121)
+    plt.title("AMI_GetWave() Output")
+    plt.xlabel("Time (ns)")
+    plt.ylabel("Vout (V)")
+    plt.axis(xmin=t[-20 * nspui] * 1e9, xmax=t[-1] * 1e9)
+    plt.legend()
+    plt.grid()
+    
+    plt.subplot(122)
+    plt.title("Spectral Content")
+    plt.xlabel("Frequency (GHz)")
+    plt.ylabel("|H(f)| (dB)")
+    plt.legend()
+    plt.grid()
+
+
 def plot_sweeps(
     func: Callable[[AMIModel, AMIModelInitializer, Figure, RGB, str], None],
     model: AMIModel,
@@ -309,7 +382,8 @@ def plot_sweeps(
     sweeps: list[TestSweep],
     fig_x: float = 6,
     fig_y: float = 2,
-    plot_t_max: float = 1e-9
+    plot_t_max: float = 1e-9,
+    finalize: bool = True
 ) -> list[Flowable]:
     """
     Run a common testing/plotting function over several parameter sweeps.
@@ -327,6 +401,8 @@ def plot_sweeps(
             Default: 1.5
         plot_t_max: Plot time axis right bound (s).
             Default: 1 ns
+        finalize: Finish plot annotations when ``True``.
+            Default: ``True``
 
     Returns:
         A list of _ReportLab_ ``Flowable``s, alternating between
@@ -362,17 +438,19 @@ def plot_sweeps(
                 initializer.bit_time = sim_params["bit_time"]
             func(model, initializer, fig, color[0], label)
 
-        plt.subplot(121)
-        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
-        plt.title("Step & Pulse Resp. (V)")
-        plt.xlabel("Time (ns)")
-        plt.grid()
-        plt.legend()
-        plt.subplot(122)
-        plt.title("Frequency Resp. (dB)")
-        plt.xlabel("Frequency (GHz)")
-        plt.grid()
-        plt.legend()
+        if finalize:
+            plt.subplot(121)
+            plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
+            plt.title("Step & Pulse Resp. (V)")
+            plt.xlabel("Time (ns)")
+            plt.grid()
+            plt.legend()
+            plt.subplot(122)
+            plt.title("Frequency Resp. (dB)")
+            plt.xlabel("Frequency (GHz)")
+            plt.grid()
+            plt.legend()
+
         plt.tight_layout()
 
         # ToDo: Can we figure out how to comment out the `delete=False` line below?

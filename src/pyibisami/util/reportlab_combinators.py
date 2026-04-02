@@ -29,7 +29,7 @@ from ..ibis.file import IBISModel
 from ..ibis.model import Model
 
 from .tool_helpers import (
-    init_vs_getwave, plot_sweeps, samples_per_bit,
+    init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length,
     bold, ital, fixed, page_break, spacer,
     styles, bold_style, caption_style, indented_style,
     P, H1, H2, H3, H4)
@@ -342,12 +342,31 @@ def test_ami_model(
     flowables.append(
         Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
 
-    # - linearity check
     # - GetWave() input length sensitivity
+    flowables.extend([
+        page_break,
+        Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
+        Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
+                  may exhibit sensitivity to the length of its input. And this is undesireable. \
+                  Here, we try to flush that out if it's occurring.", P),
+        spacer,
+    ])
+    if ami_model.has_getwave:
+        initializer = pcfg.get_init(
+            bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+        flowables.extend(plot_sweeps(check_getwave_input_length, ami_model, initializer, param_defs,
+                                     fig_x=fig_x, fig_y=fig_y, finalize=False))
+        flowables.append(
+            Paragraph("You should see very little difference in either domain \
+                      between the various plots in either chart above.", P))
+    else:
+        flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
 
     # Test w/ lossy channel.
 
     # Test w/ reflective channel.
+
+    # Linearity check
 
     return flowables
 

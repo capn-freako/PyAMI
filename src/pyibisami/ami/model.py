@@ -588,6 +588,11 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         """AMI parameter tree root name."""
         return self._root_name
 
+    @property
+    def has_getwave(self) -> bool:
+        """Flag is ``True`` when model has an ``AMI_GetWave()`` function."""
+        return self._amiGetWave is not None
+
     def _getInitOut(self):
         return list(map(float, self._initOut))
 
