@@ -125,7 +125,7 @@ def test_ami_model(
     bit_rate: float,
     nspui: int,
     fig_x: float = 6,
-    fig_y: float = 1.5,
+    fig_y: float = 2,
 ) -> list[Flowable]:
     """
     Test an individual IBIS-AMI model.

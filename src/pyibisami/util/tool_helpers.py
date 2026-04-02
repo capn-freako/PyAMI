@@ -170,23 +170,26 @@ def plot_resps(
     """
 
     plt.figure(fig)
-    color = "#%02X%02X%02X" % (int(clr[0] * 0xFF), int(clr[1] * 0xFF), int(clr[2] * 0xFF))
+    color_bright = "#%02X%02X%02X" % (int(clr[0] * 0xFF),
+                                      int(clr[1] * 0xFF),
+                                      int(clr[2] * 0xFF))
+    color_dim    = "#%02X%02X%02X" % (int(0.5 * clr[0] * 0xFF),
+                                      int(0.5 * clr[1] * 0xFF),
+                                      int(0.5 * clr[2] * 0xFF))
     if 'out_resp_init' in resps:
         t, h, s, p, f, H = resps['out_resp_init']
-        plt.subplot(131)
-        plt.plot(t*1e9, s, label=lbl, color=color)
-        plt.subplot(132)
-        plt.plot(t*1e9, p, label=lbl, color=color)
-        plt.subplot(133)
-        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color)
+        plt.subplot(121)
+        plt.plot(t*1e9, s, label=lbl, color=color_dim)
+        plt.plot(t*1e9, p, label=lbl, color=color_bright)
+        plt.subplot(122)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color_bright)
     if 'out_resp_getw' in resps:
         t, h, s, p, f, H = resps['out_resp_getw']
-        plt.subplot(131)
-        plt.plot(t*1e9, s, linestyle='dashed', color=color)
-        plt.subplot(132)
-        plt.plot(t*1e9, p, linestyle='dashed', color=color)
-        plt.subplot(133)
-        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), linestyle='dashed', color=color)
+        plt.subplot(121)
+        plt.plot(t*1e9, s, linestyle='dashed', color=color_dim)
+        plt.plot(t*1e9, p, linestyle='dashed', color=color_bright)
+        plt.subplot(122)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), linestyle='dashed', color=color_bright)
 
 
 def init_vs_getwave(
@@ -221,7 +224,7 @@ def plot_sweeps(
     initializer: AMIModelInitializer,
     sweeps: list[TestSweep],
     fig_x: float = 6,
-    fig_y: float = 1.5,
+    fig_y: float = 2,
     plot_t_max: float = 1e-9
 ) -> list[Flowable]:
     """
@@ -275,17 +278,12 @@ def plot_sweeps(
                 initializer.bit_time = sim_params["bit_time"]
             func(model, initializer, fig, color[0], label)
 
-        plt.subplot(131)
+        plt.subplot(121)
         plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
-        plt.title("Step Resp. (V)")
+        plt.title("Step & Pulse Resp. (V)")
         plt.xlabel("Time (ns)")
         plt.grid()
-        plt.subplot(132)
-        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
-        plt.title("Pulse Resp. (V)")
-        plt.xlabel("Time (ns)")
-        plt.grid()
-        plt.subplot(133)
+        plt.subplot(122)
         plt.title("Frequency Resp. (dB)")
         plt.xlabel("Frequency (GHz)")
         plt.grid()
@@ -298,6 +296,6 @@ def plot_sweeps(
                                ) as tmp_file:
             plt.savefig(tmp_file)
             rslts.extend([Paragraph(desc, styles['Normal']),
-                          Image(tmp_file.name, width=(fig_x+1)*inch, height=(fig_y+1)*inch)])
+                          Image(tmp_file.name, width=(fig_x)*inch, height=(fig_y)*inch)])
 
     return rslts
