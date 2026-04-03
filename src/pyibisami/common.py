@@ -9,7 +9,10 @@ Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
 from typing             import Any, TypeAlias, TypeVar
+
+import numpy        as np
 import numpy.typing as npt  # type: ignore
+
 from scipy.linalg       import convolution_matrix, lstsq
 
 Real = TypeVar("Real", float, float)
@@ -41,3 +44,11 @@ def deconv_same(y: Rvec, x: Rvec) -> Rvec:
     A = convolution_matrix(x, len(y), "same")
     h, _, _, _ = lstsq(A, y)
     return h
+
+
+def raised_cosine(x):
+    """
+    Apply raised cosine filter to input.
+    """
+    phi = np.linspace(0, PI, len(x))
+    return x * 0.5 * (np.cos(phi) + 1)

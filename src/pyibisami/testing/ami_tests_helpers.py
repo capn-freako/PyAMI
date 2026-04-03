@@ -17,6 +17,7 @@ import numpy as np
 from matplotlib.figure      import Figure
 from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
+from scipy.interpolate      import interp1d
 
 from ..common           import Rvec, TestSweep
 from ..ami.model        import AMIModel, AMIModelInitializer

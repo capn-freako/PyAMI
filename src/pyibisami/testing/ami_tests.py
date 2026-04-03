@@ -16,8 +16,10 @@ import numpy as np
 
 from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
+from scipy.interpolate      import interp1d
+from scipy.signal           import butter, freqs, lfilter
 
-from ..common           import Rvec, TestSweep
+from ..common           import PI, Rvec, TestSweep, raised_cosine
 from ..ami.model        import AMIModel
 from ..ami.parser       import AMIParamConfigurator, ParamName
 from ..ibis.model       import Model
@@ -85,21 +87,6 @@ def ami_tst_init_vs_getwave(
                   should look nearly identical.", P),
         Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
                   it`s not expected to match and is plotted only as a debugging aid.)", P),
-        spacer,
-        Paragraph(f"{bold('Note:')} If you`ve enabled an adaptive DFE in an Rx model \
-                  then the plots may look different, because:"),
-        ListFlowable([
-            Paragraph("The channel is perfect here, which means that any equalization \
-                      (a minimum amount of CTLE peaking or minimum first DFE tap value, for instance) \
-                      is over-equalization, and", P),
-            Paragraph(f"The AMI parameter controlling the target voltage at the slicer input \
-                      may have a maximum of 1.0V, which is too low in the case of an over-equalized channel. \
-                      (The {fixed('AMI_Init()')} function will not be affected by this, \
-                      while the {fixed('AMI_GetWave()')} function will.)", P),
-        ], bulletFontSize=9, bulletIndent=0.25*inch),
-        spacer,
-        Paragraph(f"You should see better agreement between the {fixed('AMI_Init()')} and \
-                  {fixed('AMI_GetWave()')} outputs, when this test is repeated below for a Lossy channel."),
     ])
 
     return flowables
@@ -206,6 +193,8 @@ def test_ami_model(
     nspui: int,
     fig_x: float = 6,
     fig_y: float = 3,
+    f_max: float = 40e9,
+    f_step: float = 100e6
 ) -> list[Flowable]:
     """
     Test an individual IBIS-AMI model.
@@ -222,6 +211,10 @@ def test_ami_model(
             Default: 10
         fix_y: y-dimmension of plot (in.).
             Default: 3
+        f_max: Maximum frequency of interest (Hz).
+            Default: 40 GHz
+        f_step: Frequency increment (Hz).
+            Default: 100 MHz
 
     Returns:
         A list of *ReportLab* ``Flowable``s describing the test results.
@@ -297,6 +290,9 @@ def test_ami_model(
     else:
         flowables.append(Paragraph("Model does not include on-die S-parameters.", P))
 
+    bit_interval = 1.0 / bit_rate
+    sample_interval = bit_interval / nspui
+
     # Test w/ perfect channel.
     flowables.extend([
         Paragraph("Testing w/ Perfect Channel", H3),
@@ -326,37 +322,79 @@ def test_ami_model(
                   give a more useful assessment of the model's behavior in such real use scenarios."),
     ])
 
-    bit_interval = 1.0 / bit_rate
-    sample_interval = bit_interval / nspui
-    channel_response = np.array([1.0] + [0.0] * (nspui - 1) + [0.0] * 19 * nspui) / sample_interval  # Kronecker delta
-
-    # - Init() vs. GetWave()
-    flowables.extend(
-        ami_tst_init_vs_getwave(
-            ami_model, pcfg, bit_interval, sample_interval,
-            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
+    tests = [ami_tst_init_vs_getwave, ami_tst_samples_per_bit, ami_tst_getwave_input_length]
+    perfect_channel = np.array(
+        [1.0] + [0.0] * (nspui - 1) + [0.0] * 19 * nspui
+    ) / sample_interval  # Kronecker delta
+    for test in tests:
+        flowables.extend(
+            test(
+                ami_model, pcfg, bit_interval, sample_interval,
+                perfect_channel, param_defs, fig_x=fig_x, fig_y=fig_y
+            )
         )
-    )
-
-    # - samples per bit
-    flowables.extend(
-        ami_tst_samples_per_bit(
-            ami_model, pcfg, bit_interval, sample_interval,
-            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
-        )
-    )
-
-    # - GetWave() input length sensitivity
-    flowables.extend(
-        ami_tst_getwave_input_length(
-            ami_model, pcfg, bit_interval, sample_interval,
-            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
-        )
-    )
-
+    flowables.extend([
+        spacer,
+        Paragraph(f"{bold('Note:')} If you`ve enabled an adaptive DFE in an Rx model \
+                  then the {fixed('AMI_Init()')} and {fixed('AMI_GetWave()')} plots may look different, because:"),
+        ListFlowable([
+            Paragraph("The channel is perfect here, which means that any equalization \
+                      (a minimum amount of CTLE peaking or minimum first DFE tap value, for instance) \
+                      is over-equalization, and", P),
+            Paragraph(f"The AMI parameter controlling the target voltage at the slicer input \
+                      may have a maximum of 1.0V, which is too low in the case of an over-equalized channel. \
+                      (The {fixed('AMI_Init()')} function will not be affected by this, \
+                      while the {fixed('AMI_GetWave()')} function will.)", P),
+        ], bulletFontSize=9, bulletIndent=0.25*inch),
+        spacer,
+        Paragraph(f"You should see better agreement between the {fixed('AMI_Init()')} and \
+                  {fixed('AMI_GetWave()')} outputs, when this test is repeated below for a Lossy channel."),
+    ])
+    
     # Test w/ lossy channel.
+    flowables.extend([
+        page_break,
+        Paragraph("Testing w/ Lossy Channel", H3),
+        Paragraph("Here, we test the model against a well terminated, but very lossy, channel.", P),
+    ])
+    b, a = butter(1, bit_rate / 20, fs = 1 / sample_interval)
+    lossy_channel = lfilter(
+        b, a, np.array([0., 1.] + [0.] * (nspui - 2) + [0.0] * 19 * nspui)
+    ) / sample_interval
+    for test in tests:
+        flowables.extend(
+            test(
+                ami_model, pcfg, bit_interval, sample_interval,
+                lossy_channel, param_defs, fig_x=fig_x, fig_y=fig_y
+            )
+        )
 
     # Test w/ reflective channel.
+    flowables.extend([
+        page_break,
+        Paragraph("Testing w/ Reflective Channel", H3),
+        Paragraph("Here, we test the model against a poorly terminated, very reflective channel.", P),
+    ])
+    t = np.arange(20 * nspui) * sample_interval
+    f = np.arange(0, f_max + f_step, f_step)
+    w = 2 * PI * f
+    ts = 0.5 / f_max
+    t_fft = np.array([n * ts for n in range(2 * (len(f) - 1))])
+    b, a = butter(1, 2 * PI * bit_rate / 2, analog=True)
+    _, H = freqs(b, a, worN=w)
+    td = 100e-12  # one-way channel delay
+    r = 0.2    # reflection coefficient
+    H *= (1 - r) * np.exp(-1j * w * td) / (1 - r * np.exp(-2j * w * td))
+    h = np.fft.irfft(raised_cosine(H)) / ts
+    krnl = interp1d(t_fft, h)
+    reflective_channel = krnl(t)
+    for test in tests:
+        flowables.extend(
+            test(
+                ami_model, pcfg, bit_interval, sample_interval,
+                reflective_channel, param_defs, fig_x=fig_x, fig_y=fig_y
+            )
+        )
 
     # Linearity check
 

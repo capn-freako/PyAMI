@@ -129,35 +129,3 @@ def main(ibis_file, model, bit_rate, nspui, params, debug):
 
 if __name__ == "__main__":
     main()  # pylint: disable=no-value-for-parameter
-
-
-    # file_id.wrapOn(pdf, PAGE_WIDTH, PAGE_HEIGHT)
-    # file_id.drawOn(pdf, 1*inch, 9*inch)
-
-    # spacer.wrapOn(pdf, PAGE_WIDTH, PAGE_HEIGHT)
-    # spacer.drawOn(pdf, 1*inch, 8.5*inch)
-
-    # pdf.showPage()  # Inserts a page break.
-
-    # image.wrapOn(pdf, PAGE_WIDTH, PAGE_HEIGHT)
-    # image.drawOn(pdf, 1*inch, 6*inch)
-
-    # table.wrapOn(pdf, PAGE_WIDTH, PAGE_HEIGHT)
-    # table.drawOn(pdf, 1*inch, 3*inch)
-
-    # Save the PDF document
-    # pdf.save()
-
-    # Create an image flowable
-    # image = Image('./htmlcov/favicon_32_cb_58284776.png', width=2*inch, height=2*inch)
-
-    # Create a table flowable
-    # data = [
-    #     ['Name', 'Age', 'Country'],
-    #     ['Alice', '25', 'USA'],
-    #     ['Bob', '30', 'Canada'],
-    #     ['Charlie', '40', 'Australia'],
-    # ]
-    # table = Table(data)
-
-
