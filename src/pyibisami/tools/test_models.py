@@ -30,10 +30,10 @@ from reportlab.platypus import (
     Preformatted, SimpleDocTemplate, Spacer, Table)
 
 import pyibisami
+from ..testing.ibis_file_tests import test_ami_models, get_ibis_contents, golden_parser_results
 from ..tools.run_notebook import mk_dummy_run_file
 from ..tools.run_tests import expand_params
 from ..util.reportlab_combinators import(
-    get_ibis_contents, golden_parser_results, model_test_results,
     preformatted, title_page,
 )
 
@@ -105,7 +105,7 @@ def test_ibis_ami_models(
         print("You may use this file as a template for creating parameter sweep specifications.")
         print("")
     param_defs = expand_params(params)
-    pages.extend(model_test_results(ibis_file_dir, ibis_model, bit_rate, nspui, param_defs, model_name, debug))
+    pages.extend(test_ami_models(ibis_file_dir, ibis_model, bit_rate, nspui, param_defs, model_name, debug))
 
     doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 

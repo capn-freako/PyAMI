@@ -7,12 +7,20 @@ Original Date:   April 2, 2026
 Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
+import platform
+
+from pathlib import Path
+
+import numpy as np
+
 from reportlab.lib.units import inch
 from reportlab.platypus import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
 
 from ..common import Rvec, TestSweep
 from ..ami.model import AMIModel
-from ..ami.parser import AMIParamConfigurator
+from ..ami.parser import AMIParamConfigurator, ParamName
+from ..ibis.model import Model
+from ..util.reportlab_combinators import preformatted
 
 from ..util.tool_helpers import (
     init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length,
@@ -187,5 +195,170 @@ def ami_tst_getwave_input_length(
                       between the various plots in either chart above.", P))
     else:
         flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
+
+    return flowables
+
+
+def test_ami_model(
+    model: Model,
+    ibis_file_dir: Path,
+    param_defs: list[TestSweep],
+    bit_rate: float,
+    nspui: int,
+    fig_x: float = 6,
+    fig_y: float = 3,
+) -> list[Flowable]:
+    """
+    Test an individual IBIS-AMI model.
+
+    Args:
+        model: The IBIS-AMI model to test.
+        ibis_file_dir: Parent directory of ``*.ibs`` file being tested.
+        param_defs: List of parameter definition sets to sweep over.
+        bit_rate: Bit rate to use for testing.
+        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
+
+    Keyword Args:
+        fix_x: x-dimmension of plot (in.).
+            Default: 10
+        fix_y: y-dimmension of plot (in.).
+            Default: 3
+
+    Returns:
+        A list of *ReportLab* ``Flowable``s describing the test results.
+    """
+
+    if not model.is_ami:
+        return [Paragraph("Error: This model is not an IBIS-AMI model!", P)]
+
+    # Try to fetch AMI files for this machine/system combination.
+    machine = platform.machine().lower()
+    match(machine):
+        case "x86":
+            ami_dict = model.ami_files.get('32-bit')
+        case "x86_64":
+            ami_dict = model.ami_files.get('64-bit')
+        case "amd64":
+            ami_dict = model.ami_files.get('64-bit')
+        case "arm64":
+            ami_dict = model.ami_files.get('64-bit')
+        case _:
+            return [Paragraph(f"Error: Unrecognized machine type: {machine}!", P)]
+    system = platform.system().lower()
+    match(system):
+        case "windows":
+            ami_files = ami_dict.get('win')
+        case "linux":
+            ami_files = ami_dict.get('lin')
+        case "darwin":
+            ami_files = ami_dict.get('lin')
+        case _:
+            return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
+    if not ami_files:
+        return [Paragraph(f"Error: Model does not provide AMI files for this machine/system combination: {machine}/{system}!", P)]
+
+    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", H3)]
+
+    # Attempt to create the AMI model and its configurator.
+    dll_file, ami_file = list(map(lambda f: ibis_file_dir / Path(f), ami_files))
+    try:
+        ami_model = AMIModel(str(dll_file))
+    except Exception as err:
+        return [Paragraph(str(err), P), Paragraph(f"Error loading AMI DLL/SO: {dll_file}!", P)]
+    try:
+        with open(ami_file, mode="r", encoding="utf-8") as pfile:
+            pcfg = AMIParamConfigurator(pfile.read())
+        if pcfg.ami_parsing_errors:
+            flowables.append(
+                Paragraph(preformatted(f"Non-fatal AMI file parsing errors:\n{pcfg.ami_parsing_errors}"),
+                          P))
+        has_getwave = pcfg.fetch_param_val(["Reserved_Parameters", "GetWave_Exists"]) or False
+        ignore_bits = pcfg.fetch_param_val(["Reserved_Parameters", "Ignore_Bits"]) or 0
+        returns_impulse = pcfg.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"]) or False
+        has_ts4 = True if pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]) else False
+        root_name = pcfg.input_ami_params[ParamName("root_name")]
+    except Exception as err:
+        flowables.append(Paragraph(str(err), P))
+        flowables.append(Paragraph(f"Error loading AMI parameter file: {ami_file}!", P))
+        return flowables
+
+    # Summarize results.
+    flowables.append(Paragraph("Model import was successful.", P))
+    if has_getwave:
+        flowables.append(Paragraph("Model has a `AMI_GetWave()` function.", P))
+        flowables.append(Paragraph(f"&nbsp;&nbsp;The first {ignore_bits} returned bits should be ignored.", P))
+    else:
+        flowables.append(Paragraph("Model has no `AMI_GetWave()` function.", P))
+    if returns_impulse:
+        flowables.append(Paragraph("Model's `AMI_Init()` function returns an impulse response.", P))
+    else:
+        flowables.append(Paragraph("Model's `AMI_Init()` function does not return an impulse response.", P))
+    if has_ts4:
+        flowables.append(Paragraph("Model includes on-die S-parameters.", P))
+    else:
+        flowables.append(Paragraph("Model does not include on-die S-parameters.", P))
+
+    # Test w/ perfect channel.
+    flowables.extend([
+        Paragraph("Testing w/ Perfect Channel", H3),
+        Paragraph("Here, we represent the 'channel' by a Kronecker delta function, \
+                  so as to elicit the actual responses of the model itself.", P),
+        spacer,
+        Paragraph("This imposes certain limitations on our testing. \
+                  For instance, since any equalization is over-equalization for such a perfect channel, \
+                  if the model imposes:"),
+        ListFlowable(
+            [Paragraph("a minimum amount of CTLE peaking, or"),
+             Paragraph("a minimum first DFE tap value,"),
+             Paragraph("etc.,"),
+            ], bulletType='bullet', bulletIndent=0.25*inch),
+        Paragraph("then we will end up in an over-equalized state."),
+        spacer,
+        Paragraph("Such a state will not usually affect the AMI_Init() function, \
+                  but may affect the AMI_GetWave() function, \
+                  particularly if a DFE has been enabled. \
+                  And this will cause disagreement between the two. Therefore:"),
+        spacer,
+        Paragraph("The results of this section should be considered with some skepticism, \
+                  as far as inferring how the model will behave in a 'real World' scenario.",
+                  bold_style),
+        spacer,
+        Paragraph(f"The {ital('Lossy Channel')} and {ital('Reflective Channel')} sections, below, \
+                  give a more useful assessment of the model's behavior in such real use scenarios."),
+    ])
+
+    bit_interval = 1.0 / bit_rate
+    sample_interval = bit_interval / nspui
+    channel_response = np.array([1.0] + [0.0] * (nspui - 1) + [0.0] * 19 * nspui) / sample_interval  # Kronecker delta
+
+    # - Init() vs. GetWave()
+    flowables.extend(
+        ami_tst_init_vs_getwave(
+            ami_model, pcfg, bit_interval, sample_interval,
+            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
+        )
+    )
+
+    # - samples per bit
+    flowables.extend(
+        ami_tst_samples_per_bit(
+            ami_model, pcfg, bit_interval, sample_interval,
+            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
+        )
+    )
+
+    # - GetWave() input length sensitivity
+    flowables.extend(
+        ami_tst_getwave_input_length(
+            ami_model, pcfg, bit_interval, sample_interval,
+            channel_response, param_defs, fig_x=fig_x, fig_y=fig_y
+        )
+    )
+
+    # Test w/ lossy channel.
+
+    # Test w/ reflective channel.
+
+    # Linearity check
 
     return flowables
