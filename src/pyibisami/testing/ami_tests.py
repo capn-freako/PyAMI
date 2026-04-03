@@ -10,7 +10,9 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 import platform
 
+from abc     import ABC, abstractmethod
 from pathlib import Path
+from typing  import Sequence
 
 import numpy as np
 
@@ -30,159 +32,142 @@ from ..util.reportlab   import (
 
 from .ami_tests_helpers import init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length
 
-def ami_tst_init_vs_getwave(
-    ami_model: AMIModel, pcfg: AMIParamConfigurator,
-    bit_interval: float, sample_interval:float,
-    channel_response: Rvec, param_defs: list[TestSweep],
-    fig_x: float = 6, fig_y: float = 3,
-) -> list[Flowable]:
-    """
-    Compare output from ``AMI_Init()`` and ``AMI_GetWave()`` functions.
+class AmiTester(ABC):
+    "Abstract class defining the function signature for AMI testing functions."
 
-    Args:
-        ami_model: The AMI model to test.
-        pcfg: The AMI model configurator to use/modify.
-        bit_interval: The unit interval (s).
-        sample_interval: Time between adjacent signal vector elements (s).
-        channel_response: Analog channel impulse response (V/sample).
-        param_defs: List of AMI/simulation parameter sets to sweep over.
+    @abstractmethod
+    def ami_tst(
+        self,
+        ami_model: AMIModel, pcfg: AMIParamConfigurator,
+        bit_interval: float, sample_interval:float,
+        channel_response: Rvec, param_defs: list[TestSweep],
+        fig_x: float = 6, fig_y: float = 3,
+    ) -> list[Flowable]:
+        """
+        Perform some test on an ``AMIModel`` instance.
 
-    Keyword Args:
-        fig_x: x-dimension of resultant plot figure (in.).
-            Default: 6
-        fig_y: y-dimension of resultant plot figure (in.).
-            Default: 3
+        Args:
+            ami_model: The AMI model to test.
+            pcfg: The AMI model configurator to use/modify.
+            bit_interval: The unit interval (s).
+            sample_interval: Time between adjacent signal vector elements (s).
+            channel_response: Analog channel impulse response (V/s).
+            param_defs: List of AMI/simulation parameter sets to sweep over.
 
-    Returns:
-        A list of _ReportLab_ ``Flowable``s comprising the results of this test.
-    """
+        Keyword Args:
+            fig_x: x-dimension of resultant plot figure (in.).
+                Default: 6
+            fig_y: y-dimension of resultant plot figure (in.).
+                Default: 3
 
-    flowables: list[Flowable] = [
-        page_break,
-        Paragraph("Init() vs. GetWave()", H4),
-        Paragraph(
-            "Here, we check to see that the fundamental responses of the model are the same \
-            whether we call AMI_Init() or AMI_GetWave().", P),
-        spacer,
-        Paragraph(f"{bold('Note:')} This test is only possible for models that:", P),
-        ListFlowable([
-            Paragraph(f"have an {fixed('AMI_GetWave()')} function, and", P),
-            Paragraph(f"return an impulse response from their {fixed('AMI_Init()')} function.", P),
-        ], bulletType='bullet', bulletIndent=0.25*inch),
-        spacer,
-    ]
-    initializer = pcfg.get_init(
-        bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-    flowables.extend(plot_sweeps(init_vs_getwave, ami_model, initializer, param_defs,
-                                 fig_x=fig_x, fig_y=fig_y))
-    flowables.extend([
-        Paragraph(f"{bold('Plot notes:')}", P),
-        ListFlowable([
-            Paragraph(f"Solid lines are {fixed('Init()')}; dashed are {fixed('GetWave()')}."),
-            Paragraph("Step response shown at half brightness."),
-        ], bulletFontSize=9),
-        spacer,
-        Paragraph(f"Compare the plots above. \
-                  The {fixed('Init()')} (solid) and {fixed('GetWave()')} (dashed) plots \
-                  should look nearly identical.", P),
-        Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
-                  it`s not expected to match and is plotted only as a debugging aid.)", P),
-    ])
+        Returns:
+            A list of _ReportLab_ ``Flowable``s comprising the results of this test.
+        """
 
-    return flowables
+        raise NotImplementedError
 
+class AmiTestInitVsGetwave(AmiTester):
+    "Compare output from ``AMI_Init()`` and ``AMI_GetWave()`` functions."
 
-def ami_tst_samples_per_bit(
-    ami_model: AMIModel, pcfg: AMIParamConfigurator,
-    bit_interval: float, sample_interval:float,
-    channel_response: Rvec, param_defs: list[TestSweep],
-    fig_x: float = 6, fig_y: float = 3,
-) -> list[Flowable]:
-    """
-    Compare model responses at different over-sampling rates.
-
-    Args:
-        ami_model: The AMI model to test.
-        pcfg: The AMI model configurator to use/modify.
-        bit_interval: The unit interval (s).
-        sample_interval: Time between adjacent signal vector elements (s).
-        channel_response: Analog channel impulse response (V/sample).
-        param_defs: List of AMI/simulation parameter sets to sweep over.
-
-    Keyword Args:
-        fig_x: x-dimension of resultant plot figure (in.).
-            Default: 6
-        fig_y: y-dimension of resultant plot figure (in.).
-            Default: 3
-
-    Returns:
-        A list of _ReportLab_ ``Flowable``s comprising the results of this test.
-    """
-
-    flowables: list[Flowable] = [
-        page_break,
-        Paragraph("Samples per Bit", H4),
-        Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
-                   i.e., number of samples per bit (or, symbol).", P),
-        spacer,
-    ]
-    initializer = pcfg.get_init(
-        bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-    flowables.extend(plot_sweeps(samples_per_bit, ami_model, initializer, param_defs,
-                                 fig_x=fig_x, fig_y=fig_y))
-    flowables.append(
-        Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
-
-    return flowables
-
-
-def ami_tst_getwave_input_length(
-    ami_model: AMIModel, pcfg: AMIParamConfigurator,
-    bit_interval: float, sample_interval:float,
-    channel_response: Rvec, param_defs: list[TestSweep],
-    fig_x: float = 6, fig_y: float = 3,
-) -> list[Flowable]:
-    """
-    Compare ``AMI_GetWave()`` outputs for different input lengths.
-
-    Args:
-        ami_model: The AMI model to test.
-        pcfg: The AMI model configurator to use/modify.
-        bit_interval: The unit interval (s).
-        sample_interval: Time between adjacent signal vector elements (s).
-        channel_response: Analog channel impulse response (V/sample).
-        param_defs: List of AMI/simulation parameter sets to sweep over.
-
-    Keyword Args:
-        fig_x: x-dimension of resultant plot figure (in.).
-            Default: 6
-        fig_y: y-dimension of resultant plot figure (in.).
-            Default: 3
-
-    Returns:
-        A list of _ReportLab_ ``Flowable``s comprising the results of this test.
-    """
-
-    flowables: list[Flowable] = [
-        page_break,
-        Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
-        Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
-                  may exhibit sensitivity to the length of its input. And this is undesireable. \
-                  Here, we try to flush that out if it's occurring.", P),
-        spacer,
-    ]
-    if ami_model.has_getwave:
+    def ami_tst(
+        self,
+        ami_model: AMIModel, pcfg: AMIParamConfigurator,
+        bit_interval: float, sample_interval:float,
+        channel_response: Rvec, param_defs: list[TestSweep],
+        fig_x: float = 6, fig_y: float = 3,
+    ) -> list[Flowable]:
+        flowables: list[Flowable] = [
+            page_break,
+            Paragraph("Init() vs. GetWave()", H4),
+            Paragraph(
+                "Here, we check to see that the fundamental responses of the model are the same \
+                whether we call AMI_Init() or AMI_GetWave().", P),
+            spacer,
+            Paragraph(f"{bold('Note:')} This test is only possible for models that:", P),
+            ListFlowable([
+                Paragraph(f"have an {fixed('AMI_GetWave()')} function, and", P),
+                Paragraph(f"return an impulse response from their {fixed('AMI_Init()')} function.", P),
+            ], bulletType='bullet', bulletIndent=0.25*inch),
+            spacer,
+        ]
         initializer = pcfg.get_init(
             bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-        flowables.extend(plot_sweeps(check_getwave_input_length, ami_model, initializer, param_defs,
-                                     fig_x=fig_x, fig_y=fig_y, finalize=False))
-        flowables.append(
-            Paragraph("You should see very little difference in either domain \
-                      between the various plots in either chart above.", P))
-    else:
-        flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
+        flowables.extend(plot_sweeps(init_vs_getwave, ami_model, initializer, param_defs,
+                                     fig_x=fig_x, fig_y=fig_y))
+        flowables.extend([
+            Paragraph(f"{bold('Plot notes:')}", P),
+            ListFlowable([
+                Paragraph(f"Solid lines are {fixed('Init()')}; dashed are {fixed('GetWave()')}."),
+                Paragraph("Step response shown at half brightness."),
+            ], bulletFontSize=9),
+            spacer,
+            Paragraph(f"Compare the plots above. \
+                      The {fixed('Init()')} (solid) and {fixed('GetWave()')} (dashed) plots \
+                      should look nearly identical.", P),
+            Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
+                      it`s not expected to match and is plotted only as a debugging aid.)", P),
+        ])
 
-    return flowables
+        return flowables
+
+
+class AmiTestSamplesPerBit(AmiTester):
+    "Compare model response at different oversampling factors."
+
+    def ami_tst(
+        self,
+        ami_model: AMIModel, pcfg: AMIParamConfigurator,
+        bit_interval: float, sample_interval:float,
+        channel_response: Rvec, param_defs: list[TestSweep],
+        fig_x: float = 6, fig_y: float = 3,
+    ) -> list[Flowable]:
+        flowables: list[Flowable] = [
+            page_break,
+            Paragraph("Samples per Bit", H4),
+            Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
+                       i.e., number of samples per bit (or, symbol).", P),
+            spacer,
+        ]
+        initializer = pcfg.get_init(
+            bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+        flowables.extend(plot_sweeps(samples_per_bit, ami_model, initializer, param_defs,
+                                     fig_x=fig_x, fig_y=fig_y))
+        flowables.append(
+            Paragraph("You should see very little difference between the 3 plots in either chart above.", P))
+
+        return flowables
+
+
+class AmiTestGetwaveInputLength(AmiTester):
+    "Compare ``AMI_GetWave()`` outputs for different input lengths."
+
+    def ami_tst(
+        self,
+        ami_model: AMIModel, pcfg: AMIParamConfigurator,
+        bit_interval: float, sample_interval:float,
+        channel_response: Rvec, param_defs: list[TestSweep],
+        fig_x: float = 6, fig_y: float = 3,
+    ) -> list[Flowable]:
+        flowables: list[Flowable] = [
+            page_break,
+            Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
+            Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
+                      may exhibit sensitivity to the length of its input. And this is undesireable. \
+                      Here, we try to flush that out if it's occurring.", P),
+            spacer,
+        ]
+        if ami_model.has_getwave:
+            initializer = pcfg.get_init(
+                bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
+            flowables.extend(plot_sweeps(check_getwave_input_length, ami_model, initializer, param_defs,
+                                         fig_x=fig_x, fig_y=fig_y, finalize=False))
+            flowables.append(
+                Paragraph("You should see very little difference in either domain \
+                          between the various plots in either chart above.", P))
+        else:
+            flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
+
+        return flowables
 
 
 def test_ami_model(
@@ -293,6 +278,31 @@ def test_ami_model(
     bit_interval = 1.0 / bit_rate
     sample_interval = bit_interval / nspui
 
+    # Run specific tests.
+    testers: Sequence[AmiTester] = [
+        AmiTestInitVsGetwave(), AmiTestSamplesPerBit(), AmiTestGetwaveInputLength()]
+
+    def run_testers(channel: Rvec) -> list[Flowable]:
+        """
+        Run selected model testers, using the given channel response.
+
+        Args:
+            channel: Channel impulse resopnse (V/s).
+
+        Returns:
+            A list of _ReportLab_ ``Flowable``s comprising the testing results.
+        """
+
+        flowables: list[Flowable] = []
+        for tester in testers:
+            flowables.extend(
+                tester.ami_tst(
+                    ami_model, pcfg, bit_interval, sample_interval,
+                    channel, param_defs, fig_x=fig_x, fig_y=fig_y
+                )
+            )
+        return flowables
+
     # Test w/ perfect channel.
     flowables.extend([
         Paragraph("Testing w/ Perfect Channel", H3),
@@ -322,17 +332,10 @@ def test_ami_model(
                   give a more useful assessment of the model's behavior in such real use scenarios."),
     ])
 
-    tests = [ami_tst_init_vs_getwave, ami_tst_samples_per_bit, ami_tst_getwave_input_length]
     perfect_channel = np.array(
         [1.0] + [0.0] * (nspui - 1) + [0.0] * 19 * nspui
     ) / sample_interval  # Kronecker delta
-    for test in tests:
-        flowables.extend(
-            test(
-                ami_model, pcfg, bit_interval, sample_interval,
-                perfect_channel, param_defs, fig_x=fig_x, fig_y=fig_y
-            )
-        )
+    flowables.extend(run_testers(perfect_channel))
     flowables.extend([
         spacer,
         Paragraph(f"{bold('Note:')} If you`ve enabled an adaptive DFE in an Rx model \
@@ -350,7 +353,7 @@ def test_ami_model(
         Paragraph(f"You should see better agreement between the {fixed('AMI_Init()')} and \
                   {fixed('AMI_GetWave()')} outputs, when this test is repeated below for a Lossy channel."),
     ])
-    
+
     # Test w/ lossy channel.
     flowables.extend([
         page_break,
@@ -361,13 +364,7 @@ def test_ami_model(
     lossy_channel = lfilter(
         b, a, np.array([0., 1.] + [0.] * (nspui - 2) + [0.0] * 19 * nspui)
     ) / sample_interval
-    for test in tests:
-        flowables.extend(
-            test(
-                ami_model, pcfg, bit_interval, sample_interval,
-                lossy_channel, param_defs, fig_x=fig_x, fig_y=fig_y
-            )
-        )
+    flowables.extend(run_testers(lossy_channel))
 
     # Test w/ reflective channel.
     flowables.extend([
@@ -388,13 +385,7 @@ def test_ami_model(
     h = np.fft.irfft(raised_cosine(H)) / ts
     krnl = interp1d(t_fft, h)
     reflective_channel = krnl(t)
-    for test in tests:
-        flowables.extend(
-            test(
-                ami_model, pcfg, bit_interval, sample_interval,
-                reflective_channel, param_defs, fig_x=fig_x, fig_y=fig_y
-            )
-        )
+    flowables.extend(run_testers(reflective_channel))
 
     # Linearity check
 
