@@ -27,8 +27,8 @@ from ..ami.model import AMIModel
 from ..ami.parser import AMIParamConfigurator, ParamName
 from ..ibis.file import IBISModel
 from ..ibis.model import Model
+from ..testing.ami_tests import ami_tst_init_vs_getwave, ami_tst_samples_per_bit, ami_tst_getwave_input_length
 
-from .ami_tests import ami_tst_init_vs_getwave, ami_tst_samples_per_bit, ami_tst_getwave_input_length
 from .tool_helpers import (
     init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length,
     bold, ital, fixed, page_break, spacer,
@@ -153,56 +153,29 @@ def test_ami_model(
     if not model.is_ami:
         return [Paragraph("Error: This model is not an IBIS-AMI model!", P)]
 
-    # Perform basic sanity checking and reporting.
+    # Try to fetch AMI files for this machine/system combination.
     machine = platform.machine().lower()
-    system = platform.system().lower()
     match(machine):
         case "x86":
-            ami_dict = model.ami_files['32-bit']
-            match(system):
-                case "windows":
-                    ami_files = ami_dict['win']
-                case "linux":
-                    ami_files = ami_dict['lin']
-                case "darwin":
-                    ami_files = ami_dict['lin']
-                case _:
-                    return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
+            ami_dict = model.ami_files.get('32-bit')
         case "x86_64":
-            ami_dict = model.ami_files['64-bit']
-            match(system):
-                case "windows":
-                    ami_files = ami_dict['win']
-                case "linux":
-                    ami_files = ami_dict['lin']
-                case "darwin":
-                    ami_files = ami_dict['lin']
-                case _:
-                    return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
+            ami_dict = model.ami_files.get('64-bit')
         case "amd64":
-            ami_dict = model.ami_files['64-bit']
-            match(system):
-                case "windows":
-                    ami_files = ami_dict['win']
-                case "linux":
-                    ami_files = ami_dict['lin']
-                case "darwin":
-                    ami_files = ami_dict['lin']
-                case _:
-                    return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
+            ami_dict = model.ami_files.get('64-bit')
         case "arm64":
-            ami_dict = model.ami_files['64-bit']
-            match(system):
-                case "windows":
-                    ami_files = ami_dict['win']
-                case "linux":
-                    ami_files = ami_dict['lin']
-                case "darwin":
-                    ami_files = ami_dict['lin']
-                case _:
-                    return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
+            ami_dict = model.ami_files.get('64-bit')
         case _:
             return [Paragraph(f"Error: Unrecognized machine type: {machine}!", P)]
+    system = platform.system().lower()
+    match(system):
+        case "windows":
+            ami_files = ami_dict.get('win')
+        case "linux":
+            ami_files = ami_dict.get('lin')
+        case "darwin":
+            ami_files = ami_dict.get('lin')
+        case _:
+            return [Paragraph(f"Error: Unrecognized system type: {system}!", P)]
     if not ami_files:
         return [Paragraph(f"Error: Model does not provide AMI files for this machine/system combination: {machine}/{system}!", P)]
 

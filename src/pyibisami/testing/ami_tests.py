@@ -14,7 +14,7 @@ from ..common import Rvec, TestSweep
 from ..ami.model import AMIModel
 from ..ami.parser import AMIParamConfigurator
 
-from .tool_helpers import (
+from ..util.tool_helpers import (
     init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length,
     bold, ital, fixed, page_break, spacer,
     styles, bold_style, caption_style, indented_style,
