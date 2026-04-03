@@ -33,7 +33,7 @@ import pyibisami
 from ..testing.ibis_file_tests import test_ami_models, get_ibis_contents, golden_parser_results
 from ..tools.run_notebook import mk_dummy_run_file
 from ..tools.run_tests import expand_params
-from ..util.reportlab_combinators import(
+from ..util.reportlab import(
     preformatted, title_page,
 )
 

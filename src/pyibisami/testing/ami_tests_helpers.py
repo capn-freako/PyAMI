@@ -1,207 +1,27 @@
 """
-Common helper utilities used by the various scripts in ``tools/``.
+Low level helper routines used by the API functions in ``pyibisami.testing.ami_tests``.
 
 Original Author: David Banas <capn.freako@gmail.com>
-Original Date:   March 20, 2026
+
+Original Date:   April 3, 2026
 
 Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
-import numpy as np
-
-from pathlib    import Path
 from random     import randrange
 from tempfile   import NamedTemporaryFile
-from typing     import Any, Callable, Generator, NewType
+from typing     import Any, Callable
 
-from matplotlib import pyplot as plt
-from matplotlib.figure import Figure
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, Spacer
+import numpy as np
 
-from ..common import Rvec, TestSweep
-from ..ami.model import AMIModel, AMIModelInitializer
+from matplotlib.figure      import Figure
+from reportlab.lib.units    import inch
+from reportlab.platypus     import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
 
-from .model_testing import do_samples_per_bit
-
-EPS = 0.0001  # Used to test floats for "== 0".
-
-RGB = NewType("RGB", tuple[float, float, float])
-
-RED   = RGB((1.0, 0.0, 0.0))
-GREEN = RGB((0.0, 1.0, 0.0))
-BLUE  = RGB((0.0, 0.0, 1.0))
-WHITE = RGB((1.0, 1.0, 1.0))
-BLACK = RGB((0.0, 0.0, 0.0))
-
-try:
-    plt.rcParams['axes.titlesize'] = 10
-    plt.rcParams['xtick.labelsize'] = 7
-    plt.rcParams['ytick.labelsize'] = 7
-    plt.rcParams['axes.labelsize'] = 8
-except:
-    print(f"Available keys: {plt.rcParams.keys()}")
-
-# ReportLab Platypus abbreviations
-page_break = PageBreak()
-spacer = Spacer(inch, 0.15*inch)
-styles = getSampleStyleSheet()
-P  = styles['Normal']
-H1 = styles['Heading1']
-H2 = styles['Heading2']
-H3 = styles['Heading3']
-H4 = styles['Heading4']
-bold_style = ParagraphStyle(
-    name='BoldStyle',
-    parent=styles['Normal'],
-    fontName='Helvetica-Bold', # Specify the bold variant here
-    # fontSize=12
-)
-caption_style = ParagraphStyle(
-    name='CaptionStyle',
-    parent=styles['Normal'],
-    fontName='Helvetica-Bold', # Specify the bold variant here
-    fontSize=10,
-    alignment=TA_CENTER,
-)
-indented_style = ParagraphStyle(
-    name='IndentedStyle',
-    parent=styles['Normal'],
-    leftIndent=50,
-)
-
-
-def tag(html_tag: str, text: str) -> str:
-    """Apply given HTML tag to text."""
-    return f"<{html_tag}>{text}</{html_tag}>"
-
-
-def bold(text: str) -> str:
-    """Embolden text, using HTML `<strong>` tag."""
-    return tag("strong", text)
-
-
-def ital(text: str) -> str:
-    """Italicize text, using HTML `<em>` tag."""
-    return tag("em", text)
-
-
-def fixed(text: str) -> str:
-    """Render text in fixed width font, using HTML `<pre>` tag."""
-    return tag("kbd", text)
-
-
-# General purpose utilities.
-def plot_name(tst_name: str, n: int = 0) -> Generator[str, None, None]:
-    """
-    Plot name generator keeps multiple tests from overwriting each other's plots.
-
-    Args:
-        tst_name: The root name to use for the plot names generated.
-
-    Keyword Args:
-        n: The starting index to use for generated plot names.
-            Default = 0
-
-    Returns:
-        Plot name generator.
-
-    Notes:
-        1. Plot name indices will begin at: ``n + 1``.
-    """
-    while True:
-        n += 1
-        yield f"{tst_name}_plot_{n}.png"
-
-
-def hsv2rgb(hue: float, saturation: float, value:float) -> RGB:
-    """
-    Convert a hue-saturation-value (HSV) triple to a red-green-blue (RGB) triple.
-
-    Args:
-        hue: The hue, as a direction on the standard color wheel (deg.).
-        saturation: The saturation, normalized to: [0, 1].
-        value: The value (a.k.a. - brightness), normalized to: [0, 1].
-
-    Returns:
-        A 3-tuple containing the
-
-        - red,
-        - green, and
-        - blue values,
-
-        all normalized to: [0, 1].
-
-    Notes:
-        1. ``saturation`` and ``value`` are clipped to the range: [0, 1].
-        2. ``hue`` is taken modulus 360.
-    """
-
-    V = min(1.0, max(0.0, float(value)))
-    S = min(1.0, max(0.0, float(saturation)))
-    if S < EPS:           # saturation == 0?
-        return RGB((V, V, V))  # gray at brightness = `value`
-    H, f = np.divmod(float(hue) % 360.0, 60.0)
-
-    p: float = V * (1.0 - S)
-    q: float = V * (1.0 - f * S)
-    t: float = V * (1.0 - (1.0 - f) * S)
-
-    match(int(H)):
-        case 0:
-            R = V
-            G = t
-            B = p
-        case 1:
-            R = q
-            G = V
-            B = p
-        case 2:
-            R = p
-            G = V
-            B = t
-        case 3:
-            R = p
-            G = q
-            B = V
-        case 4:
-            R = t
-            G = p
-            B = V
-        case _:
-            R = V
-            G = p
-            B = q
-
-    return RGB((R, G, B))
-
-
-def color_picker(num_hues: int = 3, first_hue: float = 0.0) -> Generator[tuple[RGB, RGB], None, None]:
-    """
-    Yields pairs of colors having the same hue, but different intensities.
-
-    Keyword Args:
-        num_hues: The number of hues into which to split the color wheel evenly.
-            Default = 3
-        first_hue: The desired first hue.
-            Default = 0.0
-
-    Notes:
-        1. The first color is fully bright and saturated, and the second is
-        half bright and half saturated. Originally, the intent was to have
-        the second color used for the `reference` waveform in plots.
-    """
-
-    hue = first_hue
-    hues_fetched: int = 0
-    while True:
-        yield (hsv2rgb(hue, 1.0, 1.0), hsv2rgb(hue, 0.75, 0.75))
-        hues_fetched += 1
-        if hues_fetched == num_hues:
-            return
-        hue += 360 // num_hues
+from ..common           import Rvec, TestSweep
+from ..ami.model        import AMIModel, AMIModelInitializer
+from ..util.plot        import RGB, RED, GREEN, BLUE, plt, color_picker
+from ..util.reportlab   import ital, styles
 
 
 def plot_resps(
@@ -267,6 +87,60 @@ def init_vs_getwave(
 
     model.initialize(initializer)
     plot_resps(fig, model.get_responses(), label, color)
+
+
+def do_samples_per_bit(
+    model: AMIModel, initializer: AMIModelInitializer, channel_response: Rvec,
+    sample_interval: float, bit_rate: float, nbits: int
+) -> list[tuple[dict[str, Any], int]]:
+    """
+    Run the "Samples per Bit" comparison.
+
+    Args:
+        model: The AMI model to test.
+        initializer: The AMI model initializer to use/customize.
+        channel_response: The analog channel impulse response.
+        sample_interval: The time spacing between successive elements of ``channel_response``.
+        bit_rate: The assumed symbol rate.
+        nbits: The number of bits to use for model characterization.
+
+    Returns:
+        A list of model response dictionaries, one for each oversampling rate tried.
+    """
+
+    # Do not interpolate deltas.
+    len_ch_resp = len(channel_response)
+    t = np.arange(0, len_ch_resp) * sample_interval
+    nspui = int(1 / (sample_interval * bit_rate))
+
+    def interp(x, ts):
+        if not any(channel_response[1:]):  # delta?
+            len_x = len(x)
+            if len_x > len_ch_resp:
+                rslt = np.pad(channel_response, (0, len_x - len_ch_resp),
+                           mode="constant", constant_values=0)
+            else:
+                rslt = channel_response[:len_x]
+            return rslt * sample_interval / ts
+        else:
+            krnl = interp1d(
+                t, channel_response, kind="cubic",
+                bounds_error=False, fill_value="extrapolate", assume_sorted=True
+            )  # interpolation "kernel"
+            return krnl(x)
+
+    model_responses = []
+    for osf in [nspui//2, nspui, nspui*2]:
+        ts = 1 / (bit_rate * osf)
+        _row_size = nbits * osf
+        _t = np.array([n * ts for n in range(_row_size)])
+        
+        initializer.sample_interval = ts
+        initializer.channel_response = interp(_t, ts)
+        model.initialize(initializer)
+        model_responses.append((model.get_responses(), osf))
+
+    return model_responses
 
 
 def samples_per_bit(

@@ -18,7 +18,7 @@ import numpy as np
 
 from pyibisami.ami.model    import AMIModel
 from pyibisami.common       import TestSweep
-from pyibisami.util.tool_helpers import plot_name, color_picker
+from pyibisami.util.plot    import plot_name, color_picker
 
 
 def expand_params(input_parameters: str) -> list[TestSweep]:

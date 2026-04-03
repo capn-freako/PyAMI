@@ -51,7 +51,7 @@ PyPi = "https://pypi.org/project/PyIBIS-AMI/"
 ami-config = "pyibisami.ami.config:main"
 run-tests = "pyibisami.tools.run_tests:main"
 run-notebook = "pyibisami.tools.run_notebook:main"
-test-model = "pyibisami.tools.test_models:main"
+test-model = "pyibisami.testing.test_models:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
