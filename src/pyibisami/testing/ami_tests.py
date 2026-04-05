@@ -407,7 +407,7 @@ def test_ami_model(
         plot_sweeps(
             mk_linearity_checker([lossy_channel, reflective_channel]),
             ami_model, initializer, param_defs,
-            fig_x=fig_x, fig_y=fig_y #, finalize=False
+            fig_x=fig_x, fig_y=fig_y
         )
     )
     flowables.extend([
