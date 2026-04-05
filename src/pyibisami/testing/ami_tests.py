@@ -30,7 +30,9 @@ from ..util.reportlab   import (
     styles, bold_style, caption_style, indented_style,
     P, H1, H2, H3, H4)
 
-from .ami_tests_helpers import init_vs_getwave, plot_sweeps, samples_per_bit, check_getwave_input_length
+from .ami_tests_helpers import (
+    init_vs_getwave, plot_sweeps, samples_per_bit,
+    check_getwave_input_length, mk_linearity_checker)
 
 class AmiTester(ABC):
     "Abstract class defining the function signature for AMI testing functions."
@@ -388,5 +390,40 @@ def test_ami_model(
     flowables.extend(run_testers(reflective_channel))
 
     # Linearity check
+    flowables.extend([
+        page_break,
+        Paragraph(f"Testing Linearity of {fixed('AMI_Init()')} function", H3),
+        Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
+        spacer,
+        Paragraph(
+            f"{bold('Note:')} There is no requirement that the {fixed('AMI_GetWave()')} \
+            function exhibit linearity. In fact, the {fixed('AMI_GetWave()')} function is \
+            often used to capture non-linear behavior.", P),
+        spacer,
+    ])
+    initializer = pcfg.get_init(
+        bit_interval, sample_interval, lossy_channel, {"root_name": pcfg._root_name})
+    flowables.extend(
+        plot_sweeps(
+            mk_linearity_checker([lossy_channel, reflective_channel]),
+            ami_model, initializer, param_defs,
+            fig_x=fig_x, fig_y=fig_y #, finalize=False
+        )
+    )
+    flowables.extend([
+        spacer,
+        Paragraph(f"Whereas we used dashed lines, previously, to represent the output from the \
+                  {fixed('AMI_GetWave()')} function, the plots above contain only output from the\
+                  {fixed('AMI_Init()')} function. So, here we use:", P),
+        ListFlowable([
+            Paragraph("solid lines to show the model's response to the sum of the channels used, and", P),
+            Paragraph("dashed lines to show the sum of the model's responses to each channel, individually.", P),
+            ], bulletType='bullet'),
+        Paragraph(f"If the model's {fixed('AMI_Init()')} function is truly linear, \
+                  then the two should look identical.", P),
+        spacer,
+        Paragraph(f"{bold('Note:')} As throughout, we use color hue to pair step and pulse responses, \
+                  with the step response shown at half brightness.", P)
+    ])
 
     return flowables

@@ -10,7 +10,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 from random     import randrange
 from tempfile   import NamedTemporaryFile
-from typing     import Any, Callable
+from typing     import Any, Callable, Optional
 
 import numpy as np
 
@@ -29,7 +29,8 @@ def plot_resps(
     fig: Figure,
     resps: dict[str, Any],
     lbl: str,
-    clr: RGB
+    clr: RGB,
+    styles: Optional[tuple[str, str]] = None
 ) -> None:
     """
     Plot available responses.
@@ -39,6 +40,10 @@ def plot_resps(
         resps: The model responses to plot.
         lbl: The plot label to use.
         clrs: The plot hue to use, in full brightness.
+
+    Keyword Args:
+        styles: A pair of styles to use for ``Init()``/``GetWave()`` plotting.
+            Default: None (solid/dashed will be used.)
     """
 
     plt.figure(fig)
@@ -48,20 +53,26 @@ def plot_resps(
     color_dim    = "#%02X%02X%02X" % (int(0.5 * clr[0] * 0xFF),
                                       int(0.5 * clr[1] * 0xFF),
                                       int(0.5 * clr[2] * 0xFF))
+    if styles:
+        style_init = styles[0]
+        style_gw   = styles[1]
+    else:
+        style_init = 'solid'
+        style_gw   = 'dashed'
     if 'out_resp_init' in resps:
         t, h, s, p, f, H = resps['out_resp_init']
         plt.subplot(121)
-        plt.plot(t*1e9, s, color=color_dim)
-        plt.plot(t*1e9, p, label=lbl, color=color_bright)
+        plt.plot(t*1e9, s,            color=color_dim,    linestyle=style_init)
+        plt.plot(t*1e9, p, label=lbl, color=color_bright, linestyle=style_init)
         plt.subplot(122)
-        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color_bright)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl, color=color_bright, linestyle=style_init)
     if 'out_resp_getw' in resps:
         t, h, s, p, f, H = resps['out_resp_getw']
         plt.subplot(121)
-        plt.plot(t*1e9, s, linestyle='dashed', color=color_dim)
-        plt.plot(t*1e9, p, linestyle='dashed', color=color_bright)
+        plt.plot(t*1e9, s, color=color_dim,    linestyle=style_gw)
+        plt.plot(t*1e9, p, color=color_bright, linestyle=style_gw)
         plt.subplot(122)
-        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), linestyle='dashed', color=color_bright)
+        plt.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), color=color_bright, linestyle=style_gw)
 
 
 def init_vs_getwave(
@@ -226,7 +237,6 @@ def check_getwave_input_length(
             y, _, _ = model.getWave(x)
             ys = np.concatenate((ys, y))
             smpl_cnt += input_len
-        # if n:
         plt.subplot(121)
         plt.plot(t * 1e9, ys, label=str(bits_per_call))
         plt.subplot(122)
@@ -248,6 +258,63 @@ def check_getwave_input_length(
     plt.ylabel("|H(f)| (dB)")
     plt.legend()
     plt.grid()
+
+
+def mk_linearity_checker(
+    hs: list[Rvec],
+    plot_t_max: float = 1e-9
+) -> Callable[[AMIModel, AMIModelInitializer, Figure, RGB, str], None]:
+    """
+    Make a model linearity checking function w/ call signature needed by ``plot_sweeps()``.
+
+    Args:
+        hs: The list of channel responses to use.
+
+    Keyword Args:
+        plot_t_max: Maximum x-axis value (s).
+            Default: 1 ns
+    Returns:
+        A function suitable for use w/ ``plot_sweeps()``.
+    """
+
+    def check_linearity(
+        model: AMIModel,
+        initializer: AMIModelInitializer,
+        fig: Figure,
+        color: RGB,
+        label: str,
+    ) -> None:
+        "Compare sum of model's responses to model's response to sum."
+
+        row_size        = initializer.row_size
+        sample_interval = initializer.sample_interval
+
+        h_shift = int(-0.49 * row_size)
+        hs_sum = sum(hs) / len(hs)
+        initializer.channel_response = hs_sum
+        model.initialize(initializer)
+        t_sum, _, s_sum, p_sum, f_sum, H_sum = model.get_responses(calc_getw=False)['out_resp_init']
+        s_tot = np.zeros(row_size)
+        p_tot = np.zeros(row_size)
+        H_tot = np.zeros(row_size // 2 + 1) * 1j
+        for h, clrs in zip(hs, color_picker(len(hs))):
+            initializer.channel_response = h
+            model.initialize(initializer)
+            _, _, _s, _p, _, _H = model.get_responses(calc_getw=False)['out_resp_init']
+            s_tot += _s
+            p_tot += _p
+            H_tot += _H
+        s_tot /= len(hs)
+        p_tot /= len(hs)
+        H_tot /= len(hs)
+
+        plt.figure(fig)
+        plot_resps(fig, {'out_resp_init': (t_sum, hs_sum, s_sum, p_sum, f_sum, H_sum)},
+                   label, color, styles=('solid', 'solid'))    # The second style is unused.
+        plot_resps(fig, {'out_resp_init': (t_sum, hs_sum, s_tot, p_tot, f_sum, H_tot)},
+                   "",    color, styles=('dashed', 'dashed'))  # The second style is unused.
+
+    return check_linearity
 
 
 def plot_sweeps(
