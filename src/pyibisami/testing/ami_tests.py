@@ -10,9 +10,9 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 import platform
 
-from abc     import ABC, abstractmethod
+from abc     import abstractmethod
 from pathlib import Path
-from typing  import Sequence
+from typing  import Protocol, Sequence
 
 import numpy as np
 
@@ -34,7 +34,7 @@ from .ami_tests_helpers import (
     init_vs_getwave, plot_sweeps, samples_per_bit,
     check_getwave_input_length, mk_linearity_checker)
 
-class AmiTester(ABC):
+class AmiTester(Protocol):
     "Abstract class defining the function signature for AMI testing functions."
 
     @abstractmethod
@@ -68,7 +68,7 @@ class AmiTester(ABC):
 
         raise NotImplementedError
 
-class AmiTestInitVsGetwave(AmiTester):
+class AmiTestInitVsGetwave():
     "Compare output from ``AMI_Init()`` and ``AMI_GetWave()`` functions."
 
     def ami_tst(
@@ -113,7 +113,7 @@ class AmiTestInitVsGetwave(AmiTester):
         return flowables
 
 
-class AmiTestSamplesPerBit(AmiTester):
+class AmiTestSamplesPerBit():
     "Compare model response at different oversampling factors."
 
     def ami_tst(
@@ -140,7 +140,7 @@ class AmiTestSamplesPerBit(AmiTester):
         return flowables
 
 
-class AmiTestGetwaveInputLength(AmiTester):
+class AmiTestGetwaveInputLength():
     "Compare ``AMI_GetWave()`` outputs for different input lengths."
 
     def ami_tst(
