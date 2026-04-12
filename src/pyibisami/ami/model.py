@@ -10,6 +10,7 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -481,20 +482,20 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self,
         bits_per_call: int = 0,
         pad_bits: int = 10,
-        nbits: int = 200,
+        nbits: int = 20,
         calc_getw: bool = True
     ) -> dict[str, Any]:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
 
         Keyword Args:
-            bits_per_call: Number of bits to include in the input to `GetWave()`.
+            bits_per_call: Number of bits to include in the input to each `GetWave()` call.
                 Default: 0 (Means "use model's existing value".)
             pad_bits: Number of bits to pad leading edge with when calling `GetWave()`,
                 to protect from initial garbage in `GetWave()` output.
                 Default: 10
-            nbits: Number of "real" bits to use for `GetWave()` testing.
-                Default: 200
+            nbits: Total number of bits to run through `GetWave()`.
+                Default: 20
             calc_getw: Calculate ``GetWave()`` responses, also, when True.
                 Default: True
 
@@ -543,6 +544,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Extract and return the model responses.
         if self.info_params["Init_Returns_Impulse"]:
+            start_time = datetime.now()
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
             rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 

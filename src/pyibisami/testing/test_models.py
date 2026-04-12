@@ -30,10 +30,10 @@ from reportlab.platypus import (
     Preformatted, SimpleDocTemplate, Spacer, Table)
 
 import pyibisami
-from ..testing.ibis_file_tests import test_ami_models, get_ibis_contents, golden_parser_results
-from ..tools.run_notebook import mk_dummy_run_file
-from ..tools.run_tests import expand_params
-from ..util.reportlab import(
+from pyibisami.testing.ibis_file_tests import test_ami_models, get_ibis_contents, golden_parser_results
+from pyibisami.tools.run_notebook import mk_dummy_run_file
+from pyibisami.tools.run_tests import expand_params
+from pyibisami.util.reportlab import(
     preformatted, title_page,
 )
 
@@ -47,8 +47,9 @@ spacer = Spacer(1, 0.25*inch)
 
 
 def test_ibis_ami_models(
-    ibis_file: Path, model_name: str, bit_rate: float, nspui: int, params: str,
-    debug: bool = False
+    ibis_file: Path, model_name: str,
+    bit_rate: float, nspui: int, nbits: int,
+    params: str, debug: bool = False
 ) -> None:
     """
     Test some subset of the IBIS-AMI models in a ``*.ibs`` file.
@@ -58,6 +59,7 @@ def test_ibis_ami_models(
         model_name: The particular model to test.
         bit_rate: The bit rate to use for testing.
         nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
+        nbits: Number of "good" bits to use for ``GetWave()`` testing.
         params: Test parameter sweep definitions.
 
     Keyword Args:
@@ -95,7 +97,7 @@ def test_ibis_ami_models(
     pages.extend(golden_parser_results(ibis_file))
 
     # individual model test results
-    model = ibis_model.get_model(model_name)
+    model = ibis_model.get_model(model_name)  # `model`: pyibisami.ibis.model.Model
     if not params:
         dummy_run_file_name = mk_dummy_run_file(
             ibis_file, model.mtype.lower() == "output", debug)
@@ -105,7 +107,10 @@ def test_ibis_ami_models(
         print("You may use this file as a template for creating parameter sweep specifications.")
         print("")
     param_defs = expand_params(params)
-    pages.extend(test_ami_models(ibis_file_dir, ibis_model, bit_rate, nspui, param_defs, model_name, debug))
+    pages.extend(
+        test_ami_models(
+            ibis_file_dir, ibis_model, bit_rate, nspui, param_defs,
+            nbits=nbits, model_name=model_name, debug=debug))
 
     doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 
@@ -117,14 +122,15 @@ def test_ibis_ami_models(
 @click.option("--params", "-p", type=str, default='',
     help='Directory (or, file) containing configuration sweeps.',
 )
-@click.option("--nspui", "-n", type=int, default=32)
+@click.option("--nspui", "-n", type=int, default=32, help="Samples per UI.")
+@click.option("--nbits", "-b", type=int, default=20, help="# of 'good' bits for `GetWave()` testing.")
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("model",     type=str)
 @click.argument("bit_rate",  type=float)
 @click.version_option(package_name="PyIBIS-AMI")
-def main(ibis_file, model, bit_rate, nspui, params, debug):
-    ibis_file_path = Path(ibis_file, exists=True).resolve()
-    test_ibis_ami_models(ibis_file_path, model, bit_rate, nspui, params, debug=debug)
+def main(ibis_file, model, bit_rate, nspui, nbits, params, debug):
+    ibis_file_path = Path(ibis_file, exists=True).resolve()  # ToDo: "exists=True" to be deprecated in Python 3.14!
+    test_ibis_ami_models(ibis_file_path, model, bit_rate, nspui, nbits, params, debug=debug)
 
 
 if __name__ == "__main__":

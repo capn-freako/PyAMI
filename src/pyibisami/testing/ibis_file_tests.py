@@ -80,6 +80,7 @@ def test_ami_models(
     ibis_file_dir: Path, ibis_model: IBISModel,
     bit_rate: float, nspui: int,
     param_defs: list[TestSweep],
+    nbits: int = 20,
     model_name: Optional[str] = None,
     debug: bool=False
 ) -> list[Flowable]:
@@ -94,6 +95,7 @@ def test_ami_models(
         param_defs: The list of parameter sweep definitions to use for this test.
 
     Keyword Args:
+        nbits: The total number of bits to use when testing ``GetWave()``.
         model_name: The name of a particular model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
         debug: Include extra debugging output when ``True``.
@@ -101,6 +103,11 @@ def test_ami_models(
 
     Returns:
         The list of *ReportLab* ``Flowable``s describing the testing results.
+
+    Notes:
+        1. The value given for ``nbits`` gives the number of "good" bits needed back from the model.
+        If the model's ``Ignore_Bits`` is set to ``N``, for instance, the number of bits actually run is
+        ``N + nbits``.
     """
 
     flowables: list[Flowable] = [Paragraph("IBIS-AMI Model(s) Testing Results", H1)]
@@ -123,7 +130,7 @@ def test_ami_models(
         flowables.append(Paragraph(f"Testing Model: {model_name}", H2))
         model = ibis_model.model_dict['models'][model_name]
         flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
-        flowables.extend(test_ami_model(model, ibis_file_dir, param_defs, bit_rate, nspui))
+        flowables.extend(test_ami_model(model, ibis_file_dir, param_defs, bit_rate, nspui, nbits))
         flowables.append(page_break)
         return flowables
 

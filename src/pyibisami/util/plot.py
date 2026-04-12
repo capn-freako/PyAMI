@@ -78,7 +78,7 @@ def hsv2rgb(hue: float, saturation: float, value:float) -> RGB:
     if S < EPS:           # saturation == 0?
         return RGB((V, V, V))  # gray at brightness = `value`
     H, f = np.divmod(float(hue) % 360.0, 60.0)
-
+    f /= 60
     p: float = V * (1.0 - S)
     q: float = V * (1.0 - f * S)
     t: float = V * (1.0 - (1.0 - f) * S)
