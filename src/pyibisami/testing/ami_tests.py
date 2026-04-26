@@ -31,8 +31,8 @@ from ..util.reportlab   import (
     P, H1, H2, H3, H4)
 
 from .ami_tests_helpers import (
-    init_vs_getwave, plot_sweeps, plot_sweeps_multi, samples_per_bit,
-    check_getwave_input_length, mk_linearity_checker)
+    AmiTestHelperInitVsGetwave, AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
+    plot_sweeps, plot_sweeps_multi, mk_linearity_checker)
 
 class AmiTester(Protocol):
     "Abstract class defining the function signature for AMI testing functions."
@@ -94,8 +94,9 @@ class AmiTestInitVsGetwave():
         ]
         initializer = pcfg.get_init(
             bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-        flowables.extend(plot_sweeps(init_vs_getwave, ami_model, initializer, param_defs, nbits,
-                                     fig_x=fig_x, fig_y=fig_y))
+        flowables.extend(plot_sweeps_multi(
+            AmiTestHelperInitVsGetwave(), ami_model, initializer,
+            param_defs, nbits, fig_x=fig_x, fig_y=fig_y))
         flowables.extend([
             Paragraph(f"{bold('Plot notes:')}", P),
             ListFlowable([
@@ -134,7 +135,7 @@ class AmiTestSamplesPerBit():
             bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
         flowables.extend(
             plot_sweeps_multi(
-                samples_per_bit, ami_model, initializer, param_defs, nbits,
+                AmiTestHelperSamplesPerBit(), ami_model, initializer, param_defs, nbits,
                 fig_x=fig_x, fig_y=fig_y, plot_t_max = 10 * bit_interval
             )
         )
@@ -167,7 +168,7 @@ class AmiTestGetwaveInputLength():
                 bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
             flowables.extend(
                 plot_sweeps_multi(
-                    check_getwave_input_length, ami_model, initializer, param_defs, nbits,
+                    AmiTestHelperGetwaveInputLength(), ami_model, initializer, param_defs, nbits,
                     fig_x=fig_x, fig_y=fig_y, finalize=False
                 )
             )
@@ -290,7 +291,6 @@ def test_ami_model(
 
     bit_interval = 1.0 / bit_rate
     sample_interval = bit_interval / nspui
-    nbits += ignore_bits
 
     # Run specific tests.
     testers: Sequence[AmiTester] = [

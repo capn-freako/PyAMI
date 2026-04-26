@@ -62,14 +62,9 @@ print("C_pkg    %5.2fp   %5.2fp   %5.2fp" % (c_pkg[0] * 1.e12, c_pkg[1] * 1.e12,
 
 [Pin]  signal_name        model_name            R_pin  L_pin  C_pin
 @{
-if model_type.startswith("Output") or model_type == "Repeater":
-    for n in range(3):
-        print(f"{n + 1}p     Tx_{n + 1}_P             {model_name}_Tx")
-        print(f"{n + 1}n     Tx_{n + 1}_N             {model_name}_Tx")
-if model_type.startswith("Input") or model_type == "Repeater":
-    for n in range(3):
-        print(f"{n + 4}p     Rx_{n + 4}_P             {model_name}_Rx")
-        print(f"{n + 4}n     Rx_{n + 4}_N             {model_name}_Rx")
+for n in range(3):
+    print(f"{n + 1}p     {n + 1}_P             {model_name}")
+    print(f"{n + 1}n     {n + 1}_N             {model_name}")
 }
 
 [Diff_Pin] inv_pin vdiff tdelay_typ tdelay_min tdelay_max
@@ -91,7 +86,7 @@ if model_type == "Repeater":
 
 @{
 if model_type.startswith("Output") or model_type == "Repeater":
-    print(f"[Model]   {model_name}_Tx")
+    print(f"[Model]   {model_name}")
     print("Model_type   Output")
     print(f"C_comp    {c_comp[0]*1.e12:5.2f}p   {c_comp[1]*1.e12:5.2f}p   {c_comp[2]*1.e12:5.2f}p")
     print(f"Cref  = {c_ref}")
@@ -100,10 +95,10 @@ if model_type.startswith("Output") or model_type == "Repeater":
     print(f"Rref  = {r_ref}")
     print("")
     print("[Algorithmic Model]")
-    print(f"Executable linux_gcc4.1.2_32        {model_name}_tx_x86.so         {model_name}_tx.ami")
-    print(f"Executable linux_gcc4.1.2_64        {model_name}_tx_x86_amd64.so   {model_name}_tx.ami")
-    print(f"Executable Windows_VisualStudio_32  {model_name}_tx_x86.dll        {model_name}_tx.ami")
-    print(f"Executable Windows_VisualStudio_64  {model_name}_tx_x86_amd64.dll  {model_name}_tx.ami")
+    print(f"Executable linux_gcc4.1.2_32        {model_name}_x86.so         {model_name}.ami")
+    print(f"Executable linux_gcc4.1.2_64        {model_name}_x86_amd64.so   {model_name}.ami")
+    print(f"Executable Windows_VisualStudio_32  {model_name}_x86.dll        {model_name}.ami")
+    print(f"Executable Windows_VisualStudio_64  {model_name}_x86_amd64.dll  {model_name}.ami")
     print("[End Algorithmic Model]")
     print("")
     print("[Pulldown]")
@@ -144,17 +139,17 @@ if model_type.startswith("Output") or model_type == "Repeater":
 
 @{
 if model_type.startswith("Input") or model_type == "Repeater":
-    print(f"[Model]   {model_name}_Rx")
+    print(f"[Model]   {model_name}")
     print("Model_type   Input")
     print(f"C_comp    {c_comp[0]*1.e12:5.2f}p   {c_comp[1]*1.e12:5.2f}p   {c_comp[2]*1.e12:5.2f}p")
     print(f"Vinl = {voltage_range[0]/2.-0.025}")
     print(f"Vinh = {voltage_range[0]/2.+0.025}")
     print("")
     print("[Algorithmic Model]")
-    print(f"Executable linux_gcc4.1.2_32        {model_name}_rx_x86.so         {model_name}_rx.ami")
-    print(f"Executable linux_gcc4.1.2_64        {model_name}_rx_x86_amd64.so   {model_name}_rx.ami")
-    print(f"Executable Windows_VisualStudio_32  {model_name}_rx_x86.dll        {model_name}_rx.ami")
-    print(f"Executable Windows_VisualStudio_64  {model_name}_rx_x86_amd64.dll  {model_name}_rx.ami")
+    print(f"Executable linux_gcc4.1.2_32        {model_name}_x86.so         {model_name}.ami")
+    print(f"Executable linux_gcc4.1.2_64        {model_name}_x86_amd64.so   {model_name}.ami")
+    print(f"Executable Windows_VisualStudio_32  {model_name}_x86.dll        {model_name}.ami")
+    print(f"Executable Windows_VisualStudio_64  {model_name}_x86_amd64.dll  {model_name}.ami")
     print("[End Algorithmic Model]")
     print("")
     print("[GND Clamp]")

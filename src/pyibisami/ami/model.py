@@ -10,14 +10,44 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TypeAlias
 
 import numpy as np
 from numpy.random     import default_rng
 
-from pyibisami.common import Rvec, deconv_same
+from pyibisami.common import Cvec, Rvec, deconv_same
+
+VALID_RESPONSE_KEYS = [
+    "imp_resp_init",    # The model's impulse response, from its `AMI_Init()` function (V/sample).
+    "out_resp_init",    # `imp_resp_init` convolved with the channel.
+    "imp_resp_getw",    # The model's impulse response, from its `AMI_GetWave()` function (V/sample).
+    "out_resp_getw",    # `imp_resp_getw` convolved with the channel.
+]
+
+
+@dataclass(frozen=True)
+class AmiModelResponseKey:
+    "For constraining the strings allowed as keys into an ``AMIModel`` response dictionary."
+
+    key: str
+
+    def __post_init__(self):
+        if not isinstance(self.key, str):
+            raise TypeError("Key must be a string.")
+        if not self.key in VALID_RESPONSE_KEYS:
+            raise ValueError(f"Key must be one of:\n{VALID_RESPONSE_KEYS}")
+
+
+IMP_RESP_INIT = AmiModelResponseKey("imp_resp_init")
+OUT_RESP_INIT = AmiModelResponseKey("out_resp_init")
+IMP_RESP_GETW = AmiModelResponseKey("imp_resp_getw")
+OUT_RESP_GETW = AmiModelResponseKey("out_resp_getw")
+
+AmiModelResponseValue: TypeAlias = Rvec | tuple[Rvec, Rvec, Rvec, Rvec, Rvec, Cvec]
+AmiModelResponses: TypeAlias = dict[AmiModelResponseKey, AmiModelResponseValue]
 
 
 def loadWave(filename: str) -> tuple[Rvec, Rvec]:
@@ -250,6 +280,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiGetWave = my_dll.AMI_GetWave
         except Exception:  # pylint: disable=broad-exception-caught
             self._amiGetWave = None  # type: ignore
+        self._getwave_step_response_out_params: Optional[list[str]] = None
 
     def __del__(self):
         """
@@ -442,7 +473,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Create the required C types.
         Signal = c_double * samps_per_call
-        Clocks = c_double * (bits_per_call + 1)  # The "+1" is critical, to prevent access violations by the model.
+        Clocks = c_double * (bits_per_call + 2)  # The "+2" is critical, to prevent access violations by the model.
 
         idx = 0  # Holds the starting index of the next processing chunk.
         _clock_times = Clocks(0.0)
@@ -481,18 +512,18 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     def get_responses(  # pylint: disable=too-many-locals
         self,
         bits_per_call: int = 0,
-        pad_bits: int = 10,
+        max_run_length: int = 10,
         nbits: int = 20,
         calc_getw: bool = True
-    ) -> dict[str, Any]:
+    ) -> AmiModelResponses:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
 
         Keyword Args:
             bits_per_call: Number of bits to include in the input to each `GetWave()` call.
                 Default: 0 (Means "use model's existing value".)
-            pad_bits: Number of bits to pad leading edge with when calling `GetWave()`,
-                to protect from initial garbage in `GetWave()` output.
+            max_run_length: Max. number of consecutive ``0``s / ``1``s allowed in `GetWave()` input,
+                to protect from de-adaptation when probing step response.
                 Default: 10
             nbits: Total number of bits to run through `GetWave()`.
                 Default: 20
@@ -500,7 +531,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: True
 
         Returns:
-            Dictionary containing the responses under the following keys
+            Dictionary containing the following keys
 
                 - "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
                 - "out_resp_init": `imp_resp_init` convolved with the channel.
@@ -523,7 +554,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             2. Implement `ignore_bits`.
         """
 
-        rslt: dict[str, Any] = {}
+        rslt: AmiModelResponses = {}
 
         # Capture needed parameter definitions.
         ui = self.bit_time
@@ -537,7 +568,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Calculate some needed intermediate values.
         nspui = int(ui / ts)            # samps per UI
-        pad_samps = pad_bits * nspui    # leading edge padding samples for GetWave() calls
+        pad_samps = max_run_length * nspui    # leading edge padding samples for GetWave() calls
         len_h = len(out_imp)
         t = np.array([i * ts for i in range(-pad_samps, len_h - pad_samps)])
         f = np.array([i * 1.0 / (ts * len_h) for i in range(len_h // 2 + 1)])  # Assumes `rfft()` is used.
@@ -546,29 +577,33 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         if self.info_params["Init_Returns_Impulse"]:
             start_time = datetime.now()
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
-            rslt["imp_resp_init"] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
+            rslt[IMP_RESP_INIT] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 
             h_init = np.roll(out_imp, pad_samps)
             s_init = np.cumsum(h_init)                 # Step response.
             p_init = s_init - np.pad(s_init[:-nspui], (nspui, 0), mode='constant', constant_values=0)
             H_init = np.fft.rfft(self.initOut)
             H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
-            rslt["out_resp_init"] = (t, h_init, s_init, p_init, f, H_init)
+            rslt[OUT_RESP_INIT] = (t, h_init, s_init, p_init, f, H_init)
 
         if calc_getw and self.info_params["GetWave_Exists"].pvalue:
             # Get model's step response.
+            # - Give the model `ignore_bits` random bits, to adapt itself.
+            # - After that, limit run length, to prevent de-adaptation.
             rng = default_rng()
-            u = np.concatenate(
+            u = np.concatenate(     # Construct the desired bit sequence.
                 (rng.integers(low=0, high=2, size=ignore_bits),
-                 np.array([0] * pad_bits + [1] * nbits))).repeat(nspui) - 0.5
+                 np.resize(np.array([0, 1]).repeat(max_run_length), nbits)
+                )
+            ).repeat(nspui) - 0.5   # Apply oversampling.
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
 
             # Calculate impulse response from step response.
-            rslt["imp_resp_getw"] = np.diff(wave_out[(ignore_bits + pad_bits) * nspui:])
+            rslt[IMP_RESP_GETW] = np.diff(wave_out[(ignore_bits + max_run_length) * nspui:])
 
             # Get step response of channel + model.
             wave_in = np.convolve(u, chnl_imp)[:len(u)]
-            wave_out, _, _ = self.getWave(wave_in, bits_per_call=bits_per_call)
+            wave_out, _, self._getwave_step_response_out_params = self.getWave(wave_in, bits_per_call=bits_per_call)
             s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
             s_getw -= s_getw[pad_samps - 1]
@@ -581,7 +616,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             else:
                 h_getw = np.pad(h_getw, (0, len_h - len_hgw))
             H_getw = np.fft.rfft(h_getw)
-            rslt["out_resp_getw"] = (t, h_getw, s_getw, p_getw, f, H_getw)
+            rslt[OUT_RESP_GETW] = (t, h_getw, s_getw, p_getw, f, H_getw)
 
         return rslt
 
@@ -656,3 +691,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         return self._info_params
 
     info_params = property(_getInfoParams, doc="Reserved AMI parameter values for this model.")
+
+    @property
+    def getwave_step_response_out_params(self) -> Optional[list[str]]:
+        return self._getwave_step_response_out_params
