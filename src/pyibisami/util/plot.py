@@ -73,6 +73,9 @@ class PlotStyleFeature:
         if not self.feature in VALID_STYLE_FEATURES:
             raise ValueError(f"Feature must be one of:\n{VALID_STYLE_FEATURES}")
 
+    def __str__(self):
+        return feature
+
 PlotStyle: TypeAlias = dict[PlotStyleFeature, str]
 
 PLOT_COLOR = PlotStyleFeature("color")
@@ -199,24 +202,31 @@ def color_picker(num_hues: int = 3, first_hue: float = 0.0) -> Generator[tuple[R
 
 
 def plot_resps(
-    fig: Figure,
+    left_ax: Axes,
+    right_ax: Axes,
     resps: AmiModelResponses,
     lbl: str,
-    styles: Optional[tuple[PlotStyle, PlotStyle]] = None
+    styles: Optional[tuple[PlotStyle, PlotStyle]] = None,
+    debug: bool = False
 ) -> None:
     """
     Plot IBIS-AMI model responses.
 
     Args:
-        fig: The plot figure to target.
+        left_ax: The left plot axes to target.
+        right_ax: The right plot axes to target.
         resps: The model responses to plot.
         lbl: The plot label to use.
 
     Keyword Args:
         styles: Optional pair of styles to use for ``Init()``/``GetWave()`` plotting.
             Default: None (blue solid/dashed will be used.)
+        debug: Print debugging info when ``True``.
+            Default: ``False``
     """
 
+    if debug:
+        print(f"lbl: {lbl}")
     # Define the defaults.
     init_color = "blue"
     getwave_color = "blue"
@@ -229,9 +239,12 @@ def plot_resps(
         getwave_color = getwave_style.get(PLOT_COLOR, getwave_color)
         init_linestyle = init_style.get(PLOT_LINESTYLE, init_linestyle)
         getwave_linestyle = getwave_style.get(PLOT_LINESTYLE, getwave_linestyle)
+    if debug:
+        print(f"init_color: {init_color}")
     # Do the plotting.
-    left_ax, right_ax = fig.subplots(1, 2)
     if OUT_RESP_INIT in resps:
+        if debug:
+            print("Plotting OUT_RESP_INIT...")
         t, h, s, p, f, H = resps[OUT_RESP_INIT]
         left_ax.plot(t*1e9, s,            color=init_color, linestyle=init_linestyle,)
         left_ax.plot(t*1e9, p, label=lbl, color=init_color, linestyle=init_linestyle,)
@@ -271,7 +284,8 @@ def plot_dfe_adaptation(
 
 def plot_finalize_steppulse_freq(
     fig: Figure,
-    plot_t_max: float = 1e-9
+    plot_t_max: float = 1e-9,
+    debug: bool = False
 ):
     """
     Add the finishing touches to a plot of Step/Pulse & Frequency responses.
@@ -282,6 +296,8 @@ def plot_finalize_steppulse_freq(
     Keyword Args:
         plot_t_max: The maximum x-axis value
             Default: 1 ns
+        debug: Show the plot on screen when ``True``.
+            Default: ``False``
     """
 
     plt.figure(fig)
@@ -296,12 +312,14 @@ def plot_finalize_steppulse_freq(
     plt.xlabel("Frequency (GHz)")
     plt.grid()
     plt.legend()
-
+    if debug:
+        plt.show()
 
 def plot_model_results(
     model_responses: Sequence[tuple[LabelledModelResponses, Optional[tuple[PlotStyle, PlotStyle]]]],
     fig: Figure,
-    plot_t_max: float = 1e-9
+    plot_t_max: float = 1e-9,
+    debug: bool = False
 ):
     """
     Plot IBIS-AMI model responses and (optionally) adaptation.
@@ -317,11 +335,16 @@ def plot_model_results(
     Keyword Args:
         plot_t_max: Max. x-axis value (s).
             Default: 1 ns
+        debug: Print debugging information when ``True``.
+            Default: ``False``
     """
 
+    left_ax, right_ax = fig.subplots(1, 2)
     for (model_response, label), styles in model_responses:
-        plot_resps(fig, model_response, label, styles=styles)
-    plot_finalize_steppulse_freq(fig, plot_t_max)
+        if debug:
+            print(f"styles: {styles}")
+        plot_resps(left_ax, right_ax, model_response, label, styles=styles, debug=debug)
+    plot_finalize_steppulse_freq(fig, plot_t_max, debug=debug)
 
 
 def do_samples_per_bit(

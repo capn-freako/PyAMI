@@ -34,6 +34,10 @@ from .ami_tests_helpers import (
     AmiTestHelperInitVsGetwave, AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
     plot_sweeps, plot_sweeps_multi, mk_linearity_checker)
 
+FIG_X_DFLT = 6
+FIG_Y_DFLT = 4
+
+
 class AmiTester(Protocol):
     "Abstract class defining the function signature for AMI testing functions."
 
@@ -43,7 +47,7 @@ class AmiTester(Protocol):
         ami_model: AMIModel, pcfg: AMIParamConfigurator,
         bit_interval: float, sample_interval: float, nbits: int,
         channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = 6, fig_y: float = 3,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     ) -> list[Flowable]:
         """
         Perform some test on an ``AMIModel`` instance.
@@ -77,7 +81,7 @@ class AmiTestInitVsGetwave():
         ami_model: AMIModel, pcfg: AMIParamConfigurator,
         bit_interval: float, sample_interval: float, nbits: int,
         channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = 6, fig_y: float = 3,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     ) -> list[Flowable]:
         flowables: list[Flowable] = [
             Paragraph("Init() vs. GetWave()", H4),
@@ -122,7 +126,7 @@ class AmiTestSamplesPerBit():
         ami_model: AMIModel, pcfg: AMIParamConfigurator,
         bit_interval: float, sample_interval: float, nbits: int,
         channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = 6, fig_y: float = 3,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     ) -> list[Flowable]:
         flowables: list[Flowable] = [
             page_break,
@@ -133,12 +137,9 @@ class AmiTestSamplesPerBit():
         ]
         initializer = pcfg.get_init(
             bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-        flowables.extend(
-            plot_sweeps_multi(
-                AmiTestHelperSamplesPerBit(), ami_model, initializer, param_defs, nbits,
-                fig_x=fig_x, fig_y=fig_y, plot_t_max = 10 * bit_interval
-            )
-        )
+        flowables.extend(plot_sweeps_multi(
+            AmiTestHelperSamplesPerBit(), ami_model, initializer,
+            param_defs, nbits, fig_x=fig_x, fig_y=fig_y, plot_t_max = 10 * bit_interval))
         flowables.append(
             Paragraph("You should see very little difference between the 3 plots in any of the charts above.", P))
 
@@ -153,7 +154,7 @@ class AmiTestGetwaveInputLength():
         ami_model: AMIModel, pcfg: AMIParamConfigurator,
         bit_interval: float, sample_interval: float, nbits: int,
         channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = 6, fig_y: float = 3,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     ) -> list[Flowable]:
         flowables: list[Flowable] = [
             page_break,
@@ -184,7 +185,7 @@ class AmiTestGetwaveInputLength():
 def test_ami_model(
     model: Model, ibis_file_dir: Path, param_defs: list[TestSweep],
     bit_rate: float, nspui: int, nbits: int,
-    fig_x: float = 6, fig_y: float = 3,
+    fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     f_max: float = 40e9, f_step: float = 10e6
 ) -> list[Flowable]:
     """

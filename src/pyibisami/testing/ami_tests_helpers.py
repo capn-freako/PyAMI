@@ -116,6 +116,9 @@ class AmiTestHelperSamplesPerBit():
         
         fig = plt.figure(figsize=(fig_x, fig_y))
         top_fig, bottom_fig = fig.subfigures(2, 1)
+        top_fig.suptitle("Model Responses (Post-Adaptation)")
+        top_fig.subplots_adjust(left=.1, right=.9, wspace=.3)
+        bottom_fig.subplots_adjust(top=.7, bottom=.1)
         model_resps = [
             ((model_response, f"{osf}x"),
              ({PLOT_COLOR: f"{color}",
@@ -125,7 +128,7 @@ class AmiTestHelperSamplesPerBit():
              )
             ) for (model_response, osf), color in zip(model_responses, [RED, GREEN, BLUE])
         ]
-        plot_model_results(model_resps, top_fig, plot_t_max)
+        plot_model_results(model_resps, top_fig, plot_t_max) #, debug=True)
 
         ax = bottom_fig.subplots(1,1)
         plot_dfe_adaptation(model.getwave_step_response_out_params, ax)
@@ -253,12 +256,13 @@ def mk_linearity_checker(
         p_tot /= len(hs)
         H_tot /= len(hs)
 
-        plt.figure(fig)
+        # plt.figure(fig)
         blue_pair = ({PLOT_COLOR: f"{BLUE}"}, {PLOT_COLOR: f"{BLUE}"})
         red_pair  = ({PLOT_COLOR: f"{RED}"},  {PLOT_COLOR: f"{RED}"})
-        plot_resps(fig, {OUT_RESP_INIT: (t_sum, hs_sum, s_sum, p_sum, f_sum, H_sum)},   # type: ignore
+        left_ax, right_ax = fig.subplots(1, 2)
+        plot_resps(left_ax, right_ax, {OUT_RESP_INIT: (t_sum, hs_sum, s_sum, p_sum, f_sum, H_sum)},   # type: ignore
                    "Response to Sum", blue_pair)
-        plot_resps(fig, {OUT_RESP_INIT: (t_sum, hs_sum, s_tot, p_tot, f_sum, H_tot)},   # type: ignore
+        plot_resps(left_ax, right_ax, {OUT_RESP_INIT: (t_sum, hs_sum, s_tot, p_tot, f_sum, H_tot)},   # type: ignore
                    "Sum of Responses", red_pair)
 
     class AmiTestHelperLinearityChecker(AmiTestHelper):
@@ -381,7 +385,7 @@ def plot_sweeps_multi(
         fix_x: x-dimmension of plot (in.).
             Default: 6
         fix_y: y-dimmension of plot (in.).
-            Default: 1.5
+            Default: 2
         plot_t_max: Plot time axis right bound (s).
             Default: 1 ns
         finalize: Finish plot annotations when ``True``.
