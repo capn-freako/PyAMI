@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, TypeAlias
 
+from matplotlib import pyplot as plt
 import numpy as np
 from numpy.random     import default_rng
 
@@ -260,6 +261,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         by calling it from the destructor.
     """
 
+    _getwave_step_response_out_params: Optional[list[str]] = None
+
     def __init__(self, filename: str):
         """
         Load the dll and bind the 3 AMI functions.
@@ -280,7 +283,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiGetWave = my_dll.AMI_GetWave
         except Exception:  # pylint: disable=broad-exception-caught
             self._amiGetWave = None  # type: ignore
-        self._getwave_step_response_out_params: Optional[list[str]] = None
 
     def __del__(self):
         """
@@ -442,6 +444,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._bits_per_call = (  # pylint: disable=attribute-defined-outside-init
             init_object.row_size / self._samps_per_bit
         )
+        self._getwave_step_response_out_params = None
 
     def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:  # noqa: F405
         """
@@ -514,7 +517,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         bits_per_call: int = 0,
         max_run_length: int = 10,
         nbits: int = 20,
-        calc_getw: bool = True
+        calc_getw: bool = True,
+        debug: bool = False
     ) -> AmiModelResponses:
         """
         Get the impulse response of an initialized IBIS-AMI model, alone and convolved with the channel.
@@ -529,6 +533,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 Default: 20
             calc_getw: Calculate ``GetWave()`` responses, also, when True.
                 Default: True
+            debug: Debug when ``True``.
+                Default: False
 
         Returns:
             Dictionary containing the following keys
@@ -597,6 +603,9 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 )
             ).repeat(nspui) - 0.5   # Apply oversampling.
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
+            if debug:
+                plt.plot(wave_out)
+                plt.show()
 
             # Calculate impulse response from step response.
             rslt[IMP_RESP_GETW] = np.diff(wave_out[(ignore_bits + max_run_length) * nspui:])
@@ -604,6 +613,9 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             # Get step response of channel + model.
             wave_in = np.convolve(u, chnl_imp)[:len(u)]
             wave_out, _, self._getwave_step_response_out_params = self.getWave(wave_in, bits_per_call=bits_per_call)
+            if debug:
+                plt.plot(wave_out)
+                plt.show()
             s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
             s_getw -= s_getw[pad_samps - 1]

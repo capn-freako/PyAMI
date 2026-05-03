@@ -75,15 +75,19 @@ class AmiTestHelper(Protocol):
 class AmiTestHelperInitVsGetwave(AmiTestHelper):
     "Compares the output of ``AMI_Init()`` and ``AMI_GetWave()``."
 
+    def __init__(self, debug: bool = False):
+        self._debug = debug
+
     def ami_tst_helper(
         self,
         model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
         color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
     ) -> Figure:
 
+        print(f"AmiTestHelperInitVsGetwave.ami_tst_helper: initializer = {initializer}", flush=True)
         model.initialize(initializer)
         model_resps = [
-            ((model.get_responses(nbits=nbits), label),     # Labelled model responses.
+            ((model.get_responses(nbits=nbits, debug=self._debug), label),     # Labelled model responses.
              ({PLOT_COLOR: "blue",                             # Init() plot style.
                PLOT_LINESTYLE: "solid"},
               {PLOT_COLOR: "blue",                             # GetWave() plot style.

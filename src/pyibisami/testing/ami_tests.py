@@ -36,6 +36,7 @@ from .ami_tests_helpers import (
 
 FIG_X_DFLT = 6
 FIG_Y_DFLT = 4
+DEBUG = False
 
 
 class AmiTester(Protocol):
@@ -99,7 +100,7 @@ class AmiTestInitVsGetwave():
         initializer = pcfg.get_init(
             bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
         flowables.extend(plot_sweeps_multi(
-            AmiTestHelperInitVsGetwave(), ami_model, initializer,
+            AmiTestHelperInitVsGetwave(DEBUG), ami_model, initializer,
             param_defs, nbits, fig_x=fig_x, fig_y=fig_y))
         flowables.extend([
             Paragraph(f"{bold('Plot notes:')}", P),
@@ -297,7 +298,7 @@ def test_ami_model(
     testers: Sequence[AmiTester] = [
         AmiTestInitVsGetwave(), AmiTestSamplesPerBit(), AmiTestGetwaveInputLength()]
 
-    def run_testers(channel: Rvec) -> list[Flowable]:
+    def run_testers(channel: Rvec, debug: bool = False) -> list[Flowable]:
         """
         Run selected model testers, using the given channel response.
 
@@ -308,8 +309,11 @@ def test_ami_model(
             A list of _ReportLab_ ``Flowable``s comprising the testing results.
         """
 
+        global DEBUG
+        DEBUG = debug
+
         flowables: list[Flowable] = []
-        for tester in testers:
+        for n, tester in enumerate(testers):
             flowables.extend(
                 tester.ami_tst(
                     ami_model, pcfg, bit_interval, sample_interval, nbits,
@@ -319,6 +323,7 @@ def test_ami_model(
         return flowables
 
     # Test w/ perfect channel.
+    print("Testing w/ perfect channel...", flush=True)
     flowables.extend([
         Paragraph("Testing w/ Perfect Channel", H3),
         Paragraph("Here, we represent the 'channel' by a Kronecker delta function, \
@@ -354,6 +359,7 @@ def test_ami_model(
     flowables.extend(run_testers(perfect_channel))
 
     # Test w/ lossy channel.
+    print("Testing w/ lossy channel...", flush=True)
     flowables.extend([
         page_break,
         Paragraph("Testing w/ Lossy Channel", H3),
@@ -363,9 +369,10 @@ def test_ami_model(
     lossy_channel = lfilter(
         b, a, np.array([0., 1.] + [0.] * (nspui - 2) + [0.0] * (CHANNEL_RESPONSE_BITS - 1) * nspui)
     ) / sample_interval
-    flowables.extend(run_testers(lossy_channel))
+    flowables.extend(run_testers(lossy_channel, debug=True))
 
     # Test w/ reflective channel.
+    print("Testing w/ reflective channel...", flush=True)
     flowables.extend([
         page_break,
         Paragraph("Testing w/ Reflective Channel", H3),
