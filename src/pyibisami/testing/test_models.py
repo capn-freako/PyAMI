@@ -7,35 +7,29 @@ Original Author: David Banas <capn.freako@gmail.com>
 
 Original Date:   March 20, 2026
 
-Copyright (pdf) 2026 David Banas; all rights reserved World wide.
+Copyright (C) 2026 David Banas; all rights reserved World wide.
 """
 
 import click
-import sys
+import inspect
+import types
 
-import numpy as np
-import scipy as sp
-
-from datetime import datetime
 from pathlib  import Path
 from typing   import Optional
 
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
-from reportlab.platypus import (
-    Flowable, Image, PageBreak, Paragraph,
-    Preformatted, SimpleDocTemplate, Spacer, Table)
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 import pyibisami
-from pyibisami.testing.ibis_file_tests import test_ami_models, get_ibis_contents, golden_parser_results
-from pyibisami.tools.run_notebook import mk_dummy_run_file
-from pyibisami.tools.run_tests import expand_params
-from pyibisami.util.reportlab import(
-    preformatted, title_page,
-)
+
+from ..util.misc        import import_from_path
+from ..util.reportlab   import title_page
+
+from .ibis_file_tests   import test_ami_models, get_ibis_contents, golden_parser_results
+from .test_defs         import TestSweep
 
 # Define the PDF document dimensions and grab some pre-defined styles.
 PAGE_WIDTH, PAGE_HEIGHT = letter
@@ -48,7 +42,6 @@ spacer = Spacer(1, 0.25*inch)
 
 def test_ibis_ami_models(
     ibis_file: Path, model_name: str,
-    bit_rate: float, nspui: int, nbits: int,
     params: str, debug: bool = False
 ) -> None:
     """
@@ -57,9 +50,6 @@ def test_ibis_ami_models(
     Args:
         ibis_file: The ``*.ibs`` file to test.
         model_name: The particular model to test.
-        bit_rate: The bit rate to use for testing.
-        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
-        nbits: Number of "good" bits to use for ``GetWave()`` testing.
         params: Test parameter sweep definitions.
 
     Keyword Args:
@@ -96,22 +86,32 @@ def test_ibis_ami_models(
     # golden parser results
     pages.extend(golden_parser_results(ibis_file))
 
-    # individual model test results
-    model = ibis_model.get_model(model_name)  # `model`: pyibisami.ibis.model.Model
-    if not params:
-        dummy_run_file_name = mk_dummy_run_file(
-            ibis_file, model.mtype.lower() == "output", debug)
-        params = str(dummy_run_file_name)
-        print("\nNOTE: Since you provided no parameter sweep information,")
-        print(f'a "dummy" sweep file has been created: {dummy_run_file_name}.')
-        print("You may use this file as a template for creating parameter sweep specifications.")
-        print("")
-    param_defs = expand_params(params)
+    # Load all Python modules in given directory,
+    # and extract all subclasses of `TestSweep`.
+    def get_sweepers(mod: types.ModuleType) -> tuple[Optional[str], list[type[TestSweep]]]:
+         return (mod.__doc__,
+            [obj for name, obj in inspect.getmembers(mod, inspect.isclass)  # type: ignore
+                 if issubclass(obj, TestSweep) and not obj == TestSweep])
+
+    mod_path = Path(params).resolve()
+    files = list(mod_path.glob("*.py"))
+    if not files:
+        raise RuntimeError(f"No Python files were found in `{mod_path}`.")
+    sweepers: list[tuple[Optional[str], list[type[TestSweep]]]] = []
+    for file in files:
+        print(f"Looking for `TestSweep` subclasses in:\n{file}...")
+        module = import_from_path(file.parent.stem + "." + file.stem, file)
+        sweepers_found = get_sweepers(module)
+        print(f"Found {len(sweepers_found[1])}.")
+        sweepers.append(sweepers_found)
+    if not sweepers:
+        raise RuntimeError("No `TestSweep` subclasses were found!")
+
     pages.extend(
         test_ami_models(
-            ibis_file_dir, ibis_model, bit_rate, nspui, param_defs,
-            nbits=nbits, model_name=model_name, debug=debug))
-
+            ibis_file_dir, ibis_model, sweepers,
+            model_name=model_name, debug=debug)
+    )
     doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 
 
@@ -119,18 +119,15 @@ def test_ibis_ami_models(
 @click.command(context_settings={"ignore_unknown_options": False,
                                  "help_option_names": ["-h", "--help"]})
 @click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
-@click.option("--params", "-p", type=str, default='',
-    help='Directory (or, file) containing configuration sweeps.',
+@click.option("--params", "-p", type=str, default='test_runs',
+    help='Directory containing test configuration sweeps.',
 )
-@click.option("--nspui", "-n", type=int, default=32, help="Samples per UI.")
-@click.option("--nbits", "-b", type=int, default=20, help="# of 'good' bits for `GetWave()` testing.")
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.argument("model",     type=str)
-@click.argument("bit_rate",  type=float)
 @click.version_option(package_name="PyIBIS-AMI")
-def main(ibis_file, model, bit_rate, nspui, nbits, params, debug):
+def main(ibis_file, model, params, debug):
     ibis_file_path = Path(ibis_file, exists=True).resolve()  # ToDo: "exists=True" to be deprecated in Python 3.14!
-    test_ibis_ami_models(ibis_file_path, model, bit_rate, nspui, nbits, params, debug=debug)
+    test_ibis_ami_models(ibis_file_path, model, params, debug=debug)
 
 
 if __name__ == "__main__":

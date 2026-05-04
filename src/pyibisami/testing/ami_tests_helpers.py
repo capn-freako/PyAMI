@@ -11,28 +11,29 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 from abc import abstractmethod
 from random     import randrange
 from tempfile   import NamedTemporaryFile
-from typing     import Any, Callable, Optional, Protocol
+from typing     import Protocol
 
 import numpy as np
 
-from matplotlib.axes        import Axes
 from matplotlib.figure      import Figure
 from reportlab.lib.units    import inch
-from reportlab.platypus     import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
-from scipy.interpolate      import interp1d
+from reportlab.platypus     import Flowable, Image, Paragraph, Spacer
 from scipy.signal           import convolve
 
-from ..common           import Rvec, TestSweep
-from ..ami.model        import (
-    AMIModel, AMIModelInitializer,
-    IMP_RESP_INIT, OUT_RESP_INIT, IMP_RESP_GETW, OUT_RESP_GETW)
+from ..common           import Rvec
+from ..ami.model        import AMIModel, AMIModelInitializer, OUT_RESP_INIT
+from ..ami.parser       import AMIParamConfigurator
 
-from ..util.ami         import get_dfe_adaptation
 from ..util.plot        import (
     RGB, RED, GREEN, BLUE, PLOT_COLOR, PLOT_LINESTYLE,
     plt, color_picker, do_samples_per_bit,
-    plot_dfe_adaptation, plot_finalize_steppulse_freq, plot_model_results, plot_resps)
-from ..util.reportlab   import P, ital, preformatted, styles
+    plot_dfe_adaptation, plot_model_results, plot_resps)
+from ..util.reportlab   import P, preformatted
+
+from .test_defs         import TestSweep
+
+FIG_X_DFLT = 6
+FIG_Y_DFLT = 4
 
 spacer = Spacer(1, 0.25*inch)
 
@@ -44,7 +45,8 @@ class AmiTestHelper(Protocol):
     def ami_tst_helper(
         self,
         model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
+        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        plot_t_max: float = 1e-9,
     ) -> Figure:
         """
         Perform some test on an ``AMIModel`` instance.
@@ -59,9 +61,9 @@ class AmiTestHelper(Protocol):
             color: Color to use for plot trace(s).
                 Default: ``BLUE``
             fig_x: x-dimension of resultant plot figure (in.).
-                Default: 6
+                Default: ``FIG_X_DFLT``
             fig_y: y-dimension of resultant plot figure (in.).
-                Default: 3
+                Default: ``FIG_Y_DFLT``
             plot_t_max: Max. x-axis value (s).
                 Default: 1 ns
 
@@ -72,7 +74,7 @@ class AmiTestHelper(Protocol):
         raise NotImplementedError
 
 
-class AmiTestHelperInitVsGetwave(AmiTestHelper):
+class AmiTestHelperInitVsGetwave():
     "Compares the output of ``AMI_Init()`` and ``AMI_GetWave()``."
 
     def __init__(self, debug: bool = False):
@@ -81,10 +83,9 @@ class AmiTestHelperInitVsGetwave(AmiTestHelper):
     def ami_tst_helper(
         self,
         model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
+        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT, plot_t_max: float = 1e-9,
     ) -> Figure:
 
-        print(f"AmiTestHelperInitVsGetwave.ami_tst_helper: initializer = {initializer}", flush=True)
         model.initialize(initializer)
         model_resps = [
             ((model.get_responses(nbits=nbits, debug=self._debug), label),     # Labelled model responses.
@@ -113,7 +114,8 @@ class AmiTestHelperSamplesPerBit():
     def ami_tst_helper(
         self,
         model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
+        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        plot_t_max: float = 1e-9,
     ) -> Figure:
 
         model_responses = do_samples_per_bit(model, initializer, nbits)
@@ -146,7 +148,8 @@ class AmiTestHelperGetwaveInputLength():
     def ami_tst_helper(
         self,
         model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
+        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        plot_t_max: float = 1e-9,
     ) -> Figure:
 
         sample_interval = initializer.sample_interval
@@ -185,7 +188,6 @@ class AmiTestHelperGetwaveInputLength():
                     f"any(np.isnan(x)): {any(np.isnan(x))}")
                 ys = np.concatenate((ys, y))
                 smpl_cnt += input_len
-            ys_max_mag = np.max(np.abs(ys))
             ys = ys[-n_kept_samples:]  # Drop ignored bits.
             plt.subplot(121)
             plt.plot(t * 1e9, ys, label=f"{bits_per_call}")
@@ -239,9 +241,7 @@ def mk_linearity_checker(
         "Compare sum of model's responses to model's response to sum."
 
         row_size        = initializer.row_size
-        sample_interval = initializer.sample_interval
 
-        h_shift = int(-0.49 * row_size)
         hs_sum = sum(hs) / len(hs)
         initializer.channel_response = hs_sum
         model.initialize(initializer)
@@ -282,156 +282,52 @@ def mk_linearity_checker(
     return AmiTestHelperLinearityChecker()
 
 
-def plot_sweeps(
-    func: Callable[[AMIModel, AMIModelInitializer, int, Figure, RGB, str], None],
-    model: AMIModel,
-    initializer: AMIModelInitializer,
-    sweeps: list[TestSweep],
-    nbits: int,
-    fig_x: float = 6,
-    fig_y: float = 2,
-    plot_t_max: float = 1e-9,
-    finalize: bool = True
+def plot_sweep(
+    helper: AmiTestHelper, ami_model: AMIModel,
+    pcfg: AMIParamConfigurator, test_sweep: type[TestSweep],
+    fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT
 ) -> list[Flowable]:
     """
-    Run a common testing/plotting function over several parameter sweeps.
+    Plot results of sweeping the parameters of the given AMI model,
+    using the given ``TestSweep`` instance and test helper.
 
     Args:
-        func: Testing/plotting function.
-        model: AMI model to test.
-        initializer: AMI model initializer to use/modify.
-        sweeps: Parameter sweep definitions.
-        nbits: Number of bits to use for ``GetWave`` testing.
+        helper: The AMI test helper to use.
+        ami_model: The AMI model to test.
+        pcfg: The parameter configurator to use for model initialization.
+        test_sweep: The ``TestSweep`` instance containing the desired parameter sweep.
 
     Keyword Args:
         fix_x: x-dimmension of plot (in.).
-            Default: 6
+            Default: ``FIG_X_DFLT``
         fix_y: y-dimmension of plot (in.).
-            Default: 1.5
-        plot_t_max: Plot time axis right bound (s).
-            Default: 1 ns
-        finalize: Finish plot annotations when ``True``.
-            Default: ``True``
+            Default: ``FIG_Y_DFLT``
 
     Returns:
         A list of _ReportLab_ ``Flowable``s, alternating between
 
         - a _ReportLab_ ``Paragraph`` containing the sweep description, and
         - a _ReportLab_ ``Image`` containing the plots for the described sweep.
-    """
 
-    rslts = []
-    for sweep in sweeps:
-        cfg_name    = sweep[0]
-        description = sweep[1]
-        cfg_list    = sweep[2]
-        colors      = color_picker(num_hues=len(cfg_list))
-
-        desc = f"Running sweep `{cfg_name}`: {ital(f'{description}')}"
-        fig = plt.figure(figsize=(fig_x, fig_y))
-        # Accommodating both new and old style IBIS-AMI model configuration:
-        for color, fields in zip(colors, cfg_list):
-            label = fields[0]
-            ami_params = fields[1][0]
-            sim_params = fields[1][1]
-            initializer.ami_params.update(ami_params)
-            if "channel_response" in sim_params:
-                initializer.channel_response = sim_params["channel_response"]
-            if "row_size" in sim_params:
-                initializer.row_size = sim_params["row_size"]
-            if "num_aggressors" in sim_params:
-                initializer.num_aggressors = sim_params["num_aggressors"]
-            if "sample_interval" in sim_params:
-                initializer.sample_interval = sim_params["sample_interval"]
-            if "bit_time" in sim_params:
-                initializer.bit_time = sim_params["bit_time"]
-            func(model, initializer, nbits, fig, color[0], label)
-
-        if finalize:
-            plot_finalize_steppulse_freq(fig, plot_t_max)
-        # plt.tight_layout()  # Doesn't work w/ subfigures.
-
-        # ToDo: Can we figure out how to comment out the `delete=False` line below?
-        with NamedTemporaryFile(suffix='.jpg', prefix=(cfg_name),
-                                delete_on_close=False,  # Deleted after use in a context manager.
-                                delete=False,           # Debugging missing files.
-                               ) as tmp_file:
-            plt.savefig(tmp_file)
-            rslts.extend([Paragraph(desc, styles['Normal']),
-                          Image(tmp_file.name, width=(fig_x)*inch, height=(fig_y)*inch)])
-
-    return rslts
-
-
-def plot_sweeps_multi(
-    helper: AmiTestHelper,
-    model: AMIModel,
-    initializer: AMIModelInitializer,
-    sweeps: list[TestSweep],
-    nbits: int,
-    fig_x: float = 6,
-    fig_y: float = 2,
-    plot_t_max: float = 1e-9,
-    finalize: bool = True
-) -> list[Flowable]:
-    """
-    Run a common testing/plotting function over several parameter sweeps,
-    generating separate plots for each.
-
-    Args:
-        helper: Tester/plotter.
-        model: AMI model to test.
-        initializer: AMI model initializer to use/modify.
-        sweeps: Parameter sweep definitions.
-        nbits: Number of bits to use for ``GetWave`` testing.
-
-    Keyword Args:
-        fix_x: x-dimmension of plot (in.).
-            Default: 6
-        fix_y: y-dimmension of plot (in.).
-            Default: 2
-        plot_t_max: Plot time axis right bound (s).
-            Default: 1 ns
-        finalize: Finish plot annotations when ``True``.
-            Default: ``True``
-
-    Returns:
-        A list of _ReportLab_ ``Flowable``s, alternating between
-
-        - a _ReportLab_ ``Paragraph`` containing the sweep description, and
-        - a _ReportLab_ ``Image`` containing the plots for the described sweep.
     """
 
     flowables: list[Flowable] = []
-    for cfg_name, cfg_desc, cfg_list in sweeps:
-        p = Paragraph(f"Running sweep `{cfg_name}`: {ital(f'{cfg_desc}')}", P)
+    for test_def in test_sweep().test_sweep():
+        p = Paragraph(preformatted(f"\t{test_def.description}:"), P)
         p.keepWithNext = True
         flowables.append(p)
-        for cfg_label, (ami_params, sim_params) in cfg_list:
-            # Generate one pair of plots per iteration of this loop.
-            p = Paragraph(preformatted(f"\tRunning configuration `{cfg_label}`..."), P)
-            p.keepWithNext = True
-            flowables.extend([spacer, p, spacer])
-            initializer.ami_params.update(ami_params)
-            if "channel_response" in sim_params:
-                initializer.channel_response = sim_params["channel_response"]
-            if "row_size" in sim_params:
-                initializer.row_size = sim_params["row_size"]
-            if "num_aggressors" in sim_params:
-                initializer.num_aggressors = sim_params["num_aggressors"]
-            if "sample_interval" in sim_params:
-                initializer.sample_interval = sim_params["sample_interval"]
-            if "bit_time" in sim_params:
-                initializer.bit_time = sim_params["bit_time"]
-            fig = helper.ami_tst_helper(model, initializer, nbits, "")
-            # plt.tight_layout()  # Doesn't work w/ subfigures.
-            # ToDo: Can we figure out how to comment out the `delete=False` line below?
-            with NamedTemporaryFile(suffix='.jpg', prefix=("_".join([cfg_name, cfg_label])),
-                                    delete_on_close=False,  # Deleted after use in a context manager.
-                                    delete=False,           # Debugging missing files.
-                                   ) as tmp_file:
-                plt.savefig(tmp_file)
-                flowables.append(Image(tmp_file.name, width=(fig_x)*inch, height=(fig_y)*inch))
-            plt.close()
-            flowables.append(spacer)
+        initializer = pcfg.get_init(
+            test_def.sim_params["bit_time"],
+            test_def.sim_params["sample_interval"],
+            test_def.sim_params["channel_response"],
+            test_def.ami_params
+        )
+        # ToDo: Get rid of `nbits`:
+        helper.ami_tst_helper(ami_model, initializer, test_def.sim_params["nbits"], "")
+        # plt.tight_layout()  # Doesn't work w/ subfigures.
+        with NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+            plt.savefig(tmp_file)
+            flowables.append(Image(tmp_file.name, width=fig_x*inch, height=fig_y*inch))
+        plt.close()
+        flowables.append(spacer)
     return flowables

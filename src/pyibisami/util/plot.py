@@ -9,7 +9,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
 from dataclasses import dataclass
-from typing import Any, Generator, Optional, NewType, Sequence, TypeAlias
+from typing import Generator, Optional, Sequence, TypeAlias
 
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -17,10 +17,10 @@ from matplotlib.figure import Figure
 import numpy as np
 from scipy.interpolate import interp1d
 
-from ..common import EPS, Rvec
+from ..common import EPS
 from ..ami.model import (
     AMIModel, AMIModelInitializer, AmiModelResponses,
-    IMP_RESP_INIT, OUT_RESP_INIT, IMP_RESP_GETW, OUT_RESP_GETW
+    OUT_RESP_INIT, OUT_RESP_GETW
 )
 
 from .ami import get_dfe_adaptation
@@ -70,11 +70,11 @@ class PlotStyleFeature:
     def __post_init__(self):
         if not isinstance(self.feature, str):
             raise TypeError("Feature must be a string.")
-        if not self.feature in VALID_STYLE_FEATURES:
+        if self.feature not in VALID_STYLE_FEATURES:
             raise ValueError(f"Feature must be one of:\n{VALID_STYLE_FEATURES}")
 
     def __str__(self):
-        return feature
+        return self.feature
 
 PlotStyle: TypeAlias = dict[PlotStyleFeature, str]
 

@@ -14,7 +14,6 @@ from pathlib import Path
 
 import click
 import em
-import numpy as np
 
 from pyibisami.ami.model    import AMIModel
 from pyibisami.common       import TestSweep

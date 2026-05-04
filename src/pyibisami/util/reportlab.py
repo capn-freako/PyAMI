@@ -12,22 +12,14 @@ import sys
 
 from datetime   import datetime
 from pathlib    import Path
-from random     import randrange
-from tempfile   import NamedTemporaryFile
-from typing     import Any, Callable, Generator, NewType
 
 import numpy as np
 import scipy as sp
 
-from matplotlib             import pyplot as plt
-from matplotlib.figure      import Figure
 from reportlab.lib.enums    import TA_CENTER
 from reportlab.lib.styles   import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units    import inch
-from reportlab.platypus     import Flowable, Image, PageBreak, Paragraph, Spacer
-
-from ..common       import Rvec, TestSweep
-from ..ami.model    import AMIModel, AMIModelInitializer
+from reportlab.platypus     import Flowable, PageBreak, Paragraph, Spacer
 
 # ReportLab Platypus abbreviations
 page_break = PageBreak()
@@ -38,6 +30,7 @@ H1 = styles['Heading1']
 H2 = styles['Heading2']
 H3 = styles['Heading3']
 H4 = styles['Heading4']
+H5 = styles['Heading5']
 bold_style = ParagraphStyle(
     name='BoldStyle',
     parent=styles['Normal'],

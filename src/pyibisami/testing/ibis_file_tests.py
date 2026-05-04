@@ -13,17 +13,13 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from reportlab.platypus import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
+from reportlab.platypus import Flowable, Paragraph
 
-from ..common import TestSweep
 from ..ibis.file import IBISModel
-from ..util.reportlab import (
-    preformatted,
-    bold, ital, fixed, page_break, spacer,
-    styles, bold_style, caption_style, indented_style,
-    P, H1, H2, H3, H4)
+from ..util.reportlab import preformatted, page_break, styles, H1, H2
 
 from .ami_tests import test_ami_model
+from .test_defs import TestSweep
 
 IBIS_CHK_EXEC = "ibischk7_64"
 
@@ -78,9 +74,7 @@ def golden_parser_results(ibis_file: Path) -> list[Flowable]:
 
 def test_ami_models(
     ibis_file_dir: Path, ibis_model: IBISModel,
-    bit_rate: float, nspui: int,
-    param_defs: list[TestSweep],
-    nbits: int = 20,
+    test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
     model_name: Optional[str] = None,
     debug: bool=False
 ) -> list[Flowable]:
@@ -90,12 +84,9 @@ def test_ami_models(
     Args:
         ibis_file_dir: The parent directory of the ``*.ibs`` file being tested.
         ibis_model: The read and parsed ``*.ibs`` file.
-        bit_rate: The desired bit rate for testing.
-        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
-        param_defs: The list of parameter sweep definitions to use for this test.
+        test_sweepers: The list of parameter sweep definitions to use for this test.
 
     Keyword Args:
-        nbits: The total number of bits to use when testing ``GetWave()``.
         model_name: The name of a particular model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
         debug: Include extra debugging output when ``True``.
@@ -103,11 +94,6 @@ def test_ami_models(
 
     Returns:
         The list of *ReportLab* ``Flowable``s describing the testing results.
-
-    Notes:
-        1. The value given for ``nbits`` gives the number of "good" bits needed back from the model.
-        If the model's ``Ignore_Bits`` is set to ``N``, for instance, the number of bits actually run is
-        ``N + nbits``.
     """
 
     flowables: list[Flowable] = [Paragraph("IBIS-AMI Model(s) Testing Results", H1)]
@@ -130,7 +116,7 @@ def test_ami_models(
         flowables.append(Paragraph(f"Testing Model: {model_name}", H2))
         model = ibis_model.model_dict['models'][model_name]
         flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
-        flowables.extend(test_ami_model(model, ibis_file_dir, param_defs, bit_rate, nspui, nbits))
+        flowables.extend(test_ami_model(model, ibis_file_dir, test_sweepers))
         flowables.append(page_break)
         return flowables
 

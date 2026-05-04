@@ -11,7 +11,6 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, TypeAlias
 
@@ -38,7 +37,7 @@ class AmiModelResponseKey:
     def __post_init__(self):
         if not isinstance(self.key, str):
             raise TypeError("Key must be a string.")
-        if not self.key in VALID_RESPONSE_KEYS:
+        if self.key not in VALID_RESPONSE_KEYS:
             raise ValueError(f"Key must be one of:\n{VALID_RESPONSE_KEYS}")
 
 
@@ -581,7 +580,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Extract and return the model responses.
         if self.info_params["Init_Returns_Impulse"]:
-            start_time = datetime.now()
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
             rslt[IMP_RESP_INIT] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 

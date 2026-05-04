@@ -10,154 +10,141 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 import platform
 
-from abc     import abstractmethod
+from abc     import ABC, abstractmethod
 from pathlib import Path
-from typing  import Protocol, Sequence
-
-import numpy as np
+from typing  import Optional, Sequence
 
 from reportlab.lib.units    import inch
-from reportlab.platypus     import Flowable, Image, ListFlowable, ListItem, PageBreak, Paragraph, Spacer
-from scipy.interpolate      import interp1d
-from scipy.signal           import butter, freqs, lfilter
+from reportlab.platypus     import Flowable, ListFlowable, Paragraph
 
-from ..common           import PI, Rvec, TestSweep, raised_cosine
 from ..ami.model        import AMIModel
-from ..ami.parser       import AMIParamConfigurator, ParamName
+from ..ami.parser       import AMIParamConfigurator
 from ..ibis.model       import Model
 from ..util.reportlab   import (
-    bold, ital, fixed, page_break, spacer, preformatted,
-    styles, bold_style, caption_style, indented_style,
-    P, H1, H2, H3, H4)
+    bold, fixed, page_break, spacer, preformatted,
+    P, H3, H4, H5)
 
 from .ami_tests_helpers import (
-    AmiTestHelperInitVsGetwave, AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
-    plot_sweeps, plot_sweeps_multi, mk_linearity_checker)
+    AmiTestHelper, AmiTestHelperInitVsGetwave,
+    AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
+    plot_sweep, mk_linearity_checker)
+from .test_defs import TestSweep
 
-FIG_X_DFLT = 6
-FIG_Y_DFLT = 4
+FIG_X_DFLT = 6.0
+FIG_Y_DFLT = 4.0
 DEBUG = False
 
 
-class AmiTester(Protocol):
-    "Abstract class defining the function signature for AMI testing functions."
+class AmiTester(ABC):
+    "Abstract class defining the structure and default behavior of an IBIS-AMI model tester."
 
+    @property
     @abstractmethod
+    def helper(self) -> AmiTestHelper:
+        "Each subclass must define a test helper."
+        raise NotImplementedError()
+
+    preamble: list[Flowable] = []  # Any desired introductory text for report body.
+
     def ami_tst(
         self,
         ami_model: AMIModel, pcfg: AMIParamConfigurator,
-        bit_interval: float, sample_interval: float, nbits: int,
-        channel_response: Rvec, param_defs: list[TestSweep],
+        test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
         fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     ) -> list[Flowable]:
         """
-        Perform some test on an ``AMIModel`` instance.
+        Perform some test on an ``AMIModel`` instance,
+        using several different parameter sweep groups.
 
         Args:
             ami_model: The AMI model to test.
             pcfg: The AMI model configurator to use/modify.
-            bit_interval: The unit interval (s).
-            sample_interval: Time between adjacent signal vector elements (s).
-            nbits: Number of bits used for ``GetWave()`` testing.
-            channel_response: Analog channel impulse response (V/s).
-            param_defs: List of AMI/simulation parameter sets to sweep over.
+            test_sweepers: List of AMI/simulation parameter set groups to sweep over.
 
         Keyword Args:
             fig_x: x-dimension of resultant plot figure (in.).
-                Default: 6
+                Default: ``FIG_X_DFLT``
             fig_y: y-dimension of resultant plot figure (in.).
-                Default: 3
+                Default: ``FIG_Y_DFLT``
 
         Returns:
             A list of _ReportLab_ ``Flowable``s comprising the results of this test.
         """
 
-        raise NotImplementedError
+        flowables: list[Flowable] = self.preamble
+        for mod_doc, test_sweeps in test_sweepers:
+            _mod_doc: str = mod_doc or "(No module description)"
+            p = Paragraph(_mod_doc, H4)
+            p.keepWithNext = True
+            flowables.append(p)
+            for test_sweep in test_sweeps:
+                sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
+                p = Paragraph(sweep_desc, H5)
+                p.keepWithNext = True
+                flowables.append(p)
+                flowables.extend(plot_sweep(
+                    self.helper, ami_model, pcfg, test_sweep,
+                    fig_x=fig_x, fig_y=fig_y))
+        return flowables
 
-class AmiTestInitVsGetwave():
+
+class AmiTestInitVsGetwave(AmiTester):
     "Compare output from ``AMI_Init()`` and ``AMI_GetWave()`` functions."
 
-    def ami_tst(
-        self,
-        ami_model: AMIModel, pcfg: AMIParamConfigurator,
-        bit_interval: float, sample_interval: float, nbits: int,
-        channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
-    ) -> list[Flowable]:
-        flowables: list[Flowable] = [
-            Paragraph("Init() vs. GetWave()", H4),
-            Paragraph(
-                "Here, we check to see that the fundamental responses of the model are the same \
-                whether we call AMI_Init() or AMI_GetWave().", P),
-            spacer,
-            Paragraph(f"{bold('Note:')} This test is only possible for models that:", P),
-            ListFlowable([
-                Paragraph(f"have an {fixed('AMI_GetWave()')} function, and", P),
-                Paragraph(f"return an impulse response from their {fixed('AMI_Init()')} function.", P),
-            ], bulletType='bullet', bulletIndent=0.25*inch),
-            spacer,
-        ]
-        initializer = pcfg.get_init(
-            bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-        flowables.extend(plot_sweeps_multi(
-            AmiTestHelperInitVsGetwave(DEBUG), ami_model, initializer,
-            param_defs, nbits, fig_x=fig_x, fig_y=fig_y))
-        flowables.extend([
-            Paragraph(f"{bold('Plot notes:')}", P),
-            ListFlowable([
-                Paragraph(f"Solid lines are {fixed('Init()')}; dashed are {fixed('GetWave()')}."),
-                Paragraph("Step response shown at reduced brightness."),
-            ], bulletFontSize=9),
-            spacer,
-            Paragraph(f"Compare the plots above. \
-                      The {fixed('Init()')} (solid) and {fixed('GetWave()')} (dashed) plots \
-                      should look nearly identical.", P),
-            Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
-                      it`s not expected to match and is plotted only as a debugging aid.)", P),
-        ])
+    helper = AmiTestHelperInitVsGetwave(DEBUG)
 
-        return flowables
+    preamble = [
+        Paragraph("Init() vs. GetWave()", H3),
+        Paragraph(
+            "Here, we check to see that the fundamental responses of the model are the same \
+            whether we call AMI_Init() or AMI_GetWave().", P),
+        spacer,
+        Paragraph(f"{bold('Note:')} This test is only possible for models that:", P),
+        ListFlowable([
+            Paragraph(f"have an {fixed('AMI_GetWave()')} function, and", P),
+            Paragraph(f"return an impulse response from their {fixed('AMI_Init()')} function.", P),
+        ], bulletType='bullet', bulletIndent=0.25*inch),
+        spacer,
+        Paragraph(f"{bold('Plot notes:')}", P),
+        ListFlowable([
+            Paragraph(f"Solid lines are {fixed('Init()')}; dashed are {fixed('GetWave()')}."),
+            Paragraph("Step response shown at reduced brightness."),
+        ], bulletFontSize=9),
+        spacer,
+        Paragraph(f"Compare the plots below. \
+                  The {fixed('Init()')} (solid) and {fixed('GetWave()')} (dashed) plots \
+                  should look nearly identical.", P),
+        Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
+                  it`s not expected to match and is plotted only as a debugging aid.)", P),
+        spacer,
+    ]
 
 
-class AmiTestSamplesPerBit():
+class AmiTestSamplesPerBit(AmiTester):
     "Compare model response at different oversampling factors."
 
-    def ami_tst(
-        self,
-        ami_model: AMIModel, pcfg: AMIParamConfigurator,
-        bit_interval: float, sample_interval: float, nbits: int,
-        channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
-    ) -> list[Flowable]:
-        flowables: list[Flowable] = [
-            page_break,
-            Paragraph("Samples per Bit", H4),
-            Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
-                       i.e., number of samples per bit (or, symbol).", P),
-            spacer,
-        ]
-        initializer = pcfg.get_init(
-            bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-        flowables.extend(plot_sweeps_multi(
-            AmiTestHelperSamplesPerBit(), ami_model, initializer,
-            param_defs, nbits, fig_x=fig_x, fig_y=fig_y, plot_t_max = 10 * bit_interval))
-        flowables.append(
-            Paragraph("You should see very little difference between the 3 plots in any of the charts above.", P))
+    helper = AmiTestHelperSamplesPerBit()
 
-        return flowables
+    preamble = [
+        page_break,
+        Paragraph("Samples per Bit", H3),
+        Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
+                   i.e., number of samples per bit (or, symbol).", P),
+        Paragraph("You should see very little difference between the 3 plots in any of the charts below.", P),
+        spacer,
+    ]
 
 
-class AmiTestGetwaveInputLength():
+class AmiTestGetwaveInputLength(AmiTester):
     "Compare ``AMI_GetWave()`` outputs for different input lengths."
 
+    helper = AmiTestHelperGetwaveInputLength()
+
     def ami_tst(
-        self,
-        ami_model: AMIModel, pcfg: AMIParamConfigurator,
-        bit_interval: float, sample_interval: float, nbits: int,
-        channel_response: Rvec, param_defs: list[TestSweep],
-        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        self, ami_model, pcfg, test_sweepers,
+        fig_x = FIG_X_DFLT, fig_y = FIG_Y_DFLT,
     ) -> list[Flowable]:
-        flowables: list[Flowable] = [
+        preamble: list[Flowable] = [
             page_break,
             Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
             Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
@@ -166,26 +153,22 @@ class AmiTestGetwaveInputLength():
             spacer,
         ]
         if ami_model.has_getwave:
-            initializer = pcfg.get_init(
-                bit_interval, sample_interval, channel_response, {"root_name": pcfg._root_name})
-            flowables.extend(
-                plot_sweeps_multi(
-                    AmiTestHelperGetwaveInputLength(), ami_model, initializer, param_defs, nbits,
-                    fig_x=fig_x, fig_y=fig_y, finalize=False
-                )
-            )
-            flowables.append(
+            preamble.append(
                 Paragraph("You should see very little difference, in either domain, \
-                          between the various plots in any of the charts above.", P))
+                          between the various plots in any of the charts below.", P)
+            )
+            self.preamble = preamble
+            return super().ami_tst(ami_model, pcfg, test_sweepers, fig_x=fig_x, fig_y=fig_y)
         else:
-            flowables.append(Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P))
-
-        return flowables
+            preamble.append(
+                Paragraph(f"Model has no {fixed('AMI_GetWave()')} function.", P)
+            )
+            return preamble
 
 
 def test_ami_model(
-    model: Model, ibis_file_dir: Path, param_defs: list[TestSweep],
-    bit_rate: float, nspui: int, nbits: int,
+    model: Model, ibis_file_dir: Path,
+    test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
     fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     f_max: float = 40e9, f_step: float = 10e6
 ) -> list[Flowable]:
@@ -195,16 +178,13 @@ def test_ami_model(
     Args:
         model: The IBIS-AMI model to test.
         ibis_file_dir: Parent directory of ``*.ibs`` file being tested.
-        param_defs: List of parameter definition sets to sweep over.
-        bit_rate: Bit rate to use for testing.
-        nspui: Number of samples per unit interval (a.k.a. - over-sampling factor).
-        nbits: Number of bits used for testing model's ``GetWave()`` function.
+        test_sweepers: List of parameter definition set groups to sweep over.
 
     Keyword Args:
         fix_x: x-dimmension of plot (in.).
-            Default: 6
+            Default: ``FIG_X_DFLT``
         fix_y: y-dimmension of plot (in.).
-            Default: 3
+            Default: ``FIG_Y_DFLT``
         f_max: Maximum frequency of interest (Hz).
             Default: 40 GHz
         f_step: Frequency increment (Hz).
@@ -212,14 +192,7 @@ def test_ami_model(
 
     Returns:
         A list of *ReportLab* ``Flowable``s describing the test results.
-
-    Notes:
-        1. The value given for ``nbits`` gives the number of "good" bits needed back from the model.
-        If the model's ``Ignore_Bits`` is set to ``N``, for instance, the number of bits actually run is
-        ``N + nbits``.
     """
-
-    CHANNEL_RESPONSE_BITS = 20
 
     if not model.is_ami:
         return [Paragraph("Error: This model is not an IBIS-AMI model!", P)]
@@ -269,7 +242,6 @@ def test_ami_model(
         ignore_bits = pcfg.fetch_param_val(["Reserved_Parameters", "Ignore_Bits"]) or 0
         returns_impulse = pcfg.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"]) or False
         has_ts4 = True if pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]) else False
-        root_name = pcfg.input_ami_params[ParamName("root_name")]
     except Exception as err:
         flowables.append(Paragraph(str(err), P))
         flowables.append(Paragraph(f"Error loading AMI parameter file: {ami_file}!", P))
@@ -291,107 +263,13 @@ def test_ami_model(
     else:
         flowables.append(Paragraph("Model does not include on-die S-parameters.", P))
 
-    bit_interval = 1.0 / bit_rate
-    sample_interval = bit_interval / nspui
-
     # Run specific tests.
     testers: Sequence[AmiTester] = [
         AmiTestInitVsGetwave(), AmiTestSamplesPerBit(), AmiTestGetwaveInputLength()]
 
-    def run_testers(channel: Rvec, debug: bool = False) -> list[Flowable]:
-        """
-        Run selected model testers, using the given channel response.
-
-        Args:
-            channel: Channel impulse resopnse (V/s).
-
-        Returns:
-            A list of _ReportLab_ ``Flowable``s comprising the testing results.
-        """
-
-        global DEBUG
-        DEBUG = debug
-
-        flowables: list[Flowable] = []
-        for n, tester in enumerate(testers):
-            flowables.extend(
-                tester.ami_tst(
-                    ami_model, pcfg, bit_interval, sample_interval, nbits,
-                    channel, param_defs, fig_x=fig_x, fig_y=fig_y
-                )
-            )
-        return flowables
-
-    # Test w/ perfect channel.
-    print("Testing w/ perfect channel...", flush=True)
-    flowables.extend([
-        Paragraph("Testing w/ Perfect Channel", H3),
-        Paragraph("Here, we represent the 'channel' by a Kronecker delta function, \
-                  so as to elicit the actual responses of the model itself.", P),
-        spacer,
-        Paragraph("This imposes certain limitations on our testing. \
-                  For instance, since any equalization is over-equalization for such a perfect channel, \
-                  if the model imposes:"),
-        ListFlowable(
-            [Paragraph("a minimum amount of CTLE peaking, or"),
-             Paragraph("a minimum first DFE tap value,"),
-             Paragraph("etc.,"),
-            ], bulletType='bullet', bulletIndent=0.25*inch),
-        Paragraph("then we will end up in an over-equalized state."),
-        spacer,
-        Paragraph("Such a state will not usually affect the AMI_Init() function, \
-                  but may affect the AMI_GetWave() function, \
-                  particularly if a DFE has been enabled. \
-                  And this will cause disagreement between the two. Therefore:"),
-        spacer,
-        Paragraph("The results of this section should be considered with some skepticism, \
-                  as far as inferring how the model will behave in a 'real World' scenario.",
-                  bold_style),
-        spacer,
-        Paragraph(f"The {ital('Lossy Channel')} and {ital('Reflective Channel')} sections, below, \
-                  give a more useful assessment of the model's behavior in such real use scenarios."),
-        page_break,
-    ])
-
-    perfect_channel = np.array(
-        [1.0] + [0.0] * (nspui - 1) + [0.0] * (CHANNEL_RESPONSE_BITS - 1) * nspui
-    ) / sample_interval  # Kronecker delta (V/s)
-    flowables.extend(run_testers(perfect_channel))
-
-    # Test w/ lossy channel.
-    print("Testing w/ lossy channel...", flush=True)
-    flowables.extend([
-        page_break,
-        Paragraph("Testing w/ Lossy Channel", H3),
-        Paragraph("Here, we test the model against a well terminated, but very lossy, channel.", P),
-    ])
-    b, a = butter(1, bit_rate / 20, fs = 1 / sample_interval)
-    lossy_channel = lfilter(
-        b, a, np.array([0., 1.] + [0.] * (nspui - 2) + [0.0] * (CHANNEL_RESPONSE_BITS - 1) * nspui)
-    ) / sample_interval
-    flowables.extend(run_testers(lossy_channel, debug=True))
-
-    # Test w/ reflective channel.
-    print("Testing w/ reflective channel...", flush=True)
-    flowables.extend([
-        page_break,
-        Paragraph("Testing w/ Reflective Channel", H3),
-        Paragraph("Here, we test the model against a poorly terminated, very reflective channel.", P),
-    ])
-    t = np.arange(CHANNEL_RESPONSE_BITS * nspui) * sample_interval
-    f = np.arange(0, f_max + f_step, f_step)
-    w = 2 * PI * f
-    ts = 0.5 / f_max
-    t_fft = np.array([n * ts for n in range(2 * (len(f) - 1))])
-    b, a = butter(1, 2 * PI * bit_rate / 2, analog=True)
-    _, H = freqs(b, a, worN=w)
-    td = 100e-12  # one-way channel delay
-    r = 0.2       # reflection coefficient
-    H *= (1 - r) * np.exp(-1j * w * td) / (1 - r * np.exp(-2j * w * td))
-    h = np.fft.irfft(raised_cosine(H)) / ts
-    krnl = interp1d(t_fft, h)
-    reflective_channel = krnl(t)
-    flowables.extend(run_testers(reflective_channel))
+    for tester in testers:
+        flowables.extend(
+            tester.ami_tst(ami_model, pcfg, test_sweepers, fig_x=fig_x, fig_y=fig_y))
 
     # Linearity check
     flowables.extend([
@@ -405,15 +283,16 @@ def test_ami_model(
             often used to capture non-linear behavior.", P),
         spacer,
     ])
-    initializer = pcfg.get_init(
-        bit_interval, sample_interval, lossy_channel, {"root_name": pcfg._root_name})
-    flowables.extend(
-        plot_sweeps_multi(
-            mk_linearity_checker([lossy_channel, reflective_channel]),
-            ami_model, initializer, param_defs, nbits,
-            fig_x=fig_x, fig_y=fig_y
-        )
-    )
+    # ToDo: Restore this:
+    # initializer = pcfg.get_init(
+    #     bit_interval, sample_interval, lossy_channel, {"root_name": pcfg._root_name})
+    # flowables.extend(
+    #     plot_sweeps_multi(
+    #         mk_linearity_checker([lossy_channel, reflective_channel]),
+    #         ami_model, initializer, test_sweepers, nbits,
+    #         fig_x=fig_x, fig_y=fig_y
+    #     )
+    # )
     flowables.extend([
         spacer,
         Paragraph(f"Compare each pair of red and blue traces above. \

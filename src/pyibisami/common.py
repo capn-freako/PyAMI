@@ -24,6 +24,7 @@ PI:    float = 3.141592653589793238462643383279502884
 TWOPI: float = 2.0 * PI
 EPS:   float = 0.0001  # Used to test floats for "== 0".
 
+# ToDo: What's this about?:
 # TestConfig: TypeAlias = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
 # TestSweep:  TypeAlias = tuple[str, str, list[TestConfig]]
 TestConfig = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
