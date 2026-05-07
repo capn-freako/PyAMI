@@ -9,12 +9,13 @@ from pyibisami.testing.test_defs    import (
 BIT_RATE = 10e9
 OSF      = 32
 CHANNEL_RESPONSE_BITS = 20
-LOSSY_CHANNEL_BW      = 0.05    # Normalized to `BIT_RATE`.
+LOSSY_CHANNEL_BW      = 0.1    # Normalized to `BIT_RATE`.
 
 # Global definitions
 bit_time        = 1 / BIT_RATE
 sample_interval = bit_time / OSF
 
+# This will be picked up by the `test-model` command, because it is a subclass of `TestSweep`.
 class MyTestSweep(TestSweep):
     "CTLE gain and DFE Vout matched to channel type."
 
@@ -29,7 +30,7 @@ class MyTestSweep(TestSweep):
         'dfe_mode':  2,
         'dfe_ntaps': 5,
         'dfe_vout':  0.5,
-        'dfe_gain':  0.02,
+        'dfe_gain':  0.1,
         'dfe_tap1': 0.0,
         'dfe_tap2': 0.0,
         'dfe_tap3': 0.0,
@@ -47,6 +48,8 @@ class MyTestSweep(TestSweep):
     }
 
     def test_sweep(self):
+        "Generates individual test cases."
+
         # Perfect channel.
         yield TestDefinition(
             "Perfect Channel @ 10 Gbps NRZ w/ 32x OSF (CTLE = 0)",
@@ -56,10 +59,11 @@ class MyTestSweep(TestSweep):
         self.ami_params.update({
             'ctle_mag': 9.0,
             'dfe_vout': 0.25,
+            'dfe_gain': 0.2,
             })
         self.sim_params.update({
             'channel_response': lossy_channel(
-                OSF, CHANNEL_RESPONSE_BITS, sample_interval),
+                OSF, CHANNEL_RESPONSE_BITS, sample_interval, bw=LOSSY_CHANNEL_BW),
             })
         yield TestDefinition(
             "Lossy Channel @ 10 Gbps NRZ w/ 32x OSF (CTLE = 9dB)",
@@ -69,6 +73,7 @@ class MyTestSweep(TestSweep):
         self.ami_params.update({
             'ctle_mag': 3.0,
             'dfe_vout': 0.4,
+            'dfe_gain': 0.1,
             })
         self.sim_params.update({
             'channel_response': reflective_channel(

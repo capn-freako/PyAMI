@@ -12,14 +12,16 @@ import platform
 
 from abc     import ABC, abstractmethod
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing  import Optional, Sequence
 
 from reportlab.lib.units    import inch
-from reportlab.platypus     import Flowable, ListFlowable, Paragraph
+from reportlab.platypus     import Flowable, Image, ListFlowable, Paragraph
 
-from ..ami.model        import AMIModel
+from ..ami.model        import AMIModel, OUT_RESP_INIT
 from ..ami.parser       import AMIParamConfigurator
 from ..ibis.model       import Model
+from ..util.plot        import plt
 from ..util.reportlab   import (
     bold, fixed, page_break, spacer, preformatted,
     P, H3, H4, H5)
@@ -27,7 +29,7 @@ from ..util.reportlab   import (
 from .ami_tests_helpers import (
     AmiTestHelper, AmiTestHelperInitVsGetwave,
     AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
-    plot_sweep, mk_linearity_checker)
+    plot_sweep)
 from .test_defs import TestSweep
 
 FIG_X_DFLT = 6.0
@@ -39,7 +41,6 @@ class AmiTester(ABC):
     "Abstract class defining the structure and default behavior of an IBIS-AMI model tester."
 
     @property
-    @abstractmethod
     def helper(self) -> AmiTestHelper:
         "Each subclass must define a test helper."
         raise NotImplementedError()
@@ -85,6 +86,75 @@ class AmiTester(ABC):
                 flowables.extend(plot_sweep(
                     self.helper, ami_model, pcfg, test_sweep,
                     fig_x=fig_x, fig_y=fig_y))
+        return flowables
+
+
+class AmiTestLinearityChecker(AmiTester):
+    "Check ``AMI_Init()`` for linearity."
+
+    preamble = [
+        page_break,
+        Paragraph(f"{fixed('AMI_Init()')} Linearity Check", H3),
+        Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
+        spacer,
+        Paragraph(
+            f"{bold('Note:')} There is no requirement that the {fixed('AMI_GetWave()')} \
+            function exhibit linearity. In fact, the {fixed('AMI_GetWave()')} function is \
+            often used to capture non-linear behavior.", P),
+        spacer,
+        Paragraph(f"Compare each pair of red and blue traces below. \
+                  If the model's {fixed('AMI_Init()')} function is truly linear, \
+                  then the two should look identical.", P),
+    ]
+
+    def ami_tst(
+        self, ami_model, pcfg, test_sweepers,
+        fig_x = 5, fig_y = 3,
+    ) -> list[Flowable]:
+        flowables: list[Flowable] = self.preamble
+        for mod_doc, test_sweeps in test_sweepers:
+            _mod_doc: str = mod_doc or "(No module description)"
+            p = Paragraph(_mod_doc, H4)
+            p.keepWithNext = True
+            flowables.append(p)
+            for test_sweep in test_sweeps:
+                sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
+                p = Paragraph(sweep_desc, H5)
+                p.keepWithNext = True
+                flowables.append(p)
+                for test_def in test_sweep().test_sweep():
+                    p = Paragraph(preformatted(f"\t{test_def.description}:"), P)
+                    p.keepWithNext = True
+                    flowables.append(p)
+                    # Test model against full channel response.
+                    initializer = pcfg.get_init(
+                        test_def.sim_params["bit_time"],
+                        test_def.sim_params["sample_interval"],
+                        test_def.sim_params["channel_response"],
+                        test_def.ami_params
+                    )
+                    ami_model.initialize(initializer)
+                    model_resps = ami_model.get_responses(nbits=test_def.sim_params["nbits"])
+                    t, _, _, resp_to_sum, _, _ = model_resps[OUT_RESP_INIT]
+                    fig = plt.figure(figsize=(fig_x, fig_y))
+                    plt.plot(t * 1e9, resp_to_sum, label="Response to Sum")
+                    # Test model against half channel response.
+                    initializer.channel_response = [x / 2 for x in initializer.channel_response]
+                    ami_model.initialize(initializer)
+                    model_resps = ami_model.get_responses(nbits=test_def.sim_params["nbits"])
+                    t, _, _, sum_of_resps, _, _ = model_resps[OUT_RESP_INIT]
+                    sum_of_resps *= 2
+                    plt.plot(t * 1e9, sum_of_resps, label="Sum of Responses")
+                    plt.title("Comparing Pulse Responses")
+                    plt.xlabel("Time (ns)")
+                    plt.ylabel("p(t) (V)")
+                    plt.legend()
+                    with NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                        plt.savefig(tmp_file)
+                        flowables.append(Image(tmp_file.name, width=fig_x*inch, height=fig_y*inch))
+                    plt.close()
+                flowables.append(spacer)
+
         return flowables
 
 
@@ -142,11 +212,11 @@ class AmiTestGetwaveInputLength(AmiTester):
 
     def ami_tst(
         self, ami_model, pcfg, test_sweepers,
-        fig_x = FIG_X_DFLT, fig_y = FIG_Y_DFLT,
+        fig_x = 6, fig_y = 2,
     ) -> list[Flowable]:
         preamble: list[Flowable] = [
             page_break,
-            Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H4),
+            Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H3),
             Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
                       may exhibit sensitivity to the length of its input. And this is undesireable. \
                       Here, we try to flush that out if it's occurring.", P),
@@ -169,7 +239,6 @@ class AmiTestGetwaveInputLength(AmiTester):
 def test_ami_model(
     model: Model, ibis_file_dir: Path,
     test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
-    fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
     f_max: float = 40e9, f_step: float = 10e6
 ) -> list[Flowable]:
     """
@@ -181,10 +250,6 @@ def test_ami_model(
         test_sweepers: List of parameter definition set groups to sweep over.
 
     Keyword Args:
-        fix_x: x-dimmension of plot (in.).
-            Default: ``FIG_X_DFLT``
-        fix_y: y-dimmension of plot (in.).
-            Default: ``FIG_Y_DFLT``
         f_max: Maximum frequency of interest (Hz).
             Default: 40 GHz
         f_step: Frequency increment (Hz).
@@ -265,42 +330,14 @@ def test_ami_model(
 
     # Run specific tests.
     testers: Sequence[AmiTester] = [
-        AmiTestInitVsGetwave(), AmiTestSamplesPerBit(), AmiTestGetwaveInputLength()]
+        AmiTestInitVsGetwave(),
+        AmiTestSamplesPerBit(),
+        AmiTestGetwaveInputLength(),
+        AmiTestLinearityChecker(),
+    ]
 
     for tester in testers:
         flowables.extend(
-            tester.ami_tst(ami_model, pcfg, test_sweepers, fig_x=fig_x, fig_y=fig_y))
-
-    # Linearity check
-    flowables.extend([
-        page_break,
-        Paragraph(f"Testing Linearity of {fixed('AMI_Init()')} function", H3),
-        Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
-        spacer,
-        Paragraph(
-            f"{bold('Note:')} There is no requirement that the {fixed('AMI_GetWave()')} \
-            function exhibit linearity. In fact, the {fixed('AMI_GetWave()')} function is \
-            often used to capture non-linear behavior.", P),
-        spacer,
-    ])
-    # ToDo: Restore this:
-    # initializer = pcfg.get_init(
-    #     bit_interval, sample_interval, lossy_channel, {"root_name": pcfg._root_name})
-    # flowables.extend(
-    #     plot_sweeps_multi(
-    #         mk_linearity_checker([lossy_channel, reflective_channel]),
-    #         ami_model, initializer, test_sweepers, nbits,
-    #         fig_x=fig_x, fig_y=fig_y
-    #     )
-    # )
-    flowables.extend([
-        spacer,
-        Paragraph(f"Compare each pair of red and blue traces above. \
-                  If the model's {fixed('AMI_Init()')} function is truly linear, \
-                  then the two should look identical.", P),
-        spacer,
-        Paragraph(f"{bold('Note:')} As throughout, we use color hue to pair step and pulse responses, \
-                  with the step response shown at reduced brightness.", P)
-    ])
+            tester.ami_tst(ami_model, pcfg, test_sweepers))
 
     return flowables

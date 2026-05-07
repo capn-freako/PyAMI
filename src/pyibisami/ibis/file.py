@@ -245,7 +245,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         res += "\nComponents:"
         res += "\n=========="
         for c in self._components:
-            res += f"\nc:\n---\n{self._components[c]}\n"
+            res += f"\n{c}:\n---\n{self._components[c]}\n"
         res += "\nModel Selectors:"
         res += "\n===============\n"
         for s in self._model_selectors:

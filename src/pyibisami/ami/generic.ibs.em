@@ -69,10 +69,9 @@ for n in range(3):
 
 [Diff_Pin] inv_pin vdiff tdelay_typ tdelay_min tdelay_max
 @{
-if model_type.startswith("Output") or model_type == "Repeater":
-    for n in range(3):
-        print(f"{n + 1}p     {n + 1}n     0.1V    NA    NA    NA")
-if model_type.startswith("Input") or model_type == "Repeater":
+for n in range(3):
+    print(f"{n + 1}p     {n + 1}n     0.1V    NA    NA    NA")
+if model_type == "Repeater":
     for n in range(3):
         print(f"{n + 4}p     {n + 4}n     0.1V    NA    NA    NA")
 }

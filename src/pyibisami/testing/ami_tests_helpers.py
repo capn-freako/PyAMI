@@ -27,7 +27,8 @@ from ..ami.parser       import AMIParamConfigurator
 from ..util.plot        import (
     RGB, RED, GREEN, BLUE, PLOT_COLOR, PLOT_LINESTYLE,
     plt, color_picker, do_samples_per_bit,
-    plot_dfe_adaptation, plot_model_results, plot_resps)
+    plot_dfe_adaptation, plot_model_adaptation,
+    plot_model_results, plot_resps)
 from ..util.reportlab   import P, preformatted
 
 from .test_defs         import TestSweep
@@ -99,11 +100,8 @@ class AmiTestHelperInitVsGetwave():
         top_fig.suptitle("Model Responses (Post-Adaptation)")
         top_fig.subplots_adjust(left=.1, right=.9, wspace=.3)
         bottom_fig.subplots_adjust(top=.7, bottom=.1)
-
         plot_model_results(model_resps, top_fig, plot_t_max)
-
-        ax = bottom_fig.subplots(1,1)
-        plot_dfe_adaptation(model.getwave_step_response_out_params, ax)
+        plot_model_adaptation(model, bottom_fig)
 
         return fig
 
@@ -213,75 +211,6 @@ class AmiTestHelperGetwaveInputLength():
         return fig
 
 
-def mk_linearity_checker(
-    hs: list[Rvec],
-    plot_t_max: float = 1e-9
-) -> AmiTestHelper:
-    """
-    Make a model linearity checking function w/ call signature needed by ``plot_sweeps_multi()``.
-
-    Args:
-        hs: The list of channel responses to use.
-
-    Keyword Args:
-        plot_t_max: Maximum x-axis value (s).
-            Default: 1 ns
-
-    Returns:
-        A function suitable for use w/ ``plot_sweeps_multi()``.
-    """
-
-    def check_linearity(
-        model: AMIModel,
-        initializer: AMIModelInitializer,
-        nbits: int,  # Unused; to satisfy type signature of `plot_sweeps_multi()` only.
-        fig: Figure,
-        label: str,
-    ) -> None:
-        "Compare sum of model's responses to model's response to sum."
-
-        row_size        = initializer.row_size
-
-        hs_sum = sum(hs) / len(hs)
-        initializer.channel_response = hs_sum
-        model.initialize(initializer)
-        t_sum, _, s_sum, p_sum, f_sum, H_sum = model.get_responses(calc_getw=False)[OUT_RESP_INIT]
-        s_tot = np.zeros(row_size)
-        p_tot = np.zeros(row_size)
-        H_tot = np.zeros(row_size // 2 + 1) * 1j
-        for h, clrs in zip(hs, color_picker(len(hs))):
-            initializer.channel_response = h
-            model.initialize(initializer)
-            _, _, _s, _p, _, _H = model.get_responses(calc_getw=False)[OUT_RESP_INIT]
-            s_tot += _s
-            p_tot += _p
-            H_tot += _H
-        s_tot /= len(hs)
-        p_tot /= len(hs)
-        H_tot /= len(hs)
-
-        # plt.figure(fig)
-        blue_pair = ({PLOT_COLOR: f"{BLUE}"}, {PLOT_COLOR: f"{BLUE}"})
-        red_pair  = ({PLOT_COLOR: f"{RED}"},  {PLOT_COLOR: f"{RED}"})
-        left_ax, right_ax = fig.subplots(1, 2)
-        plot_resps(left_ax, right_ax, {OUT_RESP_INIT: (t_sum, hs_sum, s_sum, p_sum, f_sum, H_sum)},   # type: ignore
-                   "Response to Sum", blue_pair)
-        plot_resps(left_ax, right_ax, {OUT_RESP_INIT: (t_sum, hs_sum, s_tot, p_tot, f_sum, H_tot)},   # type: ignore
-                   "Sum of Responses", red_pair)
-
-    class AmiTestHelperLinearityChecker(AmiTestHelper):
-        def ami_tst_helper(
-            self,
-            model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-            color: RGB = BLUE, fig_x: float = 6, fig_y: float = 4, plot_t_max: float = 1e-9,
-        ) -> Figure:
-            fig = plt.figure(figsize=(fig_x, fig_y))
-            check_linearity(model, initializer, nbits, fig, label)
-            return fig
-
-    return AmiTestHelperLinearityChecker()
-
-
 def plot_sweep(
     helper: AmiTestHelper, ami_model: AMIModel,
     pcfg: AMIParamConfigurator, test_sweep: type[TestSweep],
@@ -295,7 +224,7 @@ def plot_sweep(
         helper: The AMI test helper to use.
         ami_model: The AMI model to test.
         pcfg: The parameter configurator to use for model initialization.
-        test_sweep: The ``TestSweep`` instance containing the desired parameter sweep.
+        test_sweep: The ``TestSweep`` subclass containing the desired parameter sweep definitions.
 
     Keyword Args:
         fix_x: x-dimmension of plot (in.).

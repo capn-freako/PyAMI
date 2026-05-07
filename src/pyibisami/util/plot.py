@@ -23,7 +23,7 @@ from ..ami.model import (
     OUT_RESP_INIT, OUT_RESP_GETW
 )
 
-from .ami import get_dfe_adaptation
+from .ami import get_cdr_adaptation, get_dfe_adaptation
 
 
 @dataclass(frozen=True)
@@ -258,6 +258,31 @@ def plot_resps(
                           color=getwave_color, linestyle=getwave_linestyle)
 
 
+def plot_cdr_adaptation(
+    getwave_out_params: Optional[list[str]],
+    ax: Axes, window_size: int = 10
+) -> None:
+    """
+    Plot CDR adaptation from ``GetWave()`` output parameters.
+
+    Args:
+        getwave_out_params: List of AMI output parameters from multiple ``GetWave()`` calls.
+        ax: *Matplotlib* axes to use for plotting.
+
+    Keyword Args:
+        window_size: Size of smoothing window to apply before plotting.
+            Default: 10
+    """
+
+    if not getwave_out_params:
+        return
+
+    cdr_adaptation = get_cdr_adaptation(getwave_out_params)
+    ax.plot(np.convolve(cdr_adaptation, np.ones(window_size) / window_size, mode='valid'))
+    ax.set_title("CDR Adaptation")
+    ax.legend()
+
+
 def plot_dfe_adaptation(
     getwave_out_params: Optional[list[str]],
     ax: Axes
@@ -267,7 +292,7 @@ def plot_dfe_adaptation(
 
     Args:
         getwave_out_params: List of AMI output parameters from multiple ``GetWave()`` calls.
-        ax: Matplotlib axes to use for plotting.
+        ax: *Matplotlib* axes to use for plotting.
     """
 
     if not getwave_out_params:
@@ -282,11 +307,30 @@ def plot_dfe_adaptation(
     ax.legend()
 
 
+def plot_model_adaptation(
+    model: AMIModel,
+    figure: Figure
+) -> None:
+    """
+    Plot AMI model CDR & DFE adaptation, as appropriate and available.
+    
+    Args:
+        model: The (fully initialized) AMI model to use.
+        figure: The *Matplotlib* figure to use for plotting.
+    """
+
+    ax_cdr, ax_dfe = figure.subplots(1,2)
+    plot_cdr_adaptation(model.getwave_step_response_out_params, ax_cdr)
+    plot_dfe_adaptation(model.getwave_step_response_out_params, ax_dfe)
+
+
+
+
 def plot_finalize_steppulse_freq(
     fig: Figure,
     plot_t_max: float = 1e-9,
     debug: bool = False
-):
+) -> None:
     """
     Add the finishing touches to a plot of Step/Pulse & Frequency responses.
 
