@@ -24,12 +24,19 @@ from .test_defs import TestSweep
 IBIS_CHK_EXEC = "ibischk7_64"
 
 
-def get_ibis_contents(ibis_file: Path) -> tuple[IBISModel, list[Flowable]]:
+def get_ibis_contents(
+    ibis_file: Path,
+    debug: bool = False
+) -> tuple[IBISModel, list[Flowable]]:
     """
     List the components and models available in an IBIS model file.
 
     Args:
         ibis_file: The IBIS model file to be interrogated.
+
+    Keyword Args:
+        debug: Operate in debugging mode when ``True``.
+            Default: ``False``
 
     Returns:
         A pair containing
@@ -42,7 +49,7 @@ def get_ibis_contents(ibis_file: Path) -> tuple[IBISModel, list[Flowable]]:
 
     # Attempt to parse `*.ibs` file.
     try:
-        ibis_model = IBISModel(str(ibis_file), False, gui=False)
+        ibis_model = IBISModel(str(ibis_file), gui=False, debug=debug)
     except Exception as err:
         raise RuntimeError(f"An error occurred while trying to read/parse the IBIS model file: {ibis_file}") from err
 

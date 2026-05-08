@@ -82,7 +82,7 @@ def test_ibis_ami_models(
     pages = title_page(ibis_file)
 
     # Fetch/print IBIS file contents.
-    ibis_model, flowables = get_ibis_contents(ibis_file)
+    ibis_model, flowables = get_ibis_contents(ibis_file, debug=debug)
     pages.extend(flowables)
 
     # golden parser results

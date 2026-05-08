@@ -426,6 +426,7 @@ Component_keywords = {
     "package": package,
     "pin": pins,
     "diff_pin": skip_keyword,
+    "pin_mapping": skip_keyword,
 }
 
 

@@ -184,10 +184,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         with open(ibis_file_name, "r", encoding="utf-8") as file:
             ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
-        self._file_name = model_dict["file_name"]
-        self._ibis_ver = model_dict["ibis_ver"]
-        self._file_rev = model_dict["file_rev"]
-        self._date = model_dict["date"]
+        self._file_name = model_dict.get("file_name", "(n/a)")
+        self._ibis_ver = model_dict.get("ibis_ver", "(n/a)")
+        self._file_rev = model_dict.get("file_rev", "(n/a)")
+        self._date = model_dict.get("date", "(n/a)")
         self.log("IBIS parsing errors/warnings:\n" + err_str)
         if "components" not in model_dict or not model_dict["components"]:
             if debug:
