@@ -15,6 +15,8 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing  import Optional, Sequence
 
+import em
+
 from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Image, ListFlowable, Paragraph
 
@@ -30,7 +32,9 @@ from .ami_tests_helpers import (
     AmiTestHelper, AmiTestHelperInitVsGetwave,
     AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
     plot_sweep)
-from .test_defs import TestSweep
+from .test_defs         import TestSweep
+from .util              import get_all_sweepers
+
 
 FIG_X_DFLT = 6.0
 FIG_Y_DFLT = 4.0
@@ -164,6 +168,7 @@ class AmiTestInitVsGetwave(AmiTester):
     helper = AmiTestHelperInitVsGetwave(DEBUG)
 
     preamble = [
+        page_break,
         Paragraph("Init() vs. GetWave()", H3),
         Paragraph(
             "Here, we check to see that the fundamental responses of the model are the same \
@@ -237,8 +242,8 @@ class AmiTestGetwaveInputLength(AmiTester):
 
 
 def test_ami_model(
-    model: Model, ibis_file_dir: Path,
-    test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
+    model_name: str, model: Model,
+    ibis_file: Path, test_sweeps_dir: Path,
     f_max: float = 40e9, f_step: float = 10e6
 ) -> list[Flowable]:
     """
@@ -246,8 +251,10 @@ def test_ami_model(
 
     Args:
         model: The IBIS-AMI model to test.
-        ibis_file_dir: Parent directory of ``*.ibs`` file being tested.
-        test_sweepers: List of parameter definition set groups to sweep over.
+        ibis_file: Path to ``*.ibs`` file being tested.
+        test_sweeps_dir: The top level directory containing all test sweep configurations.
+            (Individual model sweepers will be found in:
+            ``<test_sweeps_dir>``/``<ibis_file.stem>``/``model_name>``/.)
 
     Keyword Args:
         f_max: Maximum frequency of interest (Hz).
@@ -291,6 +298,7 @@ def test_ami_model(
     flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", H3)]
 
     # Attempt to create the AMI model and its configurator.
+    ibis_file_dir = ibis_file.parent
     dll_file, ami_file = list(map(lambda f: ibis_file_dir / Path(f), ami_files))
     try:
         ami_model = AMIModel(str(dll_file))
@@ -327,6 +335,40 @@ def test_ami_model(
         flowables.append(Paragraph("Model includes on-die S-parameters.", P))
     else:
         flowables.append(Paragraph("Model does not include on-die S-parameters.", P))
+
+    # Fetch parameter sweepers or create a defaults template.
+    flowables.append(Paragraph("AMI Parameter Sweeps Info", H3))
+    model_sweeps_dir = test_sweeps_dir / ibis_file.stem / model_name
+    test_sweepers = get_all_sweepers(model_sweeps_dir)
+    if test_sweepers:
+        flowables.append(Paragraph("Using parameter sweep definitions in:", P))
+        flowables.append(Paragraph(preformatted(f"\t{model_sweeps_dir}"), P))
+    else:
+        model_sweeps_dir.mkdir(parents=True, exist_ok=True)
+        dflt_test_sweep_file = model_sweeps_dir / "defaults_template.py"
+        # Make default sweep file, using template, here.
+        em_file = Path(__file__).parent.joinpath("generic_test_sweep.py.em")
+        with open(dflt_test_sweep_file, "w", encoding="utf-8") as o_file:
+            interpreter = em.Interpreter(
+                output=o_file,
+                globals={
+                    "ami_params": pcfg.input_ami_params,
+                },
+            )
+            try:
+                with open(em_file, "rt", encoding="utf-8") as in_file:
+                    interpreter.file(in_file)
+            finally:
+                interpreter.shutdown()
+        flowables.append(Paragraph(preformatted("\n".join(
+            [f"Did not find any test sweep definitions in:\n\t{model_sweeps_dir}.",
+             f"So, a default test sweep definition file for this model has been created in:\n\t{dflt_test_sweep_file}",
+             "You can use this file as a template for expanding your test suite for this model.",
+             "The newly created file has instructions for doing this."
+            ])), P))
+        test_sweepers = get_all_sweepers(model_sweeps_dir)
+        if not test_sweepers:
+            raise RuntimeError(f"Attempt to create a default sweep definition file:\n\t{dflt_test_sweep_file}\nfailed.")
 
     # Run specific tests.
     testers: Sequence[AmiTester] = [

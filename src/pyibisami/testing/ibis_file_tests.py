@@ -73,8 +73,8 @@ def golden_parser_results(ibis_file: Path) -> list[Flowable]:
 
 
 def test_ami_models(
-    ibis_file_dir: Path, ibis_model: IBISModel,
-    test_sweepers: list[tuple[Optional[str], list[type[TestSweep]]]],
+    ibis_file: Path, ibis_model: IBISModel,
+    test_sweeps_dir: Path,
     model_name: Optional[str] = None,
     debug: bool=False
 ) -> list[Flowable]:
@@ -82,9 +82,11 @@ def test_ami_models(
     Test a subset of the IBIS-AMI models in the ``*.ibs`` file.
 
     Args:
-        ibis_file_dir: The parent directory of the ``*.ibs`` file being tested.
+        ibis_file: The path to the ``*.ibs`` file being tested.
         ibis_model: The read and parsed ``*.ibs`` file.
-        test_sweepers: The list of parameter sweep definitions to use for this test.
+        test_sweeps_dir: The top level directory containing all test sweep configurations.
+            (Individual model sweepers will be found in:
+            ``<test_sweeps_dir>``/``<ibis_file.stem>``/``model_name>``/.)
 
     Keyword Args:
         model_name: The name of a particular model to test.
@@ -113,10 +115,11 @@ def test_ami_models(
         Returns:
             List of _ReportLab_ ``Flowable``s describing the model testing results.
         """
+
         flowables.append(Paragraph(f"Testing Model: {model_name}", H2))
         model = ibis_model.model_dict['models'][model_name]
         flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
-        flowables.extend(test_ami_model(model, ibis_file_dir, test_sweepers))
+        flowables.extend(test_ami_model(model_name, model, ibis_file, test_sweeps_dir))
         flowables.append(page_break)
         return flowables
 

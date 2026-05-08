@@ -157,11 +157,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         return list(filter(pin_ok, list(pins)))
 
-    def __init__(self, ibis_file_name, is_tx, debug=False, gui=True):
+    def __init__(self, ibis_file_name, debug=False, gui=True):
         """
         Args:
             ibis_file_name (str): The name of the IBIS file.
-            is_tx (bool): True if this is a Tx model.
 
         Keyword Args:
             debug (bool): Output debugging info to console when true.
@@ -329,6 +328,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         "Dictionary of all model keywords."
         return self._model_dict
 
+    # ToDo: The following 2 properties are really model-specific.
     @property
     def dll_file(self):
         "Shared object file."

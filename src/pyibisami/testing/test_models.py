@@ -41,20 +41,22 @@ spacer = Spacer(1, 0.25*inch)
 
 
 def test_ibis_ami_models(
-    ibis_file: Path, model_name: str,
-    params: str, debug: bool = False
+    ibis_file: Path, test_sweeps_dir: Path, 
+    model_name: Optional[str] = None,
+    debug: bool = False
 ) -> None:
     """
     Test some subset of the IBIS-AMI models in a ``*.ibs`` file.
 
     Args:
         ibis_file: The ``*.ibs`` file to test.
-        model_name: The particular model to test.
-        params: Test parameter sweep definitions.
+        test_sweeps_dir: Test parameter sweep definitions.
 
     Keyword Args:
+        model_name: The particular model to test.
+            Default: None (Means test all IBIS-AMI models found in ``*.ibs`` file.)
         debug: Include debugging output when ``True``.
-            Default = ``False``
+            Default: ``False``
     """
 
     ibis_file_dir = ibis_file.parent
@@ -86,30 +88,9 @@ def test_ibis_ami_models(
     # golden parser results
     pages.extend(golden_parser_results(ibis_file))
 
-    # Load all Python modules in given directory,
-    # and extract all subclasses of `TestSweep`.
-    def get_sweepers(mod: types.ModuleType) -> tuple[Optional[str], list[type[TestSweep]]]:
-         return (mod.__doc__,
-            [obj for name, obj in inspect.getmembers(mod, inspect.isclass)  # type: ignore
-                 if issubclass(obj, TestSweep) and not obj == TestSweep])
-
-    mod_path = Path(params).resolve()
-    files = list(mod_path.glob("*.py"))
-    if not files:
-        raise RuntimeError(f"No Python files were found in `{mod_path}`.")
-    sweepers: list[tuple[Optional[str], list[type[TestSweep]]]] = []
-    for file in files:
-        print(f"Looking for `TestSweep` subclasses in:\n{file}...")
-        module = import_from_path(file.parent.stem + "." + file.stem, file)
-        sweepers_found = get_sweepers(module)
-        print(f"Found {len(sweepers_found[1])}.")
-        sweepers.append(sweepers_found)
-    if not sweepers:
-        raise RuntimeError("No `TestSweep` subclasses were found!")
-
     pages.extend(
         test_ami_models(
-            ibis_file_dir, ibis_model, sweepers,
+            ibis_file, ibis_model, test_sweeps_dir,
             model_name=model_name, debug=debug)
     )
     doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
@@ -118,16 +99,21 @@ def test_ibis_ami_models(
 # CLI definition
 @click.command(context_settings={"ignore_unknown_options": False,
                                  "help_option_names": ["-h", "--help"]})
-@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
+@click.option("--model",  "-m", type=str,
+    help="Name of IBIS-AMI model to test.")
 @click.option("--params", "-p", type=str, default='test_runs',
     help='Directory containing test configuration sweeps.',
 )
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
 @click.argument("ibis_file", type=click.Path(exists=True))
-@click.argument("model",     type=str)
 @click.version_option(package_name="PyIBIS-AMI")
 def main(ibis_file, model, params, debug):
-    ibis_file_path = Path(ibis_file, exists=True).resolve()  # ToDo: "exists=True" to be deprecated in Python 3.14!
-    test_ibis_ami_models(ibis_file_path, model, params, debug=debug)
+    ibis_file_path = Path(ibis_file).resolve()
+    if not ibis_file_path.exists():
+        raise RuntimeError(f"IBIS file `{ibis_file_path}` does not exist!")
+    test_sweeps_dir = Path(params).resolve()
+    test_sweeps_dir.mkdir(parents=True, exist_ok=True)
+    test_ibis_ami_models(ibis_file_path, test_sweeps_dir, model_name=model, debug=debug)
 
 
 if __name__ == "__main__":

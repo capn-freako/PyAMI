@@ -13,11 +13,14 @@ from dataclasses        import dataclass
 from pathlib            import Path
 from typing             import Any, Generator, Optional
 
+import em
 import numpy as np
 from scipy.interpolate  import interp1d
 from scipy.signal       import butter, freqs, lfilter
 
 from ..common           import Rvec, raised_cosine
+from ..ami.parser       import AMIParamConfigurator, ParamName
+from ..ibis.file        import IBISModel
 
 SIM_PARAMS = [
 	"channel_response",
@@ -74,61 +77,68 @@ class TestSweep:
 
 # ToDo: Implement `mk_default_test_sweep_file`.
 
-# def mk_default_test_sweep_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
-#     """
-#     Create a parameter sweep specification template file for an IBIS-AMI model.
+def mk_default_test_sweep_file(
+	ibis_file: Path,
+	model_name: str,
+	out_dir: Path = Path("./test_runs/"),
+	debug: bool = False
+) -> Path:
+    """
+    Create a default parameter sweep specification file for an IBIS-AMI model.
 
-#     Args:
-#         ibis_file: The ``*.ibs`` file defining the IBIS-AMI model of interest.
-#         is_tx: True for Tx model.
+    Args:
+        ibis_file: The ``*.ibs`` file defining the IBIS-AMI model of interest.
+        model_name: The name of the model being tested.
 
-#     Keyword Args:
-#         debug: Set to ``True`` for debugging mode.
-#         	Default: ``False``
+    Keyword Args:
+    	out_dir: Directory in which parameter sweep definition files are stored.
+    		Default: ``./test_runs/``
+        debug: Set to ``True`` for debugging mode.
+        	Default: ``False``
 
-#     Returns:
-#         The path to the created parameter sweep specification template file.
-#     """
+    Returns:
+        The path to the created parameter sweep specification template file.
+    """
 
-#     # Import the `*.ibs` file.
-#     try:
-#         ibis = IBISModel(ibis_file, is_tx, debug=debug, gui=False)
-#         dName = ibis_file.parent
-#         assert ibis.ami_file, RuntimeError(
-#             "Missing AMI file definition in IBIS file!"
-#         )
-#         ami_file = dName / ibis.ami_file
-#     except Exception as err:
-#         raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
+    # Import the `*.ibs` file.
+    try:
+        ibis = IBISModel(ibis_file, debug=debug, gui=False)
+        dName = ibis_file.parent
+        assert ibis.ami_file, RuntimeError(
+            "Missing AMI file definition in IBIS file!"
+        )
+        ami_file = dName / ibis.ami_file
+    except Exception as err:
+        raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
 
-#     # Import the `*.ami` file.
-#     try:
-#         with open(ami_file, mode="r", encoding="utf-8") as pfile:
-#             pcfg = AMIParamConfigurator(pfile.read())
-#     except Exception as err:
-#         raise RuntimeError(f"Failed to open/import AMI file: {ami_file}!") from err
-#     if pcfg.ami_parsing_errors:
-#         print(f"Non-fatal parsing errors:\n{pcfg.ami_parsing_errors}")
+    # Import the `*.ami` file.
+    try:
+        with open(ami_file, mode="r", encoding="utf-8") as pfile:
+            pcfg = AMIParamConfigurator(pfile.read())
+    except Exception as err:
+        raise RuntimeError(f"Failed to open/import AMI file: {ami_file}!") from err
+    if pcfg.ami_parsing_errors:
+        print(f"Non-fatal parsing errors:\n{pcfg.ami_parsing_errors}")
 
-#     # Write parameter sweep specification template file.
-#     root_name = str(pcfg.input_ami_params[ParamName("root_name")])
-#     sweep_file_path = (Path("test_runs") / Path(root_name) / Path("defaults").with_suffix(".py")).resolve()
-#     sweep_file_path.parent.mkdir(parents=True, exist_ok=True)
-#     with open(sweep_file_path, mode="wt", encoding="utf-8") as sweep_file:
-#         sweep_file.write(f"Template for specifying `{root_name}` parameter sweeps.\n")
-#         sweep_file.write("\n('Defaults', \\\n")
-#         sweep_file.write(
-#             ", \\\n   ".join(
-#                 [f"  ({{'root_name' : '{root_name}'"] +  # noqa: W504
-#                 [f" '{ami_param_name}': {pcfg.input_ami_params[ami_param_name]}"
-#                     for ami_param_name in pcfg.input_ami_params
-#                     if ami_param_name != "root_name"] +  # noqa: W504
-#                 ["}, {} \\\n"]
-#             ))
-#         sweep_file.write("  ) \\\n")
-#         sweep_file.write(")\n")
+    # Write parameter sweep specification template file.
+    root_name = str(pcfg.input_ami_params[ParamName("root_name")])
+    sweep_file_path = (Path("test_runs") / Path(root_name) / Path("defaults").with_suffix(".py")).resolve()
+    sweep_file_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(sweep_file_path, mode="wt", encoding="utf-8") as sweep_file:
+        sweep_file.write(f"Template for specifying `{root_name}` parameter sweeps.\n")
+        sweep_file.write("\n('Defaults', \\\n")
+        sweep_file.write(
+            ", \\\n   ".join(
+                [f"  ({{'root_name' : '{root_name}'"] +  # noqa: W504
+                [f" '{ami_param_name}': {pcfg.input_ami_params[ami_param_name]}"
+                    for ami_param_name in pcfg.input_ami_params
+                    if ami_param_name != "root_name"] +  # noqa: W504
+                ["}, {} \\\n"]
+            ))
+        sweep_file.write("  ) \\\n")
+        sweep_file.write(")\n")
 
-#     return sweep_file_path
+    return sweep_file_path
 
 
 def perfect_channel(

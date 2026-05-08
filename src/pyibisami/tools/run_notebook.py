@@ -41,7 +41,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
 
     # Import the `*.ibs` file.
     try:
-        ibis = IBISModel(ibis_file, is_tx, debug=debug, gui=False)
+        ibis = IBISModel(ibis_file, debug=debug, gui=False)
         dName = ibis_file.parent
         assert ibis.ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"

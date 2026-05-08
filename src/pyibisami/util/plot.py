@@ -278,7 +278,8 @@ def plot_cdr_adaptation(
         return
 
     cdr_adaptation = get_cdr_adaptation(getwave_out_params)
-    ax.plot(np.convolve(cdr_adaptation, np.ones(window_size) / window_size, mode='valid'))
+    if len(cdr_adaptation):
+        ax.plot(np.convolve(cdr_adaptation, np.ones(window_size) / window_size, mode='valid'))
     ax.set_title("CDR Adaptation")
     ax.legend()
 
