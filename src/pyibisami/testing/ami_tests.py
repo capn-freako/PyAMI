@@ -44,10 +44,30 @@ DEBUG = False
 class AmiTester(ABC):
     "Abstract class defining the structure and default behavior of an IBIS-AMI model tester."
 
+    _msg: str = ""      # Used by `is_apropos()` to log reason for failure.
+
     @property
-    def helper(self) -> AmiTestHelper:
-        "Each subclass must define a test helper."
+    def msg(self):
+        return self._msg
+    
+    @abstractmethod
+    def is_apropos(self, model: AMIModel) -> bool:
+        """
+        Return ``True`` only if this helper is appropriate for use on the given model.
+
+        Args:
+            model: The model intended for testing.
+
+        Returns:
+            ``True`` if this tester is appropriate for use on the given model,
+            ``False`` otherwise.
+        """
         raise NotImplementedError()
+
+    @property
+    def helper(self) -> Optional[AmiTestHelper]:
+        "Each subclass must define its own test helper if it needs one."
+        return None
 
     preamble: list[Flowable] = []  # Any desired introductory text for report body.
 
@@ -80,12 +100,12 @@ class AmiTester(ABC):
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
             p = Paragraph(_mod_doc, H4)
-            p.keepWithNext = True
+            # p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
                 p = Paragraph(sweep_desc, H5)
-                p.keepWithNext = True
+                # p.keepWithNext = True
                 flowables.append(p)
                 flowables.extend(plot_sweep(
                     self.helper, ami_model, pcfg, test_sweep,
@@ -95,6 +115,13 @@ class AmiTester(ABC):
 
 class AmiTestLinearityChecker(AmiTester):
     "Check ``AMI_Init()`` for linearity."
+
+    def is_apropos(self, model: AMIModel) -> bool:
+        if model.returns_impulse:
+            return True
+        else:
+            self._msg = "Model's `AMI_Init()` function does not return an impulse response."
+            return False
 
     preamble = [
         page_break,
@@ -119,16 +146,16 @@ class AmiTestLinearityChecker(AmiTester):
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
             p = Paragraph(_mod_doc, H4)
-            p.keepWithNext = True
+            # p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
                 p = Paragraph(sweep_desc, H5)
-                p.keepWithNext = True
+                # p.keepWithNext = True
                 flowables.append(p)
                 for test_def in test_sweep().test_sweep():
                     p = Paragraph(preformatted(f"\t{test_def.description}:"), P)
-                    p.keepWithNext = True
+                    # p.keepWithNext = True
                     flowables.append(p)
                     # Test model against full channel response.
                     initializer = pcfg.get_init(
@@ -166,6 +193,13 @@ class AmiTestInitVsGetwave(AmiTester):
     "Compare output from ``AMI_Init()`` and ``AMI_GetWave()`` functions."
 
     helper = AmiTestHelperInitVsGetwave(DEBUG)
+
+    def is_apropos(self, model: AMIModel) -> bool:
+        if model.returns_impulse:
+            return True
+        else:
+            self._msg = "Model's `AMI_Init()` function does not return an impulse response."
+            return False
 
     preamble = [
         page_break,

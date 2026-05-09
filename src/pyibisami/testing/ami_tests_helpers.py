@@ -39,14 +39,17 @@ FIG_Y_DFLT = 4
 spacer = Spacer(1, 0.25*inch)
 
 
+# ToDo: Add a validator to the Protocol definition,
+# which must return `True` in order for the `ami_tst_helper()` function to be called.
 class AmiTestHelper(Protocol):
     "Abstract class defining the function signature for AMI test helper functions."
 
     @abstractmethod
     def ami_tst_helper(
         self,
-        model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        model: AMIModel, initializer: AMIModelInitializer,
+        label: str, color: RGB = BLUE,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
         plot_t_max: float = 1e-9,
     ) -> Figure:
         """

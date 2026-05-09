@@ -169,7 +169,7 @@ def ratio() -> GenParser[Optional[float]]:
 
 
 ex_line: Parser = (
-    word(string("Executable"))
+    word(string("Executable_Tx") ^ string("Executable_Rx") ^ string("Executable"))
     >> (  # noqa: W503
         (
             ((string("L") | string("l")) >> string("inux")).result("linux")
@@ -316,7 +316,7 @@ def end() -> GenParser[Any]:
 
 
 # [Model]
-load_line: Parser = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << skip_line
+load_line: Parser = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << ignore
 
 ramp_line: Parser = (
     string("dV/dt_")
@@ -327,13 +327,15 @@ ramp_line: Parser = (
 @generate("[Ramp]")
 def ramp() -> GenParser[dict[str, Any]]:
     "Parse [Ramp]."
-    load = yield optional(load_line, 50)
+    load1 = yield optional(load_line, 50)
     lines = yield count(ramp_line, 2).desc("Two ramp_lines")
+    load2 = yield optional(load_line, 50)
     rslt = dict(lines)
-    rslt.update({"load": load})
+    rslt.update({"load": load2 if load1 == 50 else load1})
     return rslt
 
 
+# ToDo: Implement: rising_waveform, falling_waveform, and composite_current.
 Model_keywords: dict[str, Parser] = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
@@ -343,6 +345,9 @@ Model_keywords: dict[str, Parser] = {
     "temperature_range": typminmax,
     "gnd_clamp": many1(vi_line),
     "power_clamp": many1(vi_line),
+    "rising_waveform": skip_keyword,
+    "falling_waveform": skip_keyword,
+    "composite_current": skip_keyword,
 }
 
 

@@ -9,6 +9,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
 from dataclasses import dataclass
+import logging
 from typing import Generator, Optional, Sequence, TypeAlias
 
 from matplotlib import pyplot as plt
@@ -281,7 +282,6 @@ def plot_cdr_adaptation(
     if len(cdr_adaptation):
         ax.plot(np.convolve(cdr_adaptation, np.ones(window_size) / window_size, mode='valid'))
     ax.set_title("CDR Adaptation")
-    ax.legend()
 
 
 def plot_dfe_adaptation(
@@ -305,7 +305,6 @@ def plot_dfe_adaptation(
     for key in dfe_adaptation_keys:
         ax.plot(dfe_adaptation[key], label=key)
     ax.set_title("DFE Adaptation")
-    ax.legend()
 
 
 def plot_model_adaptation(
@@ -351,7 +350,11 @@ def plot_finalize_steppulse_freq(
     plt.title("Step & Pulse Resp. (V)")
     plt.xlabel("Time (ns)")
     plt.grid()
+
+    logging.getLogger('matplotlib.legend').setLevel(logging.ERROR)
+    plt.set_loglevel("error")
     plt.legend()
+
     plt.subplot(122)
     plt.title("Frequency Resp. (dB)")
     plt.xlabel("Frequency (GHz)")

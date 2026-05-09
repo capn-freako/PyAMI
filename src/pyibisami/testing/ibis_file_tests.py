@@ -16,7 +16,7 @@ from typing import Optional
 from reportlab.platypus import Flowable, Paragraph
 
 from ..ibis.file import IBISModel
-from ..util.reportlab import preformatted, page_break, styles, H1, H2
+from ..util.reportlab import bold, preformatted, page_break, styles, H1, H2, P
 
 from .ami_tests import test_ami_model
 from .test_defs import TestSweep
@@ -83,6 +83,7 @@ def test_ami_models(
     ibis_file: Path, ibis_model: IBISModel,
     test_sweeps_dir: Path,
     model_name: Optional[str] = None,
+    max_models_per_file: int = 1,
     debug: bool=False
 ) -> list[Flowable]:
     """
@@ -98,6 +99,8 @@ def test_ami_models(
     Keyword Args:
         model_name: The name of a particular model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
+        max_models_per_file: Maximum number of models processed per ``*.ibs`` file.
+            Default: 5
         debug: Include extra debugging output when ``True``.
             Default = ``False``
 
@@ -111,6 +114,19 @@ def test_ami_models(
         flowables.append(Paragraph("Error: The parsed IBIS file contained no model definitions!"))
         flowables.append(page_break)
         return flowables
+
+    ami_model_names = list(filter(
+        lambda nm: ibis_model.model_dict['models'][nm].is_ami,
+        ibis_model.model_dict['models'].keys()))
+    n_ami_models = len(ami_model_names)
+    if n_ami_models == 0:
+        flowables.append(Paragraph("There were no IBIS-AMI models found in this file.", P))
+        return flowables
+    if n_ami_models > max_models_per_file:
+        flowables.append(Paragraph(preformatted("\n".join([
+            f"{bold("Note:")} There were {n_ami_models} AMI models found in this IBIS file.",
+            f"Only {max_models_per_file} will be tested.",
+            ])), P))
 
     def do_model(model_name: str) -> list[Flowable]:
         """
@@ -138,7 +154,7 @@ def test_ami_models(
         do_model(model_name)
         return flowables
 
-    for model_name in ibis_model.model_dict['models']:
+    for model_name in ami_model_names[:max_models_per_file]:
         do_model(model_name)
 
     return flowables

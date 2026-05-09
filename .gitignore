@@ -120,6 +120,7 @@ empy_exec_test.*
 local/
 *.pdf
 *.run
+test_runs/
 
 # Temporary files
 !.pre-commit-config.yaml
