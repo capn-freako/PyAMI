@@ -9,8 +9,9 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
 from dataclasses import dataclass
-import logging
+# import logging
 from typing import Generator, Optional, Sequence, TypeAlias
+import warnings
 
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -344,24 +345,26 @@ def plot_finalize_steppulse_freq(
             Default: ``False``
     """
 
-    plt.figure(fig)
-    plt.subplot(121)
-    plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
-    plt.title("Step & Pulse Resp. (V)")
-    plt.xlabel("Time (ns)")
-    plt.grid()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
 
-    logging.getLogger('matplotlib.legend').setLevel(logging.ERROR)
-    plt.set_loglevel("error")
-    plt.legend()
+        plt.figure(fig)
 
-    plt.subplot(122)
-    plt.title("Frequency Resp. (dB)")
-    plt.xlabel("Frequency (GHz)")
-    plt.grid()
-    plt.legend()
-    if debug:
-        plt.show()
+        plt.subplot(121)
+        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
+        plt.title("Step & Pulse Resp. (V)")
+        plt.xlabel("Time (ns)")
+        plt.grid()
+        plt.legend()
+
+        plt.subplot(122)
+        plt.title("Frequency Resp. (dB)")
+        plt.xlabel("Frequency (GHz)")
+        plt.grid()
+        plt.legend()
+
+        if debug:
+            plt.show()
 
 def plot_model_results(
     model_responses: Sequence[tuple[LabelledModelResponses, Optional[tuple[PlotStyle, PlotStyle]]]],

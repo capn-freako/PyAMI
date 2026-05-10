@@ -11,7 +11,6 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 from abc import abstractmethod
 from random     import randrange
 from tempfile   import NamedTemporaryFile
-from typing     import Protocol
 
 import numpy as np
 
@@ -41,13 +40,13 @@ spacer = Spacer(1, 0.25*inch)
 
 # ToDo: Add a validator to the Protocol definition,
 # which must return `True` in order for the `ami_tst_helper()` function to be called.
-class AmiTestHelper(Protocol):
+class AmiTestHelper:
     "Abstract class defining the function signature for AMI test helper functions."
 
     @abstractmethod
     def ami_tst_helper(
         self,
-        model: AMIModel, initializer: AMIModelInitializer,
+        model: AMIModel, initializer: AMIModelInitializer, nbits: int,
         label: str, color: RGB = BLUE,
         fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
         plot_t_max: float = 1e-9,
@@ -78,7 +77,7 @@ class AmiTestHelper(Protocol):
         raise NotImplementedError
 
 
-class AmiTestHelperInitVsGetwave():
+class AmiTestHelperInitVsGetwave(AmiTestHelper):
     "Compares the output of ``AMI_Init()`` and ``AMI_GetWave()``."
 
     def __init__(self, debug: bool = False):
@@ -86,8 +85,10 @@ class AmiTestHelperInitVsGetwave():
 
     def ami_tst_helper(
         self,
-        model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT, plot_t_max: float = 1e-9,
+        model: AMIModel, initializer: AMIModelInitializer, nbits: int,
+        label: str, color: RGB = BLUE,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        plot_t_max: float = 1e-9,
     ) -> Figure:
 
         model.initialize(initializer)
@@ -109,13 +110,14 @@ class AmiTestHelperInitVsGetwave():
         return fig
 
 
-class AmiTestHelperSamplesPerBit():
+class AmiTestHelperSamplesPerBit(AmiTestHelper):
     "Probes the effect of changing the number of samples per bit."
 
     def ami_tst_helper(
         self,
-        model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        model: AMIModel, initializer: AMIModelInitializer, nbits: int,
+        label: str, color: RGB = BLUE,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
         plot_t_max: float = 1e-9,
     ) -> Figure:
 
@@ -143,13 +145,14 @@ class AmiTestHelperSamplesPerBit():
         return fig
 
 
-class AmiTestHelperGetwaveInputLength():
+class AmiTestHelperGetwaveInputLength(AmiTestHelper):
     "Probes the effect of changing the number of bits per ``GetWave()`` call."
 
     def ami_tst_helper(
         self,
-        model: AMIModel, initializer: AMIModelInitializer, nbits: int, label: str,
-        color: RGB = BLUE, fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
+        model: AMIModel, initializer: AMIModelInitializer, nbits: int,
+        label: str, color: RGB = BLUE,
+        fig_x: float = FIG_X_DFLT, fig_y: float = FIG_Y_DFLT,
         plot_t_max: float = 1e-9,
     ) -> Figure:
 
@@ -254,7 +257,6 @@ def plot_sweep(
             test_def.sim_params["channel_response"],
             test_def.ami_params
         )
-        # ToDo: Get rid of `nbits`:
         helper.ami_tst_helper(ami_model, initializer, test_def.sim_params["nbits"], "")
         # plt.tight_layout()  # Doesn't work w/ subfigures.
         with NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:

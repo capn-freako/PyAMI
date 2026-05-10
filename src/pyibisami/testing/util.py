@@ -15,12 +15,12 @@ from typing             import Optional
 
 from ..util.misc        import import_from_path
 
-from .test_defs         import TestSweep
+from .test_defs         import TestSweep, TestSweeper
 
 
 def get_sweepers(
     mod: types.ModuleType
-) -> tuple[Optional[str], list[type[TestSweep]]]:
+) -> TestSweeper:
     """
     Extract all subclasses of ``TestSweep`` from given module.
 
@@ -43,7 +43,7 @@ def get_sweepers(
 
 def get_all_sweepers(
     dir: Path
-) -> list[tuple[Optional[str], list[type[TestSweep]]]]:
+) -> list[TestSweeper]:
     """
     Extract all subclasses of ``TestSweep`` from all modules in given directory.
 
@@ -60,7 +60,7 @@ def get_all_sweepers(
     files = list(dir.glob("*.py"))
     if not files:
         return []
-    sweepers: list[tuple[Optional[str], list[type[TestSweep]]]] = []
+    sweepers: list[TestSweeper] = []
     for file in files:
         module = import_from_path(file.parent.stem + "." + file.stem, file)
         sweepers.append(get_sweepers(module))

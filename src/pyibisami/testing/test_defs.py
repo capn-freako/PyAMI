@@ -11,7 +11,7 @@ Copyright (C) 2026 David Banas; all rights reserved World wide.
 from abc                import abstractmethod
 from dataclasses        import dataclass
 from pathlib            import Path
-from typing             import Any, Generator, Optional
+from typing             import Any, Generator, NewType, Optional, TypeAlias
 
 import em
 import numpy as np
@@ -21,6 +21,8 @@ from scipy.signal       import butter, freqs, lfilter
 from ..common           import Rvec, raised_cosine
 from ..ami.parser       import AMIParamConfigurator, ParamName
 from ..ibis.file        import IBISModel
+
+TestSweeper = NewType('TestSweeper', tuple[Optional[str], list[type["TestSweep"]]])
 
 SIM_PARAMS = [
 	"channel_response",
@@ -74,8 +76,6 @@ class TestSweep:
 
         raise NotImplementedError
 
-
-# ToDo: Implement `mk_default_test_sweep_file`.
 
 def mk_default_test_sweep_file(
 	ibis_file: Path,

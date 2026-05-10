@@ -26,7 +26,7 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 import pyibisami
 
 from ..util.misc        import import_from_path
-from ..util.reportlab   import title_page
+from ..util.reportlab   import P, bold, ital, preformatted, title_page
 
 from .ibis_file_tests   import test_ami_models, get_ibis_contents, golden_parser_results
 from .test_defs         import TestSweep
@@ -84,6 +84,7 @@ def test_ibis_ami_models(
     # Fetch/print IBIS file contents.
     # ibis_model, flowables = get_ibis_contents(ibis_file, debug=debug)
     # pages.extend(flowables)
+    ibis_model, _ = get_ibis_contents(ibis_file, debug=debug)
 
     # golden parser results
     # pages.extend(golden_parser_results(ibis_file))
