@@ -15,6 +15,7 @@ from pathlib    import Path
 
 import numpy as np
 import scipy as sp
+import skrf  as rf
 
 from reportlab.lib.enums    import TA_CENTER
 from reportlab.lib.styles   import getSampleStyleSheet, ParagraphStyle
@@ -105,5 +106,16 @@ def title_page(ibis_file: Path) -> list[Flowable]:
     flowables.append(Paragraph(f"{bold('Python:')} {sys.version}", P))
     flowables.append(Paragraph(f"{bold('NumPy:')} {np.__version__}", P))
     flowables.append(Paragraph(f"{bold('SciPy:')} {sp.__version__}", P))
+    flowables.append(Paragraph(f"{bold('SciKit-RF:')} {rf.__version__}", P))
+    flowables.extend([
+        spacer,
+        Paragraph(
+            preformatted("\n".join([
+                f"{bold("Note:")} You should always run any new IBIS(-AMI) model through the {ital("Golden Parser")}.",
+                f"You can find more information about how to do this at the {ital("Open IBIS Forum")}'s web site:",
+                "https://www.ibis.org/ibischk7/",
+                ])),
+            P)
+        ])
     flowables.append(page_break)
     return flowables

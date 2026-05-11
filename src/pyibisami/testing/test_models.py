@@ -77,28 +77,8 @@ def test_ibis_ami_models(
         canvas.restoreState()
 
     doc = SimpleDocTemplate(pdf_filename)
-
-    # title page
     pages = title_page(ibis_file)
-
-    # Fetch/print IBIS file contents.
-    # ibis_model, flowables = get_ibis_contents(ibis_file, debug=debug)
-    # pages.extend(flowables)
     ibis_model, _ = get_ibis_contents(ibis_file, debug=debug)
-
-    # golden parser results
-    # pages.extend(golden_parser_results(ibis_file))
-    pages.extend([
-        spacer,
-        Paragraph(
-            preformatted("\n".join([
-                f"{bold("Note:")} You should always run any new IBIS(-AMI) model through the {ital("Golden Parser")}.",
-                f"You can find more information about how to do this at the {ital("Open IBIS Forum")}'s web site:",
-                "https://www.ibis.org/ibischk7/",
-                ])),
-            P)
-        ])
-
     pages.extend(
         test_ami_models(
             ibis_file, ibis_model, test_sweeps_dir,
