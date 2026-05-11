@@ -17,13 +17,13 @@ import types
 from pathlib  import Path
 from typing   import Optional
 
-from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
-
-import pyibisami
+from reportlab.platypus import (
+    BaseDocTemplate, Frame, PageBreak, PageTemplate,
+    Paragraph, SimpleDocTemplate, Spacer)
+from reportlab.platypus.tableofcontents import TableOfContents
 
 from ..util.misc        import import_from_path
 from ..util.reportlab   import P, bold, ital, preformatted, title_page
@@ -35,9 +35,33 @@ from .test_defs         import TestSweep
 PAGE_WIDTH, PAGE_HEIGHT = letter
 styles = getSampleStyleSheet()
 page_break = PageBreak()
-title_style = styles['Title']
-title_style.alignment = TA_LEFT
 spacer = Spacer(1, 0.25*inch)
+
+# Define the TOC styles.
+toc = TableOfContents()
+toc.levelStyles = [
+    ParagraphStyle(name='TOCHeading1', fontSize=12, leading=14, leftIndent=0, firstLineIndent=0, spaceBefore=10),
+    ParagraphStyle(name='TOCHeading2', fontSize=10, leading=12, leftIndent=10, firstLineIndent=0, spaceBefore=5),
+    ParagraphStyle(name='TOCHeading3', fontSize=9, leading=10, leftIndent=15, firstLineIndent=0, spaceBefore=3),
+]
+
+
+# Custom document template.
+class MyDocTemplate(BaseDocTemplate):
+    def afterFlowable(self, flowable):
+        """Called after each flowable is drawn"""
+        if isinstance(flowable, Paragraph):
+            text = flowable.getPlainText()
+            # If the paragraph is a heading, add to TOC
+            match flowable.style.name:
+                case 'Heading1':
+                    self.notify('TOCEntry', (0, text, self.page))  # Sends data to the TOC object.
+                case 'Heading2':
+                    self.notify('TOCEntry', (1, text, self.page))
+                case 'Heading3':
+                    self.notify('TOCEntry', (2, text, self.page))
+                case _:
+                    pass
 
 
 def test_ibis_ami_models(
@@ -61,7 +85,6 @@ def test_ibis_ami_models(
 
     ibis_file_dir = ibis_file.parent
     pdf_filename = str((ibis_file_dir / (ibis_file.stem + "_test_results")).with_suffix('.pdf'))
-    title = Paragraph(f"<em>PyIBIS-AMI</em> v{pyibisami.__version__} - IBIS-AMI Model Testing Report", title_style)
     pageinfo = f"Model Testing Report for: {ibis_file}"
 
     def myFirstPage(canvas, doc):
@@ -76,15 +99,22 @@ def test_ibis_ami_models(
         canvas.drawString(inch, 0.75 * inch, "Page %d - %s" % (doc.page, pageinfo))
         canvas.restoreState()
 
-    doc = SimpleDocTemplate(pdf_filename)
+    doc = MyDocTemplate(pdf_filename, pagesize=letter)
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
+    template = PageTemplate(id='test', frames=frame)
+    doc.addPageTemplates([template])
     pages = title_page(ibis_file)
+    pages.append(toc)
     ibis_model, _ = get_ibis_contents(ibis_file, debug=debug)
+    if 'models' not in ibis_model.model_dict or not ibis_model.model_dict['models']:
+        raise RuntimeError("The IBIS file contains no model definitions!")
+
     pages.extend(
         test_ami_models(
             ibis_file, ibis_model, test_sweeps_dir,
             model_name=model_name, debug=debug)
     )
-    doc.build(pages, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
+    doc.multiBuild(pages) #, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 
 
 # CLI definition

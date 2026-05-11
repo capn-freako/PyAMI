@@ -15,12 +15,13 @@ from pathlib    import Path
 
 import numpy as np
 import scipy as sp
-import skrf  as rf
 
-from reportlab.lib.enums    import TA_CENTER
+from reportlab.lib.enums    import TA_CENTER, TA_LEFT
 from reportlab.lib.styles   import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, PageBreak, Paragraph, Spacer
+
+import pyibisami
 
 # ReportLab Platypus abbreviations
 page_break = PageBreak()
@@ -50,6 +51,8 @@ indented_style = ParagraphStyle(
     parent=styles['Normal'],
     leftIndent=50,
 )
+title_style = styles['Title']
+title_style.alignment = TA_LEFT
 
 
 # HTML formatters
@@ -101,17 +104,17 @@ def title_page(ibis_file: Path) -> list[Flowable]:
     """
 
     flowables: list[Flowable] = [Spacer(1, 3*inch)]
+    flowables.append(Paragraph(f"<em>PyIBIS-AMI</em> v{pyibisami.__version__} - IBIS-AMI Model Testing Report", title_style))
     flowables.append(Paragraph(f"{bold('Date:')} {datetime.now()}", P))
     flowables.append(Paragraph(f"{bold('Tested:')} {ibis_file}", P))
     flowables.append(Paragraph(f"{bold('Python:')} {sys.version}", P))
     flowables.append(Paragraph(f"{bold('NumPy:')} {np.__version__}", P))
     flowables.append(Paragraph(f"{bold('SciPy:')} {sp.__version__}", P))
-    flowables.append(Paragraph(f"{bold('SciKit-RF:')} {rf.__version__}", P))
     flowables.extend([
         spacer,
         Paragraph(
             preformatted("\n".join([
-                f"{bold("Note:")} You should always run any new IBIS(-AMI) model through the {ital("Golden Parser")}.",
+                f"{bold("Note:")} You should always run any new IBIS model file through the {ital("Golden Parser")}.",
                 f"You can find more information about how to do this at the {ital("Open IBIS Forum")}'s web site:",
                 "https://www.ibis.org/ibischk7/",
                 ])),

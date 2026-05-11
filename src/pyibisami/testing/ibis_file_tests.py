@@ -108,25 +108,28 @@ def test_ami_models(
         The list of *ReportLab* ``Flowable``s describing the testing results.
     """
 
-    flowables: list[Flowable] = [Paragraph("IBIS-AMI Model(s) Testing Results", H1)]
-
-    if 'models' not in ibis_model.model_dict:
-        flowables.append(Paragraph("Error: The parsed IBIS file contained no model definitions!"))
-        flowables.append(page_break)
-        return flowables
+    flowables: list[Flowable] = []
 
     ami_model_names = list(filter(
         lambda nm: ibis_model.model_dict['models'][nm].is_ami,
         ibis_model.model_dict['models'].keys()))
     n_ami_models = len(ami_model_names)
     if n_ami_models == 0:
-        flowables.append(Paragraph("There were no IBIS-AMI models found in this file.", P))
+        flowables.extend([
+            spacer,
+            Paragraph("There were no IBIS-AMI models found in this file.", P),
+        ])
         return flowables
     if n_ami_models > max_models_per_file:
-        flowables.append(Paragraph(preformatted("\n".join([
-            f"{bold("Note:")} There were {n_ami_models} AMI models found in this IBIS file.",
-            f"Only {max_models_per_file} will be tested.",
-            ])), P))
+        flowables.extend([
+            spacer,
+            Paragraph(preformatted("\n".join([
+                f"{bold("Note:")} There were {n_ami_models} AMI models found in this IBIS file.",
+                f"Only {max_models_per_file} will be tested.",
+            ])), P)
+        ])
+        ami_model_names = ami_model_names[:max_models_per_file]
+    flowables.append(page_break)
 
     def do_model(model_name: str) -> list[Flowable]:
         """
@@ -139,7 +142,7 @@ def test_ami_models(
             List of _ReportLab_ ``Flowable``s describing the model testing results.
         """
 
-        flowables.append(Paragraph(f"Testing Model: {model_name}", H2))
+        flowables.append(Paragraph(f"Model: {model_name}", H1))
         model = ibis_model.model_dict['models'][model_name]
         flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
         flowables.extend(test_ami_model(model_name, model, ibis_file, test_sweeps_dir))
@@ -154,7 +157,7 @@ def test_ami_models(
         do_model(model_name)
         return flowables
 
-    for model_name in ami_model_names[:max_models_per_file]:
+    for model_name in ami_model_names:
         do_model(model_name)
 
     return flowables

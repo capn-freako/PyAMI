@@ -26,7 +26,7 @@ from ..ibis.model       import Model
 from ..util.plot        import plt
 from ..util.reportlab   import (
     bold, fixed, page_break, spacer, preformatted,
-    P, H3, H4, H5)
+    P, H2, H3, H4, H5)
 
 from .ami_tests_helpers import (
     AmiTestHelper, AmiTestHelperInitVsGetwave,
@@ -197,12 +197,12 @@ class AmiTester(ABC):
         flowables: list[Flowable] = self.preamble
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
-            p = Paragraph(_mod_doc, H4)
+            p = Paragraph(_mod_doc, H3)
             # p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
-                p = Paragraph(sweep_desc, H5)
+                p = Paragraph(sweep_desc, H4)
                 # p.keepWithNext = True
                 flowables.append(p)
                 # ToDo: Pass `init_ok` and `getwave_ok` to helpers.
@@ -218,7 +218,7 @@ class AmiTestLinearityChecker(AmiTester):
 
     preamble = [
         page_break,
-        Paragraph(f"{fixed('AMI_Init()')} Linearity Check", H3),
+        Paragraph(f"{fixed('AMI_Init()')} Linearity Check", H2),
         Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
         spacer,
         Paragraph(
@@ -244,12 +244,12 @@ class AmiTestLinearityChecker(AmiTester):
         flowables: list[Flowable] = self.preamble
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
-            p = Paragraph(_mod_doc, H4)
+            p = Paragraph(_mod_doc, H3)
             # p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
-                p = Paragraph(sweep_desc, H5)
+                p = Paragraph(sweep_desc, H4)
                 # p.keepWithNext = True
                 flowables.append(p)
                 for test_def in test_sweep().test_sweep():
@@ -295,7 +295,7 @@ class AmiTestInitVsGetwave(AmiTester):
 
     preamble = [
         page_break,
-        Paragraph("Init() vs. GetWave()", H3),
+        Paragraph("Init() vs. GetWave()", H2),
         Paragraph(
             "Here, we check to see that the fundamental responses of the model are the same \
             whether we call AMI_Init() or AMI_GetWave().", P),
@@ -328,7 +328,7 @@ class AmiTestSamplesPerBit(AmiTester):
 
     preamble = [
         page_break,
-        Paragraph("Samples per Bit", H3),
+        Paragraph("Samples per Bit", H2),
         Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
                    i.e., number of samples per bit (or, symbol).", P),
         Paragraph("You should see very little difference between the 3 plots in any of the charts below.", P),
@@ -344,7 +344,7 @@ class AmiTestGetwaveInputLength(AmiTester):
     def ami_tst(self) -> list[Flowable]:
         preamble: list[Flowable] = [
             page_break,
-            Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H3),
+            Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H2),
             Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
                       may exhibit sensitivity to the length of its input. And this is undesireable. \
                       Here, we try to flush that out if it's occurring.", P),
@@ -418,7 +418,7 @@ def test_ami_model(
     if not ami_files:
         return [Paragraph(f"Error: Model does not provide AMI files for this machine/system combination: {machine}/{system}!", P)]
 
-    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", H3)]
+    flowables: list[Flowable] = [Paragraph("Basic Sanity Checking", H2)]
 
     # Attempt to create the AMI model and its configurator.
     ibis_file_dir = ibis_file.parent
@@ -460,7 +460,7 @@ def test_ami_model(
         flowables.append(Paragraph("Model does not include on-die S-parameters.", P))
 
     # Fetch parameter sweepers or create a defaults template.
-    flowables.append(Paragraph("AMI Parameter Sweeps Info", H3))
+    flowables.append(Paragraph("AMI Parameter Sweeps Info", H2))
     model_sweeps_dir = test_sweeps_dir / ibis_file.stem / model_name
     test_sweepers = get_all_sweepers(model_sweeps_dir)
     if test_sweepers:
