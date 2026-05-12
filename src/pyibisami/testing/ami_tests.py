@@ -353,13 +353,6 @@ class AmiTestGetwaveInputLength(AmiTester):
                           between the various plots in any of the charts below.", P)
             )
             self.preamble = preamble
-            # print("\n\t".join([
-            #     "AmiTestGetwaveInputLength.ami_tst(): About to call superclass `ami_tst()` function.",
-            #     # f"self.ami_model: {self.ami_model}",
-            #     f"self.pcfg.info_ami_params: {self.pcfg.info_ami_params}",
-            #     f"self.test_sweepers: {self.test_sweepers}",
-            #     ]),
-            # flush=True)
             return super().ami_tst()
         else:
             preamble.append(
@@ -377,6 +370,7 @@ def test_ami_model(
     Test an individual IBIS-AMI model.
 
     Args:
+        model_name: The name of the model to test.
         model: The IBIS-AMI model to test.
         ibis_file: Path to ``*.ibs`` file being tested.
         test_sweeps_dir: The top level directory containing all test sweep configurations.

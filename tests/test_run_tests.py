@@ -3,21 +3,21 @@ from pathlib import Path
 import pytest
 
 from pyibisami.tools.run_tests import expand_params, run_tests
-from pyibisami.util.tool_helpers import color_picker, hsv2rgb, plot_name
+from pyibisami.util.plot import RGB, color_picker, hsv2rgb, plot_name
 
 class TestRunTests(object):
     def test_hsv2rgb(self):
         """Convert an HSV number to a RGB one. Everything is normalized to 1."""
         # Black
-        assert hsv2rgb(0, 0, 0) == (0.0, 0.0, 0.0)
+        assert hsv2rgb(0, 0, 0) == RGB((0.0, 0.0, 0.0))
         # Cyan
-        assert hsv2rgb(180, 1, 1) == (0.0, 1.0, 1.0)
+        assert hsv2rgb(180, 1, 1) == RGB((0.0, 1.0, 1.0))
         # Red
-        assert hsv2rgb(0, 1, 1) == (1.0, 0.0, 0.0)
+        assert hsv2rgb(0, 1, 1) == RGB((1.0, 0.0, 0.0))
         # Lime
-        assert hsv2rgb(120, 1, 1) == (0.0, 1.0, 0.0)
+        assert hsv2rgb(120, 1, 1) == RGB((0.0, 1.0, 0.0))
         # Blue
-        assert hsv2rgb(240, 1, 1) == (0.0, 0.0, 1.0)
+        assert hsv2rgb(240, 1, 1) == RGB((0.0, 0.0, 1.0))
 
     def test_plot_name(self):
         image_filename = plot_name("pytest")

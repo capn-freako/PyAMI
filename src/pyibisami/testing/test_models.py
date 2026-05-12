@@ -63,8 +63,12 @@ class MyDocTemplate(BaseDocTemplate):
                     self.canv.bookmarkPage(key)                
                     self.notify('TOCEntry', (0, text, self.page, key))  # Sends data to the TOC object.
                 case 'Heading2':
+                    key = 'h2-%s' % self.seq.nextf('heading2')
+                    self.canv.bookmarkPage(key)                
                     self.notify('TOCEntry', (1, text, self.page))
                 case 'Heading3':
+                    key = 'h3-%s' % self.seq.nextf('heading3')
+                    self.canv.bookmarkPage(key)                
                     self.notify('TOCEntry', (2, text, self.page))
                 case _:
                     pass
@@ -94,23 +98,9 @@ def test_ibis_ami_models(
 
     ibis_file_dir = ibis_file.parent
     pdf_filename = str((ibis_file_dir / (ibis_file.stem + "_test_results")).with_suffix('.pdf'))
-    # pageinfo = f"Model Testing Report for: {ibis_file}"
-
-    # def myFirstPage(canvas, doc):
-    #     canvas.saveState()
-    #     title.wrapOn(canvas, PAGE_WIDTH, PAGE_HEIGHT)
-    #     title.drawOn(canvas, 1*inch, 9*inch)
-    #     canvas.restoreState()
-
-    # def myLaterPages(canvas, doc):
-    #     canvas.saveState()
-    #     canvas.setFont('Times-Roman',9)
-    #     canvas.drawString(inch, 0.75 * inch, "Page %d - %s" % (doc.page, pageinfo))
-    #     canvas.restoreState()
 
     doc = MyDocTemplate(pdf_filename, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
-    # print(f"Document width: {doc.width / inch}, height: {doc.height / inch}.", flush=True)
     template = PageTemplate(id='test', frames=frame)
     doc.addPageTemplates([template])
     pages = title_page(ibis_file)
@@ -146,7 +136,7 @@ def test_ibis_ami_models(
             ibis_file, ibis_model, ami_model_names,
             test_sweeps_dir, model_name=model_name, debug=debug)
     )
-    doc.multiBuild(pages) #, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
+    doc.multiBuild(pages)
 
 
 # CLI definition

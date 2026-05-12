@@ -38,8 +38,6 @@ FIG_Y_DFLT = 4
 spacer = Spacer(1, 0.25*inch)
 
 
-# ToDo: Add a validator to the Protocol definition,
-# which must return `True` in order for the `ami_tst_helper()` function to be called.
 class AmiTestHelper:
     "Abstract class defining the function signature for AMI test helper functions."
 
@@ -163,7 +161,6 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
         if "Ignore_Bits" in initializer.ami_params:
             ignore_bits = model.info_params["Ignore_Bits"].pvalue
         else:
-            # print(initializer.ami_params)
             ignore_bits = 0
 
         # Assemble complete input vector, including bits to be ignored.

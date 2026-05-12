@@ -125,7 +125,6 @@ def test_ami_models(
 
         flowables.append(Paragraph(f"Model: {model_name}", H1))
         model = ibis_model.model_dict['models'][model_name]
-        # flowables.append(Paragraph(preformatted(f"{model}"), styles['Code']))
         flowables.extend(test_ami_model(model_name, model, ibis_file, test_sweeps_dir))
         flowables.append(page_break)
         return flowables

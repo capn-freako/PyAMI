@@ -384,7 +384,6 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 subs = []
                 for sname in pval:
                     subs.append(sexpr(sname, pval[sname]))
-                # return sexpr(pname, " ".join(subs))
                 return f"({pname} {' '.join(subs)})"
             return f"({pname} {pval})"
 
