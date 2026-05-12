@@ -194,16 +194,18 @@ class AmiTester(ABC):
         fig_x = self._fig_x
         fig_y = self._fig_y
 
-        flowables: list[Flowable] = self.preamble
+        flowables: list[Flowable] = [page_break]
+        flowables.extend(self.preamble)
+        flowables.append(spacer)
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
             p = Paragraph(_mod_doc, H3)
-            # p.keepWithNext = True
+            p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
                 p = Paragraph(sweep_desc, H4)
-                # p.keepWithNext = True
+                p.keepWithNext = True
                 flowables.append(p)
                 # ToDo: Pass `init_ok` and `getwave_ok` to helpers.
                 if self.helper:
@@ -217,7 +219,6 @@ class AmiTestLinearityChecker(AmiTester):
     "Check ``AMI_Init()`` for linearity."
 
     preamble = [
-        page_break,
         Paragraph(f"{fixed('AMI_Init()')} Linearity Check", H2),
         Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
         spacer,
@@ -241,20 +242,22 @@ class AmiTestLinearityChecker(AmiTester):
         fig_x = self.fig_x
         fig_y = self.fig_y
 
-        flowables: list[Flowable] = self.preamble
+        flowables: list[Flowable] = [page_break]
+        flowables.extend(self.preamble)
+        flowables.append(spacer)
         for mod_doc, test_sweeps in test_sweepers:
             _mod_doc: str = mod_doc or "(No module description)"
             p = Paragraph(_mod_doc, H3)
-            # p.keepWithNext = True
+            p.keepWithNext = True
             flowables.append(p)
             for test_sweep in test_sweeps:
                 sweep_desc: str = test_sweep.__doc__ if test_sweep.__doc__ else "(No class description)"
                 p = Paragraph(sweep_desc, H4)
-                # p.keepWithNext = True
+                p.keepWithNext = True
                 flowables.append(p)
                 for test_def in test_sweep().test_sweep():
                     p = Paragraph(preformatted(f"\t{test_def.description}:"), P)
-                    # p.keepWithNext = True
+                    p.keepWithNext = True
                     flowables.append(p)
                     # Test model against full channel response.
                     initializer = pcfg.get_init(
@@ -294,7 +297,6 @@ class AmiTestInitVsGetwave(AmiTester):
     helper = AmiTestHelperInitVsGetwave(DEBUG)
 
     preamble = [
-        page_break,
         Paragraph("Init() vs. GetWave()", H2),
         Paragraph(
             "Here, we check to see that the fundamental responses of the model are the same \
@@ -317,7 +319,6 @@ class AmiTestInitVsGetwave(AmiTester):
                   should look nearly identical.", P),
         Paragraph(f"({bold('Note:')} Ignore the waveform before time zero; \
                   it`s not expected to match and is plotted only as a debugging aid.)", P),
-        spacer,
     ]
 
 
@@ -327,12 +328,10 @@ class AmiTestSamplesPerBit(AmiTester):
     helper = AmiTestHelperSamplesPerBit()
 
     preamble = [
-        page_break,
         Paragraph("Samples per Bit", H2),
         Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
                    i.e., number of samples per bit (or, symbol).", P),
         Paragraph("You should see very little difference between the 3 plots in any of the charts below.", P),
-        spacer,
     ]
 
 
@@ -343,12 +342,10 @@ class AmiTestGetwaveInputLength(AmiTester):
 
     def ami_tst(self) -> list[Flowable]:
         preamble: list[Flowable] = [
-            page_break,
             Paragraph(f"{fixed('AMI_GetWave()')} Input Length Sensitivity", H2),
             Paragraph(f"Sometimes, depending upon how it's implemented, the {fixed('AMI_GetWave()')} function \
                       may exhibit sensitivity to the length of its input. And this is undesireable. \
                       Here, we try to flush that out if it's occurring.", P),
-            spacer,
         ]
         if self.ami_model.has_getwave:
             preamble.append(
@@ -356,6 +353,13 @@ class AmiTestGetwaveInputLength(AmiTester):
                           between the various plots in any of the charts below.", P)
             )
             self.preamble = preamble
+            # print("\n\t".join([
+            #     "AmiTestGetwaveInputLength.ami_tst(): About to call superclass `ami_tst()` function.",
+            #     # f"self.ami_model: {self.ami_model}",
+            #     f"self.pcfg.info_ami_params: {self.pcfg.info_ami_params}",
+            #     f"self.test_sweepers: {self.test_sweepers}",
+            #     ]),
+            # flush=True)
             return super().ami_tst()
         else:
             preamble.append(

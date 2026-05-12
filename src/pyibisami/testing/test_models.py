@@ -17,6 +17,7 @@ import types
 from pathlib  import Path
 from typing   import Optional
 
+from reportlab.lib.enums    import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -34,6 +35,9 @@ from .test_defs         import TestSweep
 # Define the PDF document dimensions and grab some pre-defined styles.
 PAGE_WIDTH, PAGE_HEIGHT = letter
 styles = getSampleStyleSheet()
+toc_style = styles['Title']
+toc_style.alignment = TA_CENTER
+toc_style.fontSize = 16
 page_break = PageBreak()
 spacer = Spacer(1, 0.25*inch)
 
@@ -55,7 +59,9 @@ class MyDocTemplate(BaseDocTemplate):
             # If the paragraph is a heading, add to TOC
             match flowable.style.name:
                 case 'Heading1':
-                    self.notify('TOCEntry', (0, text, self.page))  # Sends data to the TOC object.
+                    key = 'h1-%s' % self.seq.nextf('heading1')
+                    self.canv.bookmarkPage(key)                
+                    self.notify('TOCEntry', (0, text, self.page, key))  # Sends data to the TOC object.
                 case 'Heading2':
                     self.notify('TOCEntry', (1, text, self.page))
                 case 'Heading3':
@@ -67,6 +73,7 @@ class MyDocTemplate(BaseDocTemplate):
 def test_ibis_ami_models(
     ibis_file: Path, test_sweeps_dir: Path, 
     model_name: Optional[str] = None,
+    max_models_per_file: int = 2,
     debug: bool = False
 ) -> None:
     """
@@ -79,40 +86,65 @@ def test_ibis_ami_models(
     Keyword Args:
         model_name: The particular model to test.
             Default: None (Means test all IBIS-AMI models found in ``*.ibs`` file.)
+        max_models_per_file: Maximum number of models processed per ``*.ibs`` file.
+            Default: 2
         debug: Include debugging output when ``True``.
             Default: ``False``
     """
 
     ibis_file_dir = ibis_file.parent
     pdf_filename = str((ibis_file_dir / (ibis_file.stem + "_test_results")).with_suffix('.pdf'))
-    pageinfo = f"Model Testing Report for: {ibis_file}"
+    # pageinfo = f"Model Testing Report for: {ibis_file}"
 
-    def myFirstPage(canvas, doc):
-        canvas.saveState()
-        title.wrapOn(canvas, PAGE_WIDTH, PAGE_HEIGHT)
-        title.drawOn(canvas, 1*inch, 9*inch)
-        canvas.restoreState()
+    # def myFirstPage(canvas, doc):
+    #     canvas.saveState()
+    #     title.wrapOn(canvas, PAGE_WIDTH, PAGE_HEIGHT)
+    #     title.drawOn(canvas, 1*inch, 9*inch)
+    #     canvas.restoreState()
 
-    def myLaterPages(canvas, doc):
-        canvas.saveState()
-        canvas.setFont('Times-Roman',9)
-        canvas.drawString(inch, 0.75 * inch, "Page %d - %s" % (doc.page, pageinfo))
-        canvas.restoreState()
+    # def myLaterPages(canvas, doc):
+    #     canvas.saveState()
+    #     canvas.setFont('Times-Roman',9)
+    #     canvas.drawString(inch, 0.75 * inch, "Page %d - %s" % (doc.page, pageinfo))
+    #     canvas.restoreState()
 
     doc = MyDocTemplate(pdf_filename, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
+    # print(f"Document width: {doc.width / inch}, height: {doc.height / inch}.", flush=True)
     template = PageTemplate(id='test', frames=frame)
     doc.addPageTemplates([template])
     pages = title_page(ibis_file)
-    pages.append(toc)
+
     ibis_model, _ = get_ibis_contents(ibis_file, debug=debug)
-    if 'models' not in ibis_model.model_dict or not ibis_model.model_dict['models']:
+    if 'models' not in ibis_model.model_dict or len(ibis_model.model_dict['models']) == 0:
         raise RuntimeError("The IBIS file contains no model definitions!")
 
+    ami_model_names = list(filter(
+        lambda nm: ibis_model.model_dict['models'][nm].is_ami,
+        ibis_model.model_dict['models'].keys()))
+    n_ami_models = len(ami_model_names)
+    if n_ami_models == 0:
+        raise RuntimeError("There were no AMI models found in this IBIS file.")
+    if n_ami_models > max_models_per_file:
+        pages.extend([
+            spacer,
+            Paragraph(preformatted("\n".join([
+                f"{bold("Note:")} There were {n_ami_models} AMI models found in this IBIS file.",
+                f"Only {max_models_per_file} will be tested.",
+            ])), P)
+        ])
+        ami_model_names = ami_model_names[:max_models_per_file]
+
+    pages.extend([
+        page_break,
+        Paragraph("Table of Contents", toc_style),
+        toc,
+    ])
+    
     pages.extend(
         test_ami_models(
-            ibis_file, ibis_model, test_sweeps_dir,
-            model_name=model_name, debug=debug)
+            ibis_file, ibis_model, ami_model_names,
+            test_sweeps_dir, model_name=model_name, debug=debug)
     )
     doc.multiBuild(pages) #, onFirstPage=myFirstPage, onLaterPages=myLaterPages)
 

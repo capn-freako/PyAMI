@@ -194,7 +194,7 @@ class AMIModelInitializer:
         return "\n\t".join([
             "AMIModelInitializer instance:",
             f"`ami_params`: {self.ami_params}",
-            f"`info_params`: {self.ami_params}"])
+            f"`info_params`: {self._info_params}"])
 
     def _getChannelResponse(self):
         return list(map(float, self._init_data["channel_response"]))
@@ -261,6 +261,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
     """
 
     _getwave_step_response_out_params: Optional[list[str]] = None
+    _info_params: Optional[dict[str, Any]] = None
 
     def __init__(self, filename: str):
         """
@@ -564,8 +565,12 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         # Capture needed parameter definitions.
         ui = self.bit_time
         ts = self.sample_interval
-        info_params = self.info_params
-        ignore_bits = info_params["Ignore_Bits"].pvalue if "Ignore_Bits" in info_params else 0
+        info_params = self._info_params
+        if info_params:
+            if "Ignore_Bits" in info_params: 
+                ignore_bits = info_params["Ignore_Bits"].pvalue
+        else:
+            ignore_bits = 0
 
         # Capture/convert instance variables.
         chnl_imp = np.array(self.channel_response) * ts     # input (a.k.a. - "channel") impulse response (V/sample)
@@ -579,7 +584,11 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         f = np.array([i * 1.0 / (ts * len_h) for i in range(len_h // 2 + 1)])  # Assumes `rfft()` is used.
 
         # Extract and return the model responses.
-        if self.info_params["Init_Returns_Impulse"]:
+        if (self._info_params and
+            "Init_Returns_Impulse" in self._info_params and
+            self._info_params["Init_Returns_Impulse"] == False):
+            pass
+        else:
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
             rslt[IMP_RESP_INIT] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 
@@ -590,7 +599,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
             rslt[OUT_RESP_INIT] = (t, h_init, s_init, p_init, f, H_init)
 
-        if calc_getw and self.info_params["GetWave_Exists"].pvalue:
+        if (calc_getw and
+            self._info_params and
+            "GetWave_Exists" in self._info_params and
+            self._info_params["GetWave_Exists"].pvalue == True):
             # Get model's step response.
             # - Give the model `ignore_bits` random bits, to adapt itself.
             # - After that, limit run length, to prevent de-adaptation.

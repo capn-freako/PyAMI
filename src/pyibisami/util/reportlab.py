@@ -27,6 +27,14 @@ import pyibisami
 page_break = PageBreak()
 spacer = Spacer(inch, 0.15*inch)
 styles = getSampleStyleSheet()
+
+# Leave as an example, to avoid future frustration:
+# for style_name, style_obj in styles.byName.items():
+#     print(f"Style Name: {style_name}")
+#     # You can access properties, like fontName
+#     print(f"Font: {style_obj.fontName}")
+# print(styles['Title'].fontSize)
+
 P  = styles['Normal']
 H1 = styles['Heading1']
 H2 = styles['Heading2']
@@ -120,5 +128,4 @@ def title_page(ibis_file: Path) -> list[Flowable]:
                 ])),
             P)
         ])
-    flowables.append(page_break)
     return flowables

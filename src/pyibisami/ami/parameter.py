@@ -323,3 +323,6 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             self._value = temp_vals
 
         self._name = name
+
+    def __str__(self):
+        return f"{self.pvalue}"

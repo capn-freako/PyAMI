@@ -160,9 +160,10 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
         channel_response = np.array(initializer.channel_response)
         bit_time = initializer.bit_time
         nspui = int(bit_time / sample_interval)
-        if "Ignore_Bits" in model.info_params:
+        if "Ignore_Bits" in initializer.ami_params:
             ignore_bits = model.info_params["Ignore_Bits"].pvalue
         else:
+            # print(initializer.ami_params)
             ignore_bits = 0
 
         # Assemble complete input vector, including bits to be ignored.
