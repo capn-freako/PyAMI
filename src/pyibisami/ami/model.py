@@ -565,11 +565,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         ui = self.bit_time
         ts = self.sample_interval
         info_params = self._info_params
+        ignore_bits = 0
         if info_params:
             if "Ignore_Bits" in info_params: 
                 ignore_bits = info_params["Ignore_Bits"].pvalue
-        else:
-            ignore_bits = 0
 
         # Capture/convert instance variables.
         chnl_imp = np.array(self.channel_response) * ts     # input (a.k.a. - "channel") impulse response (V/sample)

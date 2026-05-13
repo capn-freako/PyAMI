@@ -12,6 +12,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 import re
 
+from functools import reduce
 from typing import Any, Generator, Iterable, Optional, TypeAlias, TypeVar
 
 from parsec import (
@@ -32,6 +33,7 @@ from parsec import (
     sepBy1,
     string,
     times,
+    try_choice,
 )
 
 from pyibisami.ibis.model import Component, Model
@@ -243,6 +245,29 @@ def keyword(kywrd="") -> Parser:
     return fn
 
 
+allowed_model_types: list[str] = [
+    "Input",
+    "Output",
+    "I/O",
+    "3-state",
+    "Open_drain",
+    "I/O_open_drain",
+    "Open_sink",
+    "I/O_open_sink",
+    "Open_source",
+    "I/O_open_source",
+    "Input_ECL",
+    "Output_ECL",
+    "I/O_ECL",
+    "3-state_ECL",
+    "Terminator",
+    "Series",
+    "Series_switch",
+]
+model_type_parsers = [word(string(mt)) for mt in allowed_model_types]
+model_type = reduce(try_choice, model_type_parsers)
+
+
 @generate("IBIS parameter")
 def param() -> GenParser[tuple[str, Any]]:
     "Parse IBIS parameter."
@@ -250,7 +275,11 @@ def param() -> GenParser[tuple[str, Any]]:
     pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
     if DEBUG:
         print(f"Parsing parameter {pname}...", end="", flush=True)
-    res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
+    match pname:  # Handle special cases.
+        case "Model_type":
+            res = yield model_type
+        case _:
+            res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
     if DEBUG:
         print(res, flush=True)
     yield ignore  # So that ``param`` functions as a lexeme.
