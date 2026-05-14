@@ -98,7 +98,7 @@ def test_ami_models(
         ami_model_names: The names of the models to test.
         test_sweeps_dir: The top level directory containing all test sweep configurations.
             (Individual model sweepers will be found in:
-            ``<test_sweeps_dir>``/``<ibis_file.stem>``/``model_name>``/.)
+            ``<test_sweeps_dir>``/``<ibis_file_relative_path.stem>``/``model_name>``/.)
 
     Keyword Args:
         model_name: The name of a particular model to test.

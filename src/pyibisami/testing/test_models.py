@@ -12,6 +12,7 @@ Copyright (C) 2026 David Banas; all rights reserved World wide.
 
 import click
 import inspect
+import traceback
 import types
 
 from pathlib  import Path
@@ -156,7 +157,11 @@ def main(ibis_file, model, params, debug):
         raise RuntimeError(f"IBIS file `{ibis_file_path}` does not exist!")
     test_sweeps_dir = Path(params).resolve()
     test_sweeps_dir.mkdir(parents=True, exist_ok=True)
-    test_ibis_ami_models(ibis_file_path, test_sweeps_dir, model_name=model, debug=debug)
+    try:
+        test_ibis_ami_models(ibis_file_path, test_sweeps_dir, model_name=model, debug=debug)
+    except Exception as err:
+        error_msg = traceback.format_exception_only(type(err), err)[-1].strip()
+        print(error_msg)
 
 
 if __name__ == "__main__":

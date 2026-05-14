@@ -467,7 +467,7 @@ Component_keywords = {
 @generate("[Component]")
 def comp():
     "Parse [Component]."
-    nm = yield lexeme(name)
+    nm = yield rest_line
     if DEBUG:
         print(f"Parsing component: {nm}", flush=True)
     res = yield many1(node(Component_keywords, IBIS_keywords, debug=DEBUG))
