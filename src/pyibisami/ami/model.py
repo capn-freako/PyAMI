@@ -441,7 +441,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
 
         # Create the required C types.
         Signal = c_double * samps_per_call
-        Clocks = c_double * (bits_per_call + 1)  # The "+1" is critical, to prevent access violations by the model.
+        Clocks = c_double * (bits_per_call + 8)  # The "+8" is critical, to prevent access violations by the model. Value increased from +1 to +8 to avoid access violations for specific SERDES models.
 
         idx = 0  # Holds the starting index of the next processing chunk.
         _clock_times = Clocks(0.0)
