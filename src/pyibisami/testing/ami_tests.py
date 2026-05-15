@@ -10,7 +10,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 import platform
 
-from abc     import ABC, abstractmethod
+from abc     import ABC
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing  import Optional, Sequence
@@ -26,13 +26,13 @@ from ..ibis.model       import Model
 from ..util.plot        import plt
 from ..util.reportlab   import (
     bold, fixed, page_break, spacer, preformatted,
-    P, H2, H3, H4, H5)
+    P, H2, H3, H4)
 
 from .ami_tests_helpers import (
     AmiTestHelper, AmiTestHelperInitVsGetwave,
-    AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength, 
+    AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength,
     plot_sweep)
-from .test_defs         import TestSweep, TestSweeper
+from .test_defs         import TestSweeper
 from .util              import get_all_sweepers
 
 
@@ -87,7 +87,7 @@ class AmiTester(ABC):
     @property
     def getwave_ok(self):
         return self._getwave_ok
-    
+
     # - Not set by this base class `__init__()` function.
     #   Subclass must override if defaults here are not appropriate.
     _msg: str = ""      # Used for general purpose status/debugging.
@@ -95,7 +95,7 @@ class AmiTester(ABC):
     @property
     def msg(self):
         return self._msg
-    
+
     _preamble: list[Flowable] = []  # Any desired introductory text for report body.
 
     @property
@@ -269,14 +269,14 @@ class AmiTestLinearityChecker(AmiTester):
                     ami_model.initialize(initializer)
                     model_resps = ami_model.get_responses(nbits=test_def.sim_params["nbits"])
                     t, _, _, resp_to_sum, _, _ = model_resps[OUT_RESP_INIT]
-                    fig = plt.figure(figsize=(fig_x, fig_y))
+                    plt.figure(figsize=(fig_x, fig_y))
                     plt.plot(t * 1e9, resp_to_sum, label="Response to Sum")
                     # Test model against half channel response.
-                    initializer.channel_response = [x / 2 for x in initializer.channel_response]
+                    initializer.channel_response = [x / 10 for x in initializer.channel_response]
                     ami_model.initialize(initializer)
                     model_resps = ami_model.get_responses(nbits=test_def.sim_params["nbits"])
                     t, _, _, sum_of_resps, _, _ = model_resps[OUT_RESP_INIT]
-                    sum_of_resps *= 2
+                    sum_of_resps *= 10
                     plt.plot(t * 1e9, sum_of_resps, label="Sum of Responses")
                     plt.title("Comparing Pulse Responses")
                     plt.xlabel("Time (ns)")
@@ -284,7 +284,8 @@ class AmiTestLinearityChecker(AmiTester):
                     plt.legend()
                     with NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
                         plt.savefig(tmp_file)
-                        flowables.append(Image(tmp_file.name, width=fig_x*inch, height=fig_y*inch))
+                        flowables.append(
+                            Image(tmp_file.name, width=fig_x * inch, height=fig_y * inch))
                     plt.close()
                 flowables.append(spacer)
 
@@ -306,12 +307,11 @@ class AmiTestInitVsGetwave(AmiTester):
         ListFlowable([
             Paragraph(f"have an {fixed('AMI_GetWave()')} function, and", P),
             Paragraph(f"return an impulse response from their {fixed('AMI_Init()')} function.", P),
-        ], bulletType='bullet', bulletIndent=0.25*inch),
+        ], bulletType='bullet', bulletIndent=0.25 * inch),
         spacer,
         Paragraph(f"{bold('Plot notes:')}", P),
         ListFlowable([
             Paragraph(f"Solid lines are {fixed('Init()')}; dashed are {fixed('GetWave()')}."),
-            Paragraph("Step response shown at reduced brightness."),
         ], bulletFontSize=9),
         spacer,
         Paragraph(f"Compare the plots below. \
@@ -486,7 +486,7 @@ def test_ami_model(
              f"So, a default test sweep definition file for this model has been created in:\n\t{dflt_test_sweep_file}",
              "You can use this file as a template for expanding your test suite for this model.",
              "The newly created file has instructions for doing this."
-            ])), P))
+             ])), P))
         test_sweepers = get_all_sweepers(model_sweeps_dir)
         if not test_sweepers:
             raise RuntimeError(f"Attempt to create a default sweep definition file:\n\t{dflt_test_sweep_file}\nfailed.")

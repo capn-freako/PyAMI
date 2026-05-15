@@ -25,7 +25,7 @@ import pyibisami
 
 # ReportLab Platypus abbreviations
 page_break = PageBreak()
-spacer = Spacer(inch, 0.15*inch)
+spacer = Spacer(inch, 0.15 * inch)
 styles = getSampleStyleSheet()
 
 # Leave as an example, to avoid future frustration:
@@ -44,13 +44,12 @@ H5 = styles['Heading5']
 bold_style = ParagraphStyle(
     name='BoldStyle',
     parent=styles['Normal'],
-    fontName='Helvetica-Bold', # Specify the bold variant here
-    # fontSize=12
+    fontName='Helvetica-Bold',
 )
 caption_style = ParagraphStyle(
     name='CaptionStyle',
     parent=styles['Normal'],
-    fontName='Helvetica-Bold', # Specify the bold variant here
+    fontName='Helvetica-Bold',
     fontSize=10,
     alignment=TA_CENTER,
 )
@@ -88,7 +87,7 @@ def preformatted(text: str) -> str:
     """
     Convert ``\n`` and ``\t`` characters in a pre-formatted string
     for display in a *ReportLab* ``Paragraph``.
-    
+
     Args:
         text: The pre-formatted text containing ``\n`` and ``\t`` characters to convert.
 
@@ -111,21 +110,21 @@ def title_page(ibis_file: Path) -> list[Flowable]:
         A list of *ReportLab* ``Flowable``s providing report title page information.
     """
 
-    flowables: list[Flowable] = [Spacer(1, 3*inch)]
+    flowables: list[Flowable] = [Spacer(1, 3 * inch)]
     flowables.append(Paragraph(f"<em>PyIBIS-AMI</em> v{pyibisami.__version__} - IBIS-AMI Model Testing Report", title_style))
     flowables.append(Paragraph(f"{bold('Date:')} {datetime.now()}", P))
     flowables.append(Paragraph(f"{bold('Tested:')} {ibis_file}", P))
     flowables.append(Paragraph(f"{bold('Python:')} {sys.version}", P))
     flowables.append(Paragraph(f"{bold('NumPy:')} {np.__version__}", P))
     flowables.append(Paragraph(f"{bold('SciPy:')} {sp.__version__}", P))
-    flowables.extend([
-        spacer,
-        Paragraph(
-            preformatted("\n".join([
-                f"{bold("Note:")} You should always run any new IBIS model file through the {ital("Golden Parser")}.",
-                f"You can find more information about how to do this at the {ital("Open IBIS Forum")}'s web site:",
-                "https://www.ibis.org/ibischk7/",
-                ])),
-            P)
-        ])
+    flowables.extend(
+        [spacer,
+         Paragraph(
+             preformatted("\n".join(
+                 [f"{bold('Note:')} You should always run any new IBIS model file through the {ital('Golden Parser')}.",
+                  f"You can find more information about how to do this at the {ital('Open IBIS Forum')}'s web site:",
+                  "https://www.ibis.org/ibischk7/",
+                  ])),
+             P)
+         ])
     return flowables

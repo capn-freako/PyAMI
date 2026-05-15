@@ -63,6 +63,7 @@ VALID_STYLE_FEATURES = [
     "fontstyle",
 ]
 
+
 @dataclass(frozen=True)
 class PlotStyleFeature:
     "A string constrained to valid Matplotlib plot style feature names."
@@ -77,6 +78,7 @@ class PlotStyleFeature:
 
     def __str__(self):
         return self.feature
+
 
 PlotStyle: TypeAlias = dict[PlotStyleFeature, str]
 
@@ -115,7 +117,7 @@ def plot_name(tst_name: str, n: int = 0) -> Generator[str, None, None]:
         yield f"{tst_name}_plot_{n}.png"
 
 
-def hsv2rgb(hue: float, saturation: float, value:float) -> RGB:
+def hsv2rgb(hue: float, saturation: float, value: float) -> RGB:
     """
     Convert a hue-saturation-value (HSV) triple to a red-green-blue (RGB) triple.
 
@@ -248,14 +250,14 @@ def plot_resps(
         if debug:
             print("Plotting OUT_RESP_INIT...")
         t, h, s, p, f, H = resps[OUT_RESP_INIT]
-        left_ax.plot(t*1e9, s,            color=init_color, linestyle=init_linestyle,)
-        left_ax.plot(t*1e9, p, label=lbl, color=init_color, linestyle=init_linestyle,)
+        left_ax.plot(t * 1e9, s,            color=init_color, linestyle=init_linestyle,)
+        left_ax.plot(t * 1e9, p, label=lbl, color=init_color, linestyle=init_linestyle,)
         right_ax.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl,
                           color=init_color, linestyle=init_linestyle,)
     if OUT_RESP_GETW in resps:
         t, h, s, p, f, H = resps[OUT_RESP_GETW]
-        left_ax.plot(t*1e9, s, color=getwave_color, linestyle=getwave_linestyle,)
-        left_ax.plot(t*1e9, p, color=getwave_color, linestyle=getwave_linestyle,)
+        left_ax.plot(t * 1e9, s, color=getwave_color, linestyle=getwave_linestyle,)
+        left_ax.plot(t * 1e9, p, color=getwave_color, linestyle=getwave_linestyle,)
         right_ax.semilogx(f / 1e9, 20 * np.log10(np.abs(H)),
                           color=getwave_color, linestyle=getwave_linestyle)
 
@@ -314,17 +316,15 @@ def plot_model_adaptation(
 ) -> None:
     """
     Plot AMI model CDR & DFE adaptation, as appropriate and available.
-    
+
     Args:
         model: The (fully initialized) AMI model to use.
         figure: The *Matplotlib* figure to use for plotting.
     """
 
-    ax_cdr, ax_dfe = figure.subplots(1,2)
+    ax_cdr, ax_dfe = figure.subplots(1, 2)
     plot_cdr_adaptation(model.getwave_step_response_out_params, ax_cdr)
     plot_dfe_adaptation(model.getwave_step_response_out_params, ax_dfe)
-
-
 
 
 def plot_finalize_steppulse_freq(
@@ -351,7 +351,7 @@ def plot_finalize_steppulse_freq(
         plt.figure(fig)
 
         plt.subplot(121)
-        plt.axis(xmin=-0.1, xmax=plot_t_max*1e9)
+        plt.axis(xmin=-0.1, xmax=plot_t_max * 1e9)
         plt.title("Step & Pulse Resp. (V)")
         plt.xlabel("Time (ns)")
         plt.grid()
@@ -365,6 +365,7 @@ def plot_finalize_steppulse_freq(
 
         if debug:
             plt.show()
+
 
 def plot_model_results(
     model_responses: Sequence[tuple[LabelledModelResponses, Optional[tuple[PlotStyle, PlotStyle]]]],
@@ -433,7 +434,7 @@ def do_samples_per_bit(
             ts = t[1] - t[0]
             if len_t > len_ch_resp:
                 rslt = np.pad(channel_response, (0, len_t - len_ch_resp),
-                           mode="constant", constant_values=0)
+                              mode="constant", constant_values=0)
             else:
                 rslt = channel_response[:len_t]
             return rslt * sample_interval / ts
@@ -441,11 +442,11 @@ def do_samples_per_bit(
             return krnl(t)
 
     model_responses = []
-    for osf in [nspui//2, nspui, nspui*2]:
+    for osf in [nspui // 2, nspui, nspui * 2]:
         ts = 1 / (bit_rate * osf)
         _row_size = init_bits * osf
         _t = np.array([n * ts for n in range(_row_size)])
-        
+
         initializer.sample_interval = ts
         initializer.channel_response = interp(_t)
         model.initialize(initializer)

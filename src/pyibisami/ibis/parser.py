@@ -348,10 +348,11 @@ def end() -> GenParser[Any]:
 load_line: Parser = string("R_load") >> many(string(" ")) >> string("=") >> many(string(" ")) >> number << ignore
 
 ramp_line: Parser = (
-    string("dV/dt_")
-        >> ((string("r").result("rising") | string("f").result("falling"))
-        << ignore) + times(ratio, 1, 3)
+    string("dV/dt_") >> (
+        (string("r").result("rising") | string("f").result("falling")) << ignore
+    ) + times(ratio, 1, 3)
 )
+
 
 @generate("[Ramp]")
 def ramp() -> GenParser[dict[str, Any]]:

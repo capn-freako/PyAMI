@@ -11,7 +11,6 @@ Copyright (c) 2026 David Banas; all rights reserved World wide.
 import inspect
 from pathlib            import Path
 import types
-from typing             import Optional
 
 from ..util.misc        import import_from_path
 
@@ -37,7 +36,7 @@ def get_sweepers(
     return (
         mod.__doc__,
         [obj for name, obj in inspect.getmembers(mod, inspect.isclass)  # type: ignore
-             if issubclass(obj, TestSweep) and not obj == TestSweep]
+         if issubclass(obj, TestSweep) and not obj == TestSweep]
     )
 
 

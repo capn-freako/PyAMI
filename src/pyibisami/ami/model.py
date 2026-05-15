@@ -567,7 +567,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         info_params = self._info_params
         ignore_bits = 0
         if info_params:
-            if "Ignore_Bits" in info_params: 
+            if "Ignore_Bits" in info_params:
                 ignore_bits = info_params["Ignore_Bits"].pvalue
 
         # Capture/convert instance variables.
@@ -582,9 +582,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         f = np.array([i * 1.0 / (ts * len_h) for i in range(len_h // 2 + 1)])  # Assumes `rfft()` is used.
 
         # Extract and return the model responses.
-        if (self._info_params and
-            "Init_Returns_Impulse" in self._info_params and
-            self._info_params["Init_Returns_Impulse"] == False):
+        if self._info_params and (
+            "Init_Returns_Impulse" in self._info_params and  # noqa: W504
+            not self._info_params["Init_Returns_Impulse"]
+        ):
             pass
         else:
             h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
@@ -597,10 +598,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             H_init *= s_init[-1] / np.abs(H_init[0])   # Normalize for proper d.c.
             rslt[OUT_RESP_INIT] = (t, h_init, s_init, p_init, f, H_init)
 
-        if (calc_getw and
-            self._info_params and
-            "GetWave_Exists" in self._info_params and
-            self._info_params["GetWave_Exists"].pvalue == True):
+        if calc_getw and (
+            self._info_params and "GetWave_Exists" in self._info_params and  # noqa: W504
+            self._info_params["GetWave_Exists"].pvalue
+        ):
             # Get model's step response.
             # - Give the model `ignore_bits` random bits, to adapt itself.
             # - After that, limit run length, to prevent de-adaptation.
@@ -608,7 +609,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             u = np.concatenate(     # Construct the desired bit sequence.
                 (rng.integers(low=0, high=2, size=ignore_bits),
                  np.resize(np.array([0, 1]).repeat(max_run_length), nbits)
-                )
+                 )
             ).repeat(nspui) - 0.5   # Apply oversampling.
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
             if debug:

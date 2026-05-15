@@ -31,7 +31,7 @@ def get_cdr_adaptation(ami_out_params: list[str]) -> Rvec:
     for key, value_strs in param_pairs:  # type: ignore
         key_lower_case = key.lower()
         if "cdr" in key_lower_case and (
-            "ui" in key_lower_case or "per" in key_lower_case):
+           "ui" in key_lower_case or "per" in key_lower_case):
             cdr_ui_estimates.append(float(value_strs[0]))
             cdr_ui_found = True
             break
@@ -40,7 +40,7 @@ def get_cdr_adaptation(ami_out_params: list[str]) -> Rvec:
             for key, value_strs in param_pairs:  # type: ignore
                 key_lower_case = key.lower()
                 if "cdr" in key_lower_case and (
-                    "ui" in key_lower_case or "per" in key_lower_case):
+                   "ui" in key_lower_case or "per" in key_lower_case):
                     cdr_ui_estimates.append(float(value_strs[0]))
                     break
     return np.array(cdr_ui_estimates)

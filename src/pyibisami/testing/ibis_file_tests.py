@@ -17,14 +17,13 @@ from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Paragraph, Spacer
 
 from ..ibis.file import IBISModel
-from ..util.reportlab import bold, preformatted, page_break, styles, H1, H2, P
+from ..util.reportlab import preformatted, page_break, styles, H1
 
 from .ami_tests import test_ami_model
-from .test_defs import TestSweep
 
 IBIS_CHK_EXEC = "ibischk7_64"
 
-spacer = Spacer(1, 0.25*inch)
+spacer = Spacer(1, 0.25 * inch)
 
 
 def get_ibis_contents(
@@ -87,7 +86,7 @@ def test_ami_models(
     ami_model_names: list[str],
     test_sweeps_dir: Path,
     model_name: Optional[str] = None,
-    debug: bool=False
+    debug: bool = False
 ) -> list[Flowable]:
     """
     Test a subset of the IBIS-AMI models in the ``*.ibs`` file.

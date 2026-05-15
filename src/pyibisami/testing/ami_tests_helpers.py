@@ -19,15 +19,12 @@ from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Image, Paragraph, Spacer
 from scipy.signal           import convolve
 
-from ..common           import Rvec
-from ..ami.model        import AMIModel, AMIModelInitializer, OUT_RESP_INIT
+from ..ami.model        import AMIModel, AMIModelInitializer
 from ..ami.parser       import AMIParamConfigurator
 
 from ..util.plot        import (
     RGB, RED, GREEN, BLUE, PLOT_COLOR, PLOT_LINESTYLE,
-    plt, color_picker, do_samples_per_bit,
-    plot_dfe_adaptation, plot_model_adaptation,
-    plot_model_results, plot_resps)
+    plt, do_samples_per_bit, plot_model_adaptation, plot_model_results)
 from ..util.reportlab   import P, preformatted
 
 from .test_defs         import TestSweep
@@ -35,7 +32,7 @@ from .test_defs         import TestSweep
 FIG_X_DFLT = 6
 FIG_Y_DFLT = 4
 
-spacer = Spacer(1, 0.25*inch)
+spacer = Spacer(1, 0.25 * inch)
 
 
 class AmiTestHelper:
@@ -120,7 +117,7 @@ class AmiTestHelperSamplesPerBit(AmiTestHelper):
     ) -> Figure:
 
         model_responses = do_samples_per_bit(model, initializer, nbits)
-        
+
         fig = plt.figure(figsize=(fig_x, fig_y))
         top_fig, bottom_fig = fig.subfigures(2, 1)
         top_fig.suptitle("Model Responses (Post-Adaptation)")
@@ -132,13 +129,11 @@ class AmiTestHelperSamplesPerBit(AmiTestHelper):
                PLOT_LINESTYLE: "solid"},
               {PLOT_COLOR: f"{color}",
                PLOT_LINESTYLE: "dashed"}
-             )
-            ) for (model_response, osf), color in zip(model_responses, [RED, GREEN, BLUE])
+              )
+             ) for (model_response, osf), color in zip(model_responses, [RED, GREEN, BLUE])
         ]
-        plot_model_results(model_resps, top_fig, plot_t_max) #, debug=True)
-
-        ax = bottom_fig.subplots(1,1)
-        plot_dfe_adaptation(model.getwave_step_response_out_params, ax)
+        plot_model_results(model_resps, top_fig, plot_t_max)
+        plot_model_adaptation(model, bottom_fig)
 
         return fig
 
@@ -182,9 +177,9 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
             ys = np.array([])
             while smpl_cnt < len_u:
                 if smpl_cnt + input_len > len_u:
-                    x = w[smpl_cnt :]
+                    x = w[smpl_cnt:]
                 else:
-                    x = w[smpl_cnt : smpl_cnt + input_len]
+                    x = w[smpl_cnt: smpl_cnt + input_len]
                 y, _, _ = model.getWave(x)
                 assert not any(np.isnan(y)), RuntimeError(
                     f"any(np.isnan(x)): {any(np.isnan(x))}")
@@ -196,7 +191,7 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
             plt.subplot(122)
             Ys = np.fft.rfft(ys)
             plt.semilogx(f / 1e9, 20 * np.log10(np.abs(Ys)), label=str(bits_per_call))
-        
+
         plt.subplot(121)
         plt.title("AMI_GetWave() Output")
         plt.xlabel("Time (ns)")
@@ -204,7 +199,7 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
         plt.axis(xmin=t[-20 * nspui] * 1e9, xmax=t[-1] * 1e9)
         plt.legend()
         plt.grid()
-        
+
         plt.subplot(122)
         plt.title("Spectral Content")
         plt.xlabel("Frequency (GHz)")
@@ -259,7 +254,7 @@ def plot_sweep(
         # plt.tight_layout()  # Doesn't work w/ subfigures.
         with NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
             plt.savefig(tmp_file)
-            flowables.append(Image(tmp_file.name, width=fig_x*inch, height=fig_y*inch))
+            flowables.append(Image(tmp_file.name, width=fig_x * inch, height=fig_y * inch))
         plt.close()
         flowables.append(spacer)
     return flowables

@@ -552,7 +552,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
 
     def log_warning(msg: str) -> None:
         warnings.append(msg)
-    
+
     reserved_found = False
     init_returns_impulse_found = False
     getwave_exists_found = False
@@ -616,8 +616,8 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
         {root_name: {"description":         description,
                      "Reserved_Parameters": reserved_params_dict,
                      "Model_Specific":      model_specific_dict
-                    }
-        }
+                     }
+         }
     )
 
 

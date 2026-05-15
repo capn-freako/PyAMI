@@ -11,9 +11,8 @@ Copyright (C) 2026 David Banas; all rights reserved World wide.
 from abc                import abstractmethod
 from dataclasses        import dataclass
 from pathlib            import Path
-from typing             import Any, Generator, NewType, Optional, TypeAlias
+from typing             import Any, Generator, NewType, Optional
 
-import em
 import numpy as np
 from scipy.interpolate  import interp1d
 from scipy.signal       import butter, freqs, lfilter
@@ -25,41 +24,41 @@ from ..ibis.file        import IBISModel
 TestSweeper = NewType('TestSweeper', tuple[Optional[str], list[type["TestSweep"]]])
 
 SIM_PARAMS = [
-	"channel_response",
-	"sample_interval",
-	"bit_time",
-	"row_size",
-	"num_aggressors",
-	"nbits",
+    "channel_response",
+    "sample_interval",
+    "bit_time",
+    "row_size",
+    "num_aggressors",
+    "nbits",
 ]
 
 
 @dataclass(frozen=True)
 class TestDefinition:
-	"Defines one iteration of a PyIBIS-AMI IBIS-AMI model testing sweep."
+    "Defines one iteration of a PyIBIS-AMI IBIS-AMI model testing sweep."
 
-	description: str
-	ami_params: dict[str, Any]
-	sim_params: dict[str, Any]
-	reference: Optional[Path] = None
+    description: str
+    ami_params: dict[str, Any]
+    sim_params: dict[str, Any]
+    reference: Optional[Path] = None
 
-	def __post_init__(self):
-		if not isinstance(self.description, str):
-			raise TypeError(f"The `description` field should contain a string, not a {type(self.description)}.")
-		if not isinstance(self.ami_params, dict):
-			raise TypeError(f"The `ami_params` field should contain a dictionary, not a {type(self.ami_params)}.")
-		if not isinstance(self.sim_params, dict):
-			raise TypeError(f"The `sim_params` field should contain a dictionary, not a {type(self.sim_params)}.")
-		sim_params_keys = list(self.sim_params.keys())
-		if sim_params_keys:
-			first_key = sim_params_keys[0]
-			if first_key not in SIM_PARAMS:
-				raise ValueError(f"Values of keys in the `sim_params` dictionary must be one of: {SIM_PARAMS}, not {first_key}")
-		if self.reference:
-			if not isinstance(self.reference, Path):
-				raise TypeError(f"The `reference` field should contain a Path, not a {type(self.reference)}.")
-			if not self.reference.exists():
-				raise ValueError(f"The given reference file path: {Path}, does not exist.")
+    def __post_init__(self):
+        if not isinstance(self.description, str):
+            raise TypeError(f"The `description` field should contain a string, not a {type(self.description)}.")
+        if not isinstance(self.ami_params, dict):
+            raise TypeError(f"The `ami_params` field should contain a dictionary, not a {type(self.ami_params)}.")
+        if not isinstance(self.sim_params, dict):
+            raise TypeError(f"The `sim_params` field should contain a dictionary, not a {type(self.sim_params)}.")
+        sim_params_keys = list(self.sim_params.keys())
+        if sim_params_keys:
+            first_key = sim_params_keys[0]
+            if first_key not in SIM_PARAMS:
+                raise ValueError(f"Values of keys in the `sim_params` dictionary must be one of: {SIM_PARAMS}, not {first_key}")
+        if self.reference:
+            if not isinstance(self.reference, Path):
+                raise TypeError(f"The `reference` field should contain a Path, not a {type(self.reference)}.")
+            if not self.reference.exists():
+                raise ValueError(f"The given reference file path: {Path}, does not exist.")
 
 
 class TestSweep:
@@ -78,10 +77,10 @@ class TestSweep:
 
 
 def mk_default_test_sweep_file(
-	ibis_file: Path,
-	model_name: str,
-	out_dir: Path = Path("./test_runs/"),
-	debug: bool = False
+    ibis_file: Path,
+    model_name: str,
+    out_dir: Path = Path("./test_runs/"),
+    debug: bool = False
 ) -> Path:
     """
     Create a default parameter sweep specification file for an IBIS-AMI model.
@@ -91,10 +90,10 @@ def mk_default_test_sweep_file(
         model_name: The name of the model being tested.
 
     Keyword Args:
-    	out_dir: Directory in which parameter sweep definition files are stored.
-    		Default: ``./test_runs/``
+        out_dir: Directory in which parameter sweep definition files are stored.
+            Default: ``./test_runs/``
         debug: Set to ``True`` for debugging mode.
-        	Default: ``False``
+            Default: ``False``
 
     Returns:
         The path to the created parameter sweep specification template file.
@@ -142,80 +141,80 @@ def mk_default_test_sweep_file(
 
 
 def perfect_channel(
-	osf: int, nbits: int, ts: float
+    osf: int, nbits: int, ts: float
 ) -> Rvec:
-	"""
-	Perfect channel response (i.e - Kronecker delta)
+    """
+    Perfect channel response (i.e - Kronecker delta)
 
-	Args:
-		osf: Over-sampling factor of returned vector.
-		nbits: Total number of bits in returned vector.
-		ts: Sampling interval of returned vector.
+    Args:
+        osf: Over-sampling factor of returned vector.
+        nbits: Total number of bits in returned vector.
+        ts: Sampling interval of returned vector.
 
-	Returns:
-		The perfect channel response.
-	"""
+    Returns:
+        The perfect channel response.
+    """
 
-	return np.array([1.0] + [0.0] * (osf - 1) + [0.0] * (nbits - 1) * osf) / ts
+    return np.array([1.0] + [0.0] * (osf - 1) + [0.0] * (nbits - 1) * osf) / ts
 
 
 def lossy_channel(
-	osf: int, nbits: int, ts: float,
-	bw: float = 0.05
+    osf: int, nbits: int, ts: float,
+    bw: float = 0.05
 ) -> Rvec:
-	"""
-	Perfect channel response (i.e - Kronecker delta)
+    """
+    Perfect channel response (i.e - Kronecker delta)
 
-	Args:
-		osf: Over-sampling factor of returned vector.
-		nbits: Total number of bits in returned vector.
-		ts: Sampling interval of returned vector.
+    Args:
+        osf: Over-sampling factor of returned vector.
+        nbits: Total number of bits in returned vector.
+        ts: Sampling interval of returned vector.
 
-	Keyword Args:
-		bw: Bandwidth of filter used (bit_rate)
+    Keyword Args:
+        bw: Bandwidth of filter used (bit_rate)
 
-	Returns:
-		The perfect channel response.
-	"""
+    Returns:
+        The perfect channel response.
+    """
 
-	bit_rate = 1 / ts / osf
-	b, a = butter(1, bw * bit_rate, fs = 1 / ts)
-	return lfilter(
-	    b, a, np.array([0., 1.] + [0.] * (osf - 2) + [0.0] * (nbits - 1) * osf)
-	) / ts
+    bit_rate = 1 / ts / osf
+    b, a = butter(1, bw * bit_rate, fs=1 / ts)
+    return lfilter(
+        b, a, np.array([0., 1.] + [0.] * (osf - 2) + [0.0] * (nbits - 1) * osf)
+    ) / ts
 
 
 def reflective_channel(
-	osf: int, nbits: int, ts: float,
+    osf: int, nbits: int, ts: float,
     f_max: float = 40e9, f_step: float = 10e6
-	) -> Rvec:
-	"""
-	Perfect channel response (i.e - Kronecker delta)
+) -> Rvec:
+    """
+    Perfect channel response (i.e - Kronecker delta)
 
-	Args:
-		osf: Over-sampling factor of returned vector.
-		nbits: Total number of bits in returned vector.
-		ts: Sampling interval of returned vector.
+    Args:
+        osf: Over-sampling factor of returned vector.
+        nbits: Total number of bits in returned vector.
+        ts: Sampling interval of returned vector.
 
-	Keyword Args:
-		f_max: Maximum frequency of interest.
-		f_step: Frequency step to use.
+    Keyword Args:
+        f_max: Maximum frequency of interest.
+        f_step: Frequency step to use.
 
-	Returns:
-		The perfect channel response.
-	"""
+    Returns:
+        The perfect channel response.
+    """
 
-	bit_rate = 1 / ts / osf
-	t = np.arange(nbits * osf) * ts
-	f = np.arange(0, f_max + f_step, f_step)
-	w = 2 * np.pi * f
-	_ts = 0.5 / f_max
-	t_fft = np.array([n * _ts for n in range(2 * (len(f) - 1))])
-	b, a = butter(1, 2 * np.pi * bit_rate / 2, analog=True)
-	_, H = freqs(b, a, worN=w)
-	td = 1 / bit_rate   # one-way channel delay = UI
-	r = 0.2             # reflection coefficient
-	H *= (1 - r) * np.exp(-1j * w * td) / (1 - r * np.exp(-2j * w * td))
-	h = np.fft.irfft(raised_cosine(H)) / _ts
-	krnl = interp1d(t_fft, h)
-	return krnl(t)
+    bit_rate = 1 / ts / osf
+    t = np.arange(nbits * osf) * ts
+    f = np.arange(0, f_max + f_step, f_step)
+    w = 2 * np.pi * f
+    _ts = 0.5 / f_max
+    t_fft = np.array([n * _ts for n in range(2 * (len(f) - 1))])
+    b, a = butter(1, 2 * np.pi * bit_rate / 2, analog=True)
+    _, H = freqs(b, a, worN=w)
+    td = 1 / bit_rate   # one-way channel delay = UI
+    r = 0.2             # reflection coefficient
+    H *= (1 - r) * np.exp(-1j * w * td) / (1 - r * np.exp(-2j * w * td))
+    h = np.fft.irfft(raised_cosine(H)) / _ts
+    krnl = interp1d(t_fft, h)
+    return krnl(t)
