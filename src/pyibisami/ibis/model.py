@@ -198,7 +198,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
         elif mtype == "input":
             if "gnd_clamp" not in subDict and "power_clamp" not in subDict:
-                # raise LookupError("Missing clamp curves!")
                 pass
 
             plotdata = ArrayPlotData()

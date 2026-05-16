@@ -54,6 +54,7 @@ class MyDocTemplate(BaseDocTemplate):
         if isinstance(flowable, Paragraph):
             text = flowable.getPlainText()
             # If the paragraph is a heading, add to TOC
+            # ToDo: Figure out why heading levels 2&3 are not clickable in TOC.
             match flowable.style.name:
                 case 'Heading1':
                     key = 'h1-%s' % self.seq.nextf('heading1')

@@ -31,6 +31,7 @@ from .test_defs         import TestSweep
 
 FIG_X_DFLT = 6
 FIG_Y_DFLT = 4
+MIN_IGNORE_BITS = 100
 
 spacer = Spacer(1, 0.25 * inch)
 
@@ -157,6 +158,7 @@ class AmiTestHelperGetwaveInputLength(AmiTestHelper):
             ignore_bits = model.info_params["Ignore_Bits"].pvalue
         else:
             ignore_bits = 0
+        ignore_bits = max(MIN_IGNORE_BITS, ignore_bits)
 
         # Assemble complete input vector, including bits to be ignored.
         u = (np.array([randrange(2) for _ in range(ignore_bits + nbits)]) * 2 - 1).repeat(nspui)
