@@ -33,23 +33,12 @@ class Component(HasTraits):
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
 
-        # Fetch available keyword/parameter definitions.
-        def maybe(name):
-            return subDict[name] if name in subDict else None
-
-        self._mfr = maybe("manufacturer")
-        self._pkg = maybe("package")
-        self._pins = maybe("pin")
-        self._diffs = maybe("diff_pin")
-
-        # Check for the required keywords.
-        if not self._mfr:
-            raise LookupError("Missing [Manufacturer]!")
-        if not self._pkg:
-            print(self._mfr)
-            raise LookupError("Missing [Package]!")
-        if not self._pins:
-            raise LookupError("Missing [Pin]!")
+        # Fetch available keyword/parameter definitions,
+        # flagging an error if any required keywords are missing.
+        self._mfr = subDict["manufacturer"]    # Will flag error if missing.
+        self._pkg = subDict["package"]
+        self._pins = subDict["pin"]
+        self._diffs = subDict.get("diff_pin")  # Won't flag error; returns `None`.
 
         # Set up the GUI.
         self.add_trait("manufacturer", String(self._mfr))
@@ -209,7 +198,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
         elif mtype == "input":
             if "gnd_clamp" not in subDict and "power_clamp" not in subDict:
-                # raise LookupError("Missing clamp curves!")
                 pass
 
             plotdata = ArrayPlotData()
@@ -400,5 +388,17 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     @property
     def mtype(self):
-        """Model type."""
+        "Model type."
         return self._mtype
+
+    @property
+    def is_ami(self):
+        "AMI model flag."
+        return ("algorithmic_model" in self._subDict)
+
+    @property
+    def ami_files(self):
+        return {
+            "32-bit": {"lin": self._exec32Lins, "win": self._exec32Wins},
+            "64-bit": {"lin": self._exec64Lins, "win": self._exec64Wins}
+        }

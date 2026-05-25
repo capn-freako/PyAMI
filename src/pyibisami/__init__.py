@@ -17,6 +17,6 @@ try:
 except Exception as err:  # pylint: disable=broad-exception-caught
     __version__ = f"{err} (dev)"
 
-__date__ = "October 12, 2023"
+__date__ = "May 16, 2026"
 __authors__ = "David Banas & David Patterson"
 __copy__ = "Copyright (c) 2012 David Banas, 2019 David Patterson"
