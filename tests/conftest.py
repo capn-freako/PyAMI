@@ -166,3 +166,82 @@ dV/dt_f    0.540/108.00p    0.512/511.58p    0.566/56.57p
 """
         )
     return ibis_file
+
+
+@pytest.fixture
+def ibis_test_file_with_ami_test_config(tmp_path):
+    """Return an IBIS file containing [AMI Test Configuration] blocks."""
+    ibis_file = tmp_path.joinpath("test_with_tc.ibs")
+    with open(ibis_file, "w", encoding="UTF-8") as output:
+        output.write(
+            r"""[IBIS Ver]   5.1
+
+[File Name]  example_tx.ibs
+[File Rev]   v0.1
+
+[Date]       2019-02-10
+
+[Source]     ibisami
+
+[Component]    Example_Tx
+[Manufacturer] (n/a)
+
+[Package]
+R_pkg     0.10     0.00     0.50
+L_pkg    10.00n    0.10n   50.00n
+C_pkg     1.00p    0.01p    5.00p
+
+[Pin]  signal_name        model_name
+1p     Tx_1_P             example_tx
+
+[Model]   example_tx
+Model_type   Output
+
+[Algorithmic Model]
+Executable linux_gcc4.1.2_64          example_tx_x86_amd64.so   example_tx.ami
+Executable Windows_VisualStudio_64    example_tx_x86_amd64.dll  example_tx.ami
+| Statistical test configuration
+[AMI Test Configuration] Typ_stat
+Type Statistical
+Direction Tx
+Input_IR_file four_tap_input_IR.txt
+AMI_input_parameters_file four_tap_tx_params_stat.txt
+Golden_IR_file four_tap_output_IR_typ.txt
+AMI_output_parameters_file four_tap_output_params_stat.txt
+Executable_index 1
+| Time-domain test configuration
+[AMI Test Configuration] Typ_td
+Type Time_domain
+Direction Tx
+Input_IR_file four_tap_input_IR.txt
+Input_waveform_file four_tap_input_bits.txt
+AMI_input_parameters_file four_tap_tx_params_td.txt
+Golden_IR_file four_tap_output_IR_typ.txt
+Golden_waveform_file four_tap_output_wave_typ.txt
+AMI_output_parameters_file four_tap_output_params_td.txt
+Executable_index 2
+[End Algorithmic Model]
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[Pulldown]
+-1.80    -1.000e+01    -1.000e+01    -1.000e+01
+0.00     0.000e+00     0.000e+00     0.000e+00
+1.80     3.600e-02     4.000e-02     3.273e-02
+3.60     1.000e+01     1.000e+01     1.000e+01
+
+[Pullup]
+-1.80    1.000e+01     1.000e+01     1.000e+01
+0.00     -0.000e+00    -0.000e+00    -0.000e+00
+1.80     -3.600e-02    -4.000e-02    -3.273e-02
+3.60     -1.000e+01    -1.000e+01    -1.000e+01
+
+[Ramp]
+dV/dt_r    0.540/108.00p    0.512/511.58p    0.566/56.57p
+dV/dt_f    0.540/108.00p    0.512/511.58p    0.566/56.57p
+
+[END]
+"""
+        )
+    return ibis_file

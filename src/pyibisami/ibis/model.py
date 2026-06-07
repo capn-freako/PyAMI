@@ -285,8 +285,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         self._exec32Wins, self._exec32Lins = [], []
         self._exec64Wins, self._exec64Lins = [], []
+        self._test_configs: dict = {}
         if "algorithmic_model" in subDict:
-            execs = subDict["algorithmic_model"]
+            algo_model_data = subDict["algorithmic_model"]
+            execs = algo_model_data.get("executables", [])
+            self._test_configs = algo_model_data.get("test_configs", {})
             exec64s, exec32s = partition(is64, execs)
             self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
             self._exec64Wins, self._exec64Lins = splitExecs(exec64s)
@@ -402,3 +405,15 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             "32-bit": {"lin": self._exec32Lins, "win": self._exec32Wins},
             "64-bit": {"lin": self._exec64Lins, "win": self._exec64Wins}
         }
+
+    @property
+    def test_configs(self) -> dict:
+        "Named [AMI Test Configuration] blocks from the IBIS file."
+        return self._test_configs
+
+    @property
+    def executables(self) -> list:
+        "Raw ordered list of Executable entries from [Algorithmic Model], for executable_index lookup."
+        if "algorithmic_model" in self._subDict:
+            return self._subDict["algorithmic_model"].get("executables", [])
+        return []
