@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-All commands must be prefixed with `uv run`. The project uses `uv` for environment and dependency management.
+All commands, except make commands, must be prefixed with `uv run`. The project uses `uv` for environment and dependency management.
 
 ```bash
 # Run all tests (current Python only)
