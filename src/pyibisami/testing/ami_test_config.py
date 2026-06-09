@@ -355,47 +355,46 @@ def _check_time_domain(
             input_wave  = _load_numeric_file(ibis_dir / config["input_waveform_file"])
             golden_wave = _load_numeric_file(ibis_dir / config["golden_waveform_file"])
         except Exception as exc:
-            return AmiTestConfigResult(
-                config_name=config_name, passed=False,
-                message=f"Failed to load waveform file: {exc}")
-
-        # Compute bits_per_call from wave_size (fixed samples per AMI_GetWave call).
-        samps_per_bit = max(1, round(initializer.bit_time / initializer.sample_interval))
-        wave_size     = int(sim_params.get("wave_size", str(num_rows)))
-        bits_per_call = max(1, wave_size // samps_per_bit)
-
-        try:
-            wave_out, _clocks, _params_list = ami_model.getWave(
-                input_wave, bits_per_call=bits_per_call)
-            n        = min(len(wave_out), len(golden_wave))
-            diff     = wave_out[:n] - golden_wave[:n]
-            wave_max = float(np.max(np.abs(diff)))
-            wave_rms = float(np.sqrt(np.mean(diff ** 2)))
-            if wave_max > tol_wave:
-                passed = False
-                messages.append(
-                    f"Waveform max|err|={wave_max:.3e} exceeds tolerance {tol_wave:.3e}")
-        except Exception as exc:
             passed = False
-            messages.append(f"GetWave comparison failed: {exc}")
+            messages.append(f"Failed to load waveform file: {exc}")
+        else:
+            # Compute bits_per_call from wave_size (fixed samples per AMI_GetWave call).
+            samps_per_bit = max(1, int(initializer.bit_time / initializer.sample_interval))
+            wave_size     = int(sim_params.get("wave_size", str(num_rows)))
+            bits_per_call = max(1, wave_size // samps_per_bit)
 
-        # --- params_out: compare last block against golden file ---
-        try:
-            golden_path = ibis_dir / config["ami_output_parameters_file"]
-            with open(golden_path, encoding="utf-8") as fh:
-                golden_str = fh.read()
-            actual_norm  = _normalize_params_str(ami_model.ami_params_out)
-            golden_norm  = _normalize_params_str(golden_str)
-            params_out_match = (actual_norm == golden_norm)
-            if not params_out_match:
+            try:
+                wave_out, _clocks, _params_list = ami_model.getWave(
+                    input_wave, bits_per_call=bits_per_call)
+                n        = min(len(wave_out), len(golden_wave))
+                diff     = wave_out[:n] - golden_wave[:n]
+                wave_max = float(np.max(np.abs(diff)))
+                wave_rms = float(np.sqrt(np.mean(diff ** 2)))
+                if wave_max > tol_wave:
+                    passed = False
+                    messages.append(
+                        f"Waveform max|err|={wave_max:.3e} exceeds tolerance {tol_wave:.3e}")
+            except Exception as exc:
                 passed = False
-                messages.append(
-                    f"params_out mismatch.\n"
-                    f"  Got:      {actual_norm}\n"
-                    f"  Expected: {golden_norm}")
-        except Exception as exc:
-            passed = False
-            messages.append(f"params_out comparison failed: {exc}")
+                messages.append(f"GetWave comparison failed: {exc}")
+
+            # --- params_out: compare last block against golden file ---
+            try:
+                golden_path = ibis_dir / config["ami_output_parameters_file"]
+                with open(golden_path, encoding="utf-8") as fh:
+                    golden_str = fh.read()
+                actual_norm  = _normalize_params_str(ami_model.ami_params_out)
+                golden_norm  = _normalize_params_str(golden_str)
+                params_out_match = (actual_norm == golden_norm)
+                if not params_out_match:
+                    passed = False
+                    messages.append(
+                        f"params_out mismatch.\n"
+                        f"  Got:      {actual_norm}\n"
+                        f"  Expected: {golden_norm}")
+            except Exception as exc:
+                passed = False
+                messages.append(f"params_out comparison failed: {exc}")
 
     msg = "PASS" if passed else "FAIL: " + "; ".join(messages)
     return AmiTestConfigResult(
