@@ -55,7 +55,7 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 - **`file.py`**: `IBISModel(HasTraits)` — high-level object that holds the full parsed IBIS file, including all `Component` and `Model` instances.
 
 ### `testing/` — Model test runners
-- **`ami_test_config.py`**: IBIS 8.0 §10.11 runner. `run_ami_test_config(ibis_file_dir, model, config_name)` loads the files named in an `[AMI Test Configuration]` block, calls `AMI_Init()` (and `AMI_GetWave()` for `Time_domain`), and compares against golden data. Returns `AmiTestConfigResult`. `run_all_ami_test_configs()` runs every config in a model.
+- **`ami_test_config.py`**: IBIS 8.0 §10.11 runner. `run_ami_test_config(ibis_file_dir, model, config_name)` loads the files named in an `[AMI Test Configuration]` block, calls `AMI_Init()` (and `AMI_GetWave()` for `Time_domain`), and compares against golden data. Returns `AmiTestConfigResult`. `run_all_ami_test_configs()` runs every config in a model. Also exposes the `check-ami` CLI entry point.
 - **`test_models.py`**: `test-model` CLI entry point; runs the notebook-based testing pipeline.
 - **`ami_tests.py` / `ami_tests_helpers.py`**: older EmPy-template-based test infrastructure (used by `run-tests` CLI).
 - **`test_defs.py`**: shared test-definition helpers consumed by both the old and new test runners.

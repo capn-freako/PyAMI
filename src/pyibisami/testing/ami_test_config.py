@@ -6,12 +6,14 @@ embeds golden input/output data so any EDA tool can verify the model produces
 the same output the model-maker intended.  This module drives that verification.
 """
 
+import sys
 import re
 from ctypes    import c_double
 from dataclasses import dataclass, field
 from pathlib   import Path
 from typing    import Optional
 
+import click
 import numpy as np
 from parsec    import many
 
@@ -430,3 +432,79 @@ def run_all_ami_test_configs(
             tol_ir=tol_ir, tol_wave=tol_wave)
         for name in model.test_configs
     ]
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("ibis_file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--model-name", "-m", default=None,
+              help="Name of the [Model] to test.  Required when the .ibs file defines more than one model.")
+@click.option("--config", "-c", default=None,
+              help="Name of a single [AMI Test Configuration] to run.  Runs all configs when omitted.")
+@click.option("--tol-ir",   default=1e-6, show_default=True,
+              help="Absolute tolerance for impulse-response comparison.")
+@click.option("--tol-wave", default=1e-6, show_default=True,
+              help="Absolute tolerance for waveform comparison.")
+def main(ibis_file, model_name, config, tol_ir, tol_wave):
+    """Run [AMI Test Configuration] blocks embedded in an IBIS file (IBIS 8.0 §10.11).
+
+    Parses IBIS_FILE, locates the target model, then calls AMI_Init() (and
+    AMI_GetWave() for Time_domain configs) and compares the outputs against the
+    golden data files referenced in each [AMI Test Configuration] block.
+
+    Exits with status 1 if any configuration fails.
+    """
+    from ..ibis.parser import parse_ibis_file  # local import to avoid circular deps at module load
+
+    ibis_path = Path(ibis_file).resolve()
+    ibis_dir  = ibis_path.parent
+
+    status, ibis_dict = parse_ibis_file(ibis_path.read_text(encoding="utf-8"))
+    if status != "Success!":
+        click.echo(f"ERROR: failed to parse {ibis_path}: {status}", err=True)
+        sys.exit(1)
+
+    models: dict = ibis_dict.get("models", {})
+    if not models:
+        click.echo("ERROR: no [Model] sections found in the IBIS file.", err=True)
+        sys.exit(1)
+
+    if model_name is None:
+        if len(models) == 1:
+            model_name = next(iter(models))
+        else:
+            click.echo(
+                f"ERROR: the file contains multiple models ({', '.join(models)}); "
+                "specify one with --model-name / -m.",
+                err=True)
+            sys.exit(1)
+
+    if model_name not in models:
+        click.echo(f"ERROR: model '{model_name}' not found (available: {', '.join(models)}).", err=True)
+        sys.exit(1)
+
+    model_obj = models[model_name]
+    if not model_obj.test_configs:
+        click.echo(f"No [AMI Test Configuration] blocks found in model '{model_name}'.")
+        sys.exit(0)
+
+    if config:
+        results = [run_ami_test_config(ibis_dir, model_obj, config, tol_ir=tol_ir, tol_wave=tol_wave)]
+    else:
+        results = run_all_ami_test_configs(ibis_dir, model_obj, tol_ir=tol_ir, tol_wave=tol_wave)
+
+    any_failed = False
+    for result in results:
+        click.echo(str(result))
+        if not result.passed:
+            any_failed = True
+
+    if any_failed:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()  # pylint: disable=no-value-for-parameter
