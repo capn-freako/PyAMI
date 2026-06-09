@@ -176,6 +176,7 @@ class AMIModelInitializer:
             Default) 100e-12 (10 Gbits/s)
         """
 
+        self._init_data = dict(self.__class__._init_data)
         self.ami_params = {"root_name": ""}
         self.ami_params.update(ami_params)
         self.info_params = info_params

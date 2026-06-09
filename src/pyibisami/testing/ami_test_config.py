@@ -125,6 +125,27 @@ def _load_numeric_file(path: Path) -> np.ndarray:
     return np.loadtxt(str(path))
 
 
+def _compare_ir(
+    ami_model: "AMIModel",
+    ibis_dir: Path,
+    config: dict,
+    tol_ir: float,
+) -> tuple[bool, list[str], Optional[float], Optional[float]]:
+    """Compare AMI_Init() output IR against the golden file named in config."""
+    try:
+        golden_ir = _load_numeric_file(ibis_dir / config["golden_ir_file"])
+        init_out  = np.array(ami_model.initOut)
+        n         = min(len(init_out), len(golden_ir.flatten()))
+        diff      = init_out[:n] - golden_ir.flatten()[:n]
+        ir_max    = float(np.max(np.abs(diff)))
+        ir_rms    = float(np.sqrt(np.mean(diff ** 2)))
+        ok        = ir_max <= tol_ir
+        msgs      = [] if ok else [f"IR max|err|={ir_max:.3e} exceeds tolerance {tol_ir:.3e}"]
+        return ok, msgs, ir_max, ir_rms
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        return False, [f"IR comparison failed: {exc}"], None, None
+
+
 def _normalize_params_str(s: str) -> str:
     """Collapse internal whitespace for string-level params_out comparison."""
     return re.sub(r"\s+", " ", s.strip())
@@ -269,20 +290,10 @@ def _check_statistical(
     params_out_match = False
 
     # --- IR comparison ---
-    try:
-        golden_ir  = _load_numeric_file(ibis_dir / config["golden_ir_file"])
-        init_out   = np.array(ami_model.initOut)
-        n          = min(len(init_out), len(golden_ir.flatten()))
-        diff       = init_out[:n] - golden_ir.flatten()[:n]
-        ir_max     = float(np.max(np.abs(diff)))
-        ir_rms     = float(np.sqrt(np.mean(diff ** 2)))
-        if ir_max > tol_ir:
-            passed = False
-            messages.append(
-                f"IR max|err|={ir_max:.3e} exceeds tolerance {tol_ir:.3e}")
-    except Exception as exc:
+    ok, msgs, ir_max, ir_rms = _compare_ir(ami_model, ibis_dir, config, tol_ir)
+    if not ok:
         passed = False
-        messages.append(f"IR comparison failed: {exc}")
+        messages.extend(msgs)
 
     # --- params_out comparison ---
     try:
@@ -331,20 +342,10 @@ def _check_time_domain(
 
     # --- Optional IR comparison ---
     if config.get("golden_ir_file", "").strip():
-        try:
-            golden_ir = _load_numeric_file(ibis_dir / config["golden_ir_file"])
-            init_out  = np.array(ami_model.initOut)
-            n         = min(len(init_out), len(golden_ir.flatten()))
-            diff      = init_out[:n] - golden_ir.flatten()[:n]
-            ir_max    = float(np.max(np.abs(diff)))
-            ir_rms    = float(np.sqrt(np.mean(diff ** 2)))
-            if ir_max > tol_ir:
-                passed = False
-                messages.append(
-                    f"IR max|err|={ir_max:.3e} exceeds tolerance {tol_ir:.3e}")
-        except Exception as exc:
+        ok, msgs, ir_max, ir_rms = _compare_ir(ami_model, ibis_dir, config, tol_ir)
+        if not ok:
             passed = False
-            messages.append(f"IR comparison failed: {exc}")
+            messages.extend(msgs)
 
     # --- Waveform comparison via AMI_GetWave() ---
     if not ami_model.has_getwave:
