@@ -106,6 +106,8 @@ def rest_line() -> GenParser[str]:  # type: ignore
 skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
 name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name: Parser = word(name_only)
+# Parameters must begin with a letter in column 1.
+param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true: Parser = lexeme(string("True")).result(True)
 false: Parser = lexeme(string("False")).result(False)
@@ -190,7 +192,7 @@ ex_line: Parser = (
 @generate("[AMI Test Configuration] subparam")
 def ami_tc_param() -> GenParser[tuple[str, str]]:
     "Parse a single [AMI Test Configuration] subparameter line."
-    pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
+    pname = yield param_name
     pval = yield rest_line
     return (pname.lower(), pval.strip())
 
@@ -296,8 +298,7 @@ model_type = reduce(try_choice, model_type_parsers)
 @generate("IBIS parameter")
 def param() -> GenParser[tuple[str, Any]]:
     "Parse IBIS parameter."
-    # Parameters must begin with a letter in column 1.
-    pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
+    pname = yield param_name
     if DEBUG:
         print(f"Parsing parameter {pname}...", end="", flush=True)
     match pname:  # Handle special cases.
