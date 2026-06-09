@@ -348,7 +348,8 @@ def _check_time_domain(
 
     # --- Waveform comparison via AMI_GetWave() ---
     if not ami_model.has_getwave:
-        messages.append("Model has no AMI_GetWave(); waveform comparison skipped.")
+        passed = False
+        messages.append("Model has no AMI_GetWave(); Time_domain config requires it.")
     else:
         try:
             input_wave  = _load_numeric_file(ibis_dir / config["input_waveform_file"])
@@ -383,16 +384,15 @@ def _check_time_domain(
             golden_path = ibis_dir / config["ami_output_parameters_file"]
             with open(golden_path, encoding="utf-8") as fh:
                 golden_str = fh.read()
-            # For Time_domain the golden file contains accumulated blocks; we
-            # compare only the final ami_params_out string (last GetWave call).
             actual_norm  = _normalize_params_str(ami_model.ami_params_out)
             golden_norm  = _normalize_params_str(golden_str)
-            params_out_match = (actual_norm in golden_norm)  # substring: last block must appear
+            params_out_match = (actual_norm == golden_norm)
             if not params_out_match:
                 passed = False
                 messages.append(
-                    f"Last params_out block not found in golden params_out file.\n"
-                    f"  Got: {actual_norm}")
+                    f"params_out mismatch.\n"
+                    f"  Got:      {actual_norm}\n"
+                    f"  Expected: {golden_norm}")
         except Exception as exc:
             passed = False
             messages.append(f"params_out comparison failed: {exc}")
