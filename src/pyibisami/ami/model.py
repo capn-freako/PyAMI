@@ -125,16 +125,6 @@ class AMIModelInitializer:
 
     # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
-    ami_params = {"root_name": ""}
-
-    _init_data = {
-        "channel_response": (c_double * 128)(0.0, 1.0, 0.0),
-        "row_size": 128,
-        "num_aggressors": 0,
-        "sample_interval": c_double(25.0e-12),
-        "bit_time": c_double(0.1e-9),
-    }
-
     def __init__(self, ami_params: dict, info_params: Optional[dict] = None, **optional_args):
         """
         Constructor accepts a mandatory dictionary containing the AMI
@@ -176,7 +166,13 @@ class AMIModelInitializer:
             Default) 100e-12 (10 Gbits/s)
         """
 
-        self._init_data = dict(self.__class__._init_data)
+        self._init_data = {
+            "channel_response": (c_double * 128)(0.0, 1.0, 0.0),
+            "row_size": 128,
+            "num_aggressors": 0,
+            "sample_interval": c_double(25.0e-12),
+            "bit_time": c_double(0.1e-9),
+        }
         self.ami_params = {"root_name": ""}
         self.ami_params.update(ami_params)
         self.info_params = info_params
