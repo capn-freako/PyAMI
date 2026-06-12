@@ -106,11 +106,6 @@ def _coerce_param_value(v):
     if isinstance(v, (bool, int, float)):
         return v
     if isinstance(v, str):
-        # Booleans are already handled by the parser (True/False atoms), but guard anyway.
-        if v == "True":
-            return True
-        if v == "False":
-            return False
         try:
             if "." not in v and "e" not in v.lower():
                 return int(v)
@@ -125,6 +120,41 @@ def _load_numeric_file(path: Path) -> np.ndarray:
     return np.loadtxt(str(path))
 
 
+def _diff_metrics(diff: np.ndarray) -> tuple[float, float]:
+    "Return (max absolute error, RMS error) for a difference array."
+    return float(np.max(np.abs(diff))), float(np.sqrt(np.mean(diff ** 2)))
+
+
+def _compare_params_out(
+    ami_model: "AMIModel",
+    ibis_dir: Path,
+    config: dict,
+) -> tuple[bool, bool, list[str]]:
+    """Compare ami_params_out against the golden params file.
+
+    Returns:
+        (attempted, matched, error_messages) — *attempted* is False when the
+        config key is absent (treated as optional), True otherwise.
+    """
+    golden_path_str = config.get("ami_output_parameters_file", "").strip()
+    if not golden_path_str:
+        return False, False, []
+    try:
+        with open(ibis_dir / golden_path_str, encoding="utf-8") as fh:
+            golden_str = fh.read()
+        actual_norm = _normalize_params_str(ami_model.ami_params_out)
+        golden_norm = _normalize_params_str(golden_str)
+        matched = (actual_norm == golden_norm)
+        msgs = [] if matched else [
+            f"params_out mismatch.\n"
+            f"  Got:      {actual_norm}\n"
+            f"  Expected: {golden_norm}"
+        ]
+        return True, matched, msgs
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        return True, False, [f"params_out comparison failed: {exc}"]
+
+
 def _compare_ir(
     ami_model: "AMIModel",
     ibis_dir: Path,
@@ -133,12 +163,12 @@ def _compare_ir(
 ) -> tuple[bool, list[str], Optional[float], Optional[float]]:
     """Compare AMI_Init() output IR against the golden file named in config."""
     try:
-        golden_ir = _load_numeric_file(ibis_dir / config["golden_ir_file"])
-        init_out  = np.array(ami_model.initOut)
-        n         = min(len(init_out), len(golden_ir.flatten()))
-        diff      = init_out[:n] - golden_ir.flatten()[:n]
-        ir_max    = float(np.max(np.abs(diff)))
-        ir_rms    = float(np.sqrt(np.mean(diff ** 2)))
+        golden_ir  = _load_numeric_file(ibis_dir / config["golden_ir_file"])
+        golden_amp = golden_ir[:, 1] if golden_ir.ndim == 2 else golden_ir
+        init_out   = np.array(ami_model.initOut)
+        n          = min(len(init_out), len(golden_amp))
+        diff       = init_out[:n] - golden_amp[:n]
+        ir_max, ir_rms = _diff_metrics(diff)
         ok        = ir_max <= tol_ir
         msgs      = [] if ok else [f"IR max|err|={ir_max:.3e} exceeds tolerance {tol_ir:.3e}"]
         return ok, msgs, ir_max, ir_rms
@@ -191,7 +221,7 @@ def run_ami_test_config(
             config_name=config_name, passed=False,
             message=f"No [AMI Test Configuration] named '{config_name}' found.")
 
-    cfg_type = config.get("type", "").strip()
+    cfg_type = config.get("type", "").strip().lower()
     exe_idx  = int(config.get("executable_index", "1")) - 1  # convert to 0-based
 
     # Resolve executable (DLL/SO + .ami file).
@@ -227,6 +257,8 @@ def run_ami_test_config(
             message=f"Failed to load Input_IR_file: {exc}")
 
     num_rows = input_ir.shape[0]
+    # Two-column files (time, amplitude) — keep only the amplitude column.
+    ir_amplitudes = input_ir[:, 1] if input_ir.ndim == 2 else input_ir
 
     # --------------------------------------------------------- build AMIModelInitializer
     ami_params: dict = {"root_name": root_name}
@@ -248,7 +280,7 @@ def run_ami_test_config(
             num_aggressors=num_aggressors,
         )
         # Use the property setter so the ctypes array is built correctly.
-        initializer.channel_response = input_ir.flatten().tolist()
+        initializer.channel_response = ir_amplitudes.tolist()
         ami_model.initialize(initializer)
     except Exception as exc:
         return AmiTestConfigResult(
@@ -256,15 +288,15 @@ def run_ami_test_config(
             message=f"AMI_Init() failed: {exc}")
 
     # ======================================================= Statistical path
-    if cfg_type == "Statistical":
+    if cfg_type == "statistical":
         return _check_statistical(
             config_name, config, ibis_file_dir, ami_model, tol_ir)
 
     # ======================================================= Time_domain path
-    if cfg_type == "Time_domain":
+    if cfg_type == "time_domain":
         return _check_time_domain(
             config_name, config, ibis_file_dir, ami_model,
-            initializer, sim_params, num_rows, tol_ir, tol_wave)
+            sim_params, num_rows, tol_ir, tol_wave)
 
     return AmiTestConfigResult(
         config_name=config_name, passed=False,
@@ -289,30 +321,18 @@ def _check_statistical(
     ir_max = ir_rms = None
     params_out_match = False
 
-    # --- IR comparison ---
-    ok, msgs, ir_max, ir_rms = _compare_ir(ami_model, ibis_dir, config, tol_ir)
-    if not ok:
-        passed = False
-        messages.extend(msgs)
+    # --- IR comparison (optional) ---
+    if config.get("golden_ir_file", "").strip():
+        ok, msgs, ir_max, ir_rms = _compare_ir(ami_model, ibis_dir, config, tol_ir)
+        if not ok:
+            passed = False
+            messages.extend(msgs)
 
     # --- params_out comparison ---
-    try:
-        golden_path = ibis_dir / config["ami_output_parameters_file"]
-        with open(golden_path, encoding="utf-8") as fh:
-            golden_str = fh.read()
-        params_out_match = (
-            _normalize_params_str(ami_model.ami_params_out)
-            == _normalize_params_str(golden_str)
-        )
-        if not params_out_match:
-            passed = False
-            messages.append(
-                f"params_out mismatch.\n"
-                f"  Got:      {_normalize_params_str(ami_model.ami_params_out)}\n"
-                f"  Expected: {_normalize_params_str(golden_str)}")
-    except Exception as exc:
+    _, params_out_match, msgs = _compare_params_out(ami_model, ibis_dir, config)
+    if msgs:
         passed = False
-        messages.append(f"params_out comparison failed: {exc}")
+        messages.extend(msgs)
 
     msg = "PASS" if passed else "FAIL: " + "; ".join(messages)
     return AmiTestConfigResult(
@@ -326,7 +346,6 @@ def _check_time_domain(
     config: dict,
     ibis_dir: Path,
     ami_model: AMIModel,
-    initializer: AMIModelInitializer,
     sim_params: dict,
     num_rows: int,
     tol_ir:   float,
@@ -360,42 +379,31 @@ def _check_time_domain(
             messages.append(f"Failed to load waveform file: {exc}")
         else:
             # Compute bits_per_call from wave_size (fixed samples per AMI_GetWave call).
-            samps_per_bit = max(1, int(initializer.bit_time / initializer.sample_interval))
             wave_size     = int(sim_params.get("wave_size", str(num_rows)))
-            bits_per_call = max(1, wave_size // samps_per_bit)
+            bits_per_call = max(1, wave_size // max(1, ami_model._samps_per_bit))
 
+            getwave_ok = False
             try:
                 wave_out, _clocks, _params_list = ami_model.getWave(
                     input_wave, bits_per_call=bits_per_call)
                 n        = min(len(wave_out), len(golden_wave))
                 diff     = wave_out[:n] - golden_wave[:n]
-                wave_max = float(np.max(np.abs(diff)))
-                wave_rms = float(np.sqrt(np.mean(diff ** 2)))
+                wave_max, wave_rms = _diff_metrics(diff)
                 if wave_max > tol_wave:
                     passed = False
                     messages.append(
                         f"Waveform max|err|={wave_max:.3e} exceeds tolerance {tol_wave:.3e}")
+                getwave_ok = True
             except Exception as exc:
                 passed = False
                 messages.append(f"GetWave comparison failed: {exc}")
 
-            # --- params_out: compare last block against golden file ---
-            try:
-                golden_path = ibis_dir / config["ami_output_parameters_file"]
-                with open(golden_path, encoding="utf-8") as fh:
-                    golden_str = fh.read()
-                actual_norm  = _normalize_params_str(ami_model.ami_params_out)
-                golden_norm  = _normalize_params_str(golden_str)
-                params_out_match = (actual_norm == golden_norm)
-                if not params_out_match:
+            # --- params_out: only meaningful after a successful getWave() call ---
+            if getwave_ok:
+                _, params_out_match, msgs = _compare_params_out(ami_model, ibis_dir, config)
+                if msgs:
                     passed = False
-                    messages.append(
-                        f"params_out mismatch.\n"
-                        f"  Got:      {actual_norm}\n"
-                        f"  Expected: {golden_norm}")
-            except Exception as exc:
-                passed = False
-                messages.append(f"params_out comparison failed: {exc}")
+                    messages.extend(msgs)
 
     msg = "PASS" if passed else "FAIL: " + "; ".join(messages)
     return AmiTestConfigResult(

@@ -208,7 +208,7 @@ def ami_test_config() -> GenParser[tuple[str, dict[str, str]]]:
 @generate("[Algorithmic Model]")
 def algo_model() -> GenParser[dict]:
     "Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks."
-    execs = yield many(ex_line)
+    execs = yield many1(ex_line)
     cfg_pairs = yield many(keyword("ami_test_configuration") >> ami_test_config)
     yield keyword("end_algorithmic_model")
     return {"executables": execs, "test_configs": dict(cfg_pairs)}

@@ -239,7 +239,7 @@ class TestStatistical:
 
     def _stat_config(self) -> dict:
         return {
-            "type":                        "Statistical",
+            "type":                        "statistical",
             "direction":                   "Tx",
             "input_ir_file":               "input_ir.txt",
             "ami_input_parameters_file":   "ami_params_stat.txt",
@@ -292,7 +292,7 @@ class TestTimeDomain:
 
     def _td_config(self) -> dict:
         return {
-            "type":                        "Time_domain",
+            "type":                        "time_domain",
             "direction":                   "Tx",
             "input_ir_file":               "input_ir.txt",
             "ami_input_parameters_file":   "ami_params_td.txt",
@@ -342,7 +342,7 @@ class TestRunAll:
     def test_runs_all_configs(self, golden_workspace):
         configs = {
             "stat": {
-                "type":                       "Statistical",
+                "type":                       "statistical",
                 "direction":                  "Tx",
                 "input_ir_file":              "input_ir.txt",
                 "ami_input_parameters_file":  "ami_params_stat.txt",
@@ -351,7 +351,7 @@ class TestRunAll:
                 "executable_index":           "1",
             },
             "td": {
-                "type":                       "Time_domain",
+                "type":                       "time_domain",
                 "direction":                  "Tx",
                 "input_ir_file":              "input_ir.txt",
                 "ami_input_parameters_file":  "ami_params_td.txt",
