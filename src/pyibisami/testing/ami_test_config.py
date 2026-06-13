@@ -475,7 +475,7 @@ def main(ibis_file, model_name, config, tol_ir, tol_wave):
         click.echo(f"ERROR: failed to parse {ibis_path}: {status}", err=True)
         sys.exit(1)
 
-    models: dict = ibis_dict.get("models", {})
+    models = ibis_dict.get("models", {})
     if not models:
         click.echo("ERROR: no [Model] sections found in the IBIS file.", err=True)
         sys.exit(1)

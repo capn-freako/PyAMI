@@ -285,8 +285,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         self._exec32Wins, self._exec32Lins = [], []
         self._exec64Wins, self._exec64Lins = [], []
-        self._test_configs: dict = {}
-        self._executables: list = []
+        self._test_configs = {}
+        self._executables = []
         if "algorithmic_model" in subDict:
             algo_model_data = subDict["algorithmic_model"]
             execs = algo_model_data.get("executables", [])

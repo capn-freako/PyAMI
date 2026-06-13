@@ -12,7 +12,7 @@ import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, TypeAlias
+from typing import Any, Optional, TypeAlias, TypedDict
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -112,6 +112,14 @@ def interpFile(filename: str, sample_per: float) -> Rvec:
 _DEFAULT_ROW_SIZE = 128
 
 
+class _InitData(TypedDict):
+    channel_response: Any  # ctypes array: c_double * N
+    row_size: int
+    num_aggressors: int
+    sample_interval: c_double
+    bit_time: c_double
+
+
 class AMIModelInitializer:
     """
     Class containing the initialization data for an instance of ``AMIModel``.
@@ -169,7 +177,7 @@ class AMIModelInitializer:
             Default) 100e-12 (10 Gbits/s)
         """
 
-        self._init_data = {
+        self._init_data: _InitData = {
             "channel_response": (c_double * _DEFAULT_ROW_SIZE)(0.0, 1.0, 0.0),
             "row_size": _DEFAULT_ROW_SIZE,
             "num_aggressors": 0,
@@ -182,12 +190,12 @@ class AMIModelInitializer:
         # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
         # before ``channel_response``, since ``channel_response`` depends upon ``sample_interval``,
         # when ``h`` is a file name, and overwrites ``row_size``, in any case.
-        keys = list(optional_args.keys())
+        keys: list[str] = list(optional_args.keys())
         keys.sort(reverse=True)
         if keys:
             for key in keys:
                 if key in self._init_data:
-                    self._init_data[key] = optional_args[key]
+                    self._init_data[key] = optional_args[key]  # type: ignore[literal-required]
 
     def __str__(self):
         return "\n\t".join([
