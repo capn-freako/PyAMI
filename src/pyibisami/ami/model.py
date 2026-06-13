@@ -109,6 +109,9 @@ def interpFile(filename: str, sample_per: float) -> Rvec:
     return np.array(res)
 
 
+_DEFAULT_ROW_SIZE = 128
+
+
 class AMIModelInitializer:
     """
     Class containing the initialization data for an instance of ``AMIModel``.
@@ -167,8 +170,8 @@ class AMIModelInitializer:
         """
 
         self._init_data = {
-            "channel_response": (c_double * 128)(0.0, 1.0, 0.0),
-            "row_size": 128,
+            "channel_response": (c_double * _DEFAULT_ROW_SIZE)(0.0, 1.0, 0.0),
+            "row_size": _DEFAULT_ROW_SIZE,
             "num_aggressors": 0,
             "sample_interval": c_double(25.0e-12),
             "bit_time": c_double(0.1e-9),
