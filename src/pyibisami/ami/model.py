@@ -336,26 +336,15 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
+        # channel_response must be fetched as a ctypes array; the public property returns a plain list.
         self._channel_response = (   # pylint: disable=attribute-defined-outside-init
-            init_object._init_data[  # pylint: disable=protected-access
-                "channel_response"
-            ]
+            init_object._init_data["channel_response"]  # pylint: disable=protected-access
         )
         self._initOut = cp.copy(self._channel_response)  # type: ignore  # pylint: disable=attribute-defined-outside-init
-        self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "row_size"
-        ]
-        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "num_aggressors"
-        ]
-        self._sample_interval = (    # pylint: disable=attribute-defined-outside-init
-            init_object._init_data[  # pylint: disable=protected-access
-                "sample_interval"
-            ]
-        )
-        self._bit_time = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "bit_time"
-        ]
+        self._row_size = init_object.row_size  # pylint: disable=attribute-defined-outside-init
+        self._num_aggressors = init_object.num_aggressors  # pylint: disable=attribute-defined-outside-init
+        self._sample_interval = c_double(init_object.sample_interval)  # pylint: disable=attribute-defined-outside-init
+        self._bit_time = c_double(init_object.bit_time)  # pylint: disable=attribute-defined-outside-init
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
 
         # Check GetWave() consistency if possible.
