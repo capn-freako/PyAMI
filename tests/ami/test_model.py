@@ -51,7 +51,7 @@ class Test_AMIModel(object):
 
 class Test_AMIModelInitializer(object):
     def test_init(self):
-        dut = AMIModelInitializer("")
+        dut = AMIModelInitializer({})
         assert dut.ami_params == {"root_name": ""}
         data = ["channel_response", "row_size", "num_aggressors", "sample_interval", "bit_time"]
         assert all(name in dut._init_data for name in data)

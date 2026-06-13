@@ -9,7 +9,7 @@ the same output the model-maker intended.  This module drives that verification.
 import sys
 import re
 from ctypes    import c_double
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib   import Path
 from typing    import Optional
 

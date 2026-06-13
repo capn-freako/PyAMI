@@ -176,8 +176,7 @@ class AMIModelInitializer:
             "sample_interval": c_double(25.0e-12),
             "bit_time": c_double(0.1e-9),
         }
-        self.ami_params = {"root_name": ""}
-        self.ami_params.update(ami_params)
+        self.ami_params = {"root_name": "", **ami_params}
         self.info_params = info_params
 
         # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
