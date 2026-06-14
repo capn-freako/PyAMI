@@ -75,3 +75,12 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 **Test DLLs**: pre-compiled example model binaries live in `tests/examples/`. Tests that require them are marked with a `needs_dll` skip marker when the binary is absent. The platform-specific name follows `example_tx_x86_amd64{_osx}.so` / `.dll` convention.
 
 **`HasTraits` models**: `Component` and `Model` (and `IBISModel`) use Enthought Traits for attribute validation. Do not assign arbitrary attributes; use the declared `Trait`/`Property` descriptors.
+
+## Compact Instructions
+
+When compacting, always preserve: the list of modified files, current test status, and any unresolved issues.
+
+## Git workflow
+
+- Never commit to master directly
+- Commit messages: conventional commits format

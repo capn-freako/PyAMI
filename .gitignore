@@ -140,3 +140,6 @@ examples/test_results/*
 
 # Profiling
 *.prof
+
+# Claude
+CLAUDE.local.md
