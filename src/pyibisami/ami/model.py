@@ -534,10 +534,10 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         Returns:
             Dictionary containing the following keys
 
-                - "imp_resp_init": The model's impulse response, from its `AMI_Init()` function (V/sample).
-                - "out_resp_init": `imp_resp_init` convolved with the channel.
-                - "imp_resp_getw": The model's impulse response, from its `AMI_GetWave()` function (V/sample).
-                - "out_resp_getw": `imp_resp_getw` convolved with the channel.
+                - ``IMP_RESP_INIT``: The model's impulse response, from its `AMI_Init()` function (V/sample).
+                - ``OUT_RESP_INIT``: `imp_resp_init` convolved with the channel.
+                - ``IMP_RESP_GETW``: The model's impulse response, from its `AMI_GetWave()` function (V/sample).
+                - ``OUT_RESP_GETW``: `imp_resp_getw` convolved with the channel.
 
         Notes:
             1. If either set of keys (i.e. - "..._init" or "..._getw")

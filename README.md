@@ -12,7 +12,48 @@ It can be installed via: `pip install PyIBIS-AMI`.
 
 ## Command Line Tools
 
-### AMI Config
+### IBIS-AMI Model Testing
+
+**PyIBIS-AMI Native:**
+
+```
+% test-model -h
+Usage: test-model [OPTIONS] IBIS_FILE
+
+Options:
+  -m, --model TEXT   Name of IBIS-AMI model to test.
+  -p, --params TEXT  Directory containing test configuration sweeps.
+  -d, --debug        Provide extra debugging information.
+  --version          Show the version and exit.
+  -h, --help         Show this message and exit.
+```
+
+**IBIS v8.0:**
+
+% check-ami -h
+Usage: check-ami [OPTIONS] IBIS_FILE
+
+  Run [AMI Test Configuration] blocks embedded in an IBIS file (IBIS 8.0
+  §10.11).
+
+  Parses IBIS_FILE, locates the target model, then calls AMI_Init() (and
+  AMI_GetWave() for Time_domain configs) and compares the outputs against the
+  golden data files referenced in each [AMI Test Configuration] block.
+
+  Exits with status 1 if any configuration fails.
+
+Options:
+  -m, --model-name TEXT  Name of the [Model] to test.  Required when the .ibs
+                         file defines more than one model.
+  -c, --config TEXT      Name of a single [AMI Test Configuration] to run.
+                         Runs all configs when omitted.
+  --tol-ir FLOAT         Absolute tolerance for impulse-response comparison.
+                         [default: 1e-06]
+  --tol-wave FLOAT       Absolute tolerance for waveform comparison.
+                         [default: 1e-06]
+  -h, --help             Show this message and exit.
+
+### IBIS-AMI Model Pre-build Configuration
 
 ```
 ami_config -h
@@ -24,73 +65,4 @@ Usage: ami_config [OPTIONS] PY_FILE
 
 Options:
   -h, --help  Show this message and exit.
-```
-
-### Run (New) IBIS-AMI Model Testing Notebook
-
-```
-$ run-notebook -h
-Usage: run-notebook [OPTIONS] IBIS_FILE BIT_RATE
-
-  Run a *Jupyter* notebook on an IBIS-AMI model file.
-
-Options:
-  -n, --notebook PATH  Override the default notebook file name.
-  -o, --out-dir PATH   Override the name of the directory in which to place
-                       the results.
-  -p, --params TEXT    Directory (or, file) containing configuration sweeps.
-  --debug              Provide extra debugging information.
-  --is_tx              Flags a Tx model.
-  --nspui INTEGER      Number of samples per unit interval.  [default: 32]
-  --nbits INTEGER      Number of bits to run in simulations.  [default: 200]
-  --plot-t-max FLOAT   Maximum time value for plots (s).  [default: 5e-10]
-  --f-max FLOAT        Maximum frequency for transfer functions (Hz).
-                       [default: 40000000000.0]
-  --f-step FLOAT       Frequency step for transfer functions (Hz).  [default:
-                       10000000.0]
-  --fig-x INTEGER      x-dimmension for plot figures (in).  [default: 10]
-  --fig-y INTEGER      y-dimmension for plot figures (in).  [default: 3]
-  --version            Show the version and exit.
-  -h, --help           Show this message and exit.
-```
-
-### Run (Old Style) Tests
-
-```
-run_tests -h
-Usage: run_tests [OPTIONS] [TESTS]...
-
-  Run a series of tests on a AMI model DLL file.
-
-  If no tests are specified on the command line, run all tests found in
-  `test_dir`. (See `-t` option.)
-
-  usage: %prog [options] [test1 [test2 ...]]
-
-  Tests are written in the EmPy templating language, and produce XML output.
-  (See the examples provided in the `examples` directory of the `pyibisami`
-  Python package.)
-
-  Test results should be viewed by loading the XML output file into a Web
-  browser. By default, the XML output file refers to the supplied XSLT file,
-  `test_results.xsl`. It is possible that you may need to copy this file
-  from the pyibisami package directory to your local working directory, in
-  order to avoid file loading errors in your Web browser.
-
-Options:
-  -t, --test_dir PATH  Sets the name of the directory from which tests are taken.
-  -m, --model PATH     Sets the AMI model DLL file name.
-  -p, --params TEXT    List of lists of model configurations. Format:
-                       <filename> or [(name, [(label, ({AMI params., in
-                       "key:val" format},{Model params., in "key:val"
-                       format})), ...]), ...]
-  -x, --xml_file PATH  Sets the name of the XML output file. You should load
-                       this file into your Web browser after the program
-                       completion.
-  -r, --ref_dir PATH   Sets the name of the directory from which reference
-                       waveforms are taken.
-  -o, --out_dir PATH   Sets the name of the directory in which to place the
-                       results.
-  -v, --version TEXT   Show program version info and exit.
-  -h, --help           Show this message and exit.
 ```
