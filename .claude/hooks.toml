@@ -1,0 +1,4 @@
+[on_file_change]
+run = "make lint && make type-check"
+[on_session_end]
+run = "make test"

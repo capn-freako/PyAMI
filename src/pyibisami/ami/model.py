@@ -12,7 +12,7 @@ import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, TypeAlias
+from typing import Any, Optional, TypeAlias, TypedDict
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -109,6 +109,17 @@ def interpFile(filename: str, sample_per: float) -> Rvec:
     return np.array(res)
 
 
+_DEFAULT_ROW_SIZE = 128
+
+
+class _InitData(TypedDict):
+    channel_response: Any  # ctypes array: c_double * N
+    row_size: int
+    num_aggressors: int
+    sample_interval: c_double
+    bit_time: c_double
+
+
 class AMIModelInitializer:
     """
     Class containing the initialization data for an instance of ``AMIModel``.
@@ -124,16 +135,6 @@ class AMIModelInitializer:
     """
 
     # pylint: disable=too-few-public-methods,too-many-instance-attributes
-
-    ami_params = {"root_name": ""}
-
-    _init_data = {
-        "channel_response": (c_double * 128)(0.0, 1.0, 0.0),
-        "row_size": 128,
-        "num_aggressors": 0,
-        "sample_interval": c_double(25.0e-12),
-        "bit_time": c_double(0.1e-9),
-    }
 
     def __init__(self, ami_params: dict, info_params: Optional[dict] = None, **optional_args):
         """
@@ -176,25 +177,31 @@ class AMIModelInitializer:
             Default) 100e-12 (10 Gbits/s)
         """
 
-        self.ami_params = {"root_name": ""}
-        self.ami_params.update(ami_params)
+        self._init_data: _InitData = {
+            "channel_response": (c_double * _DEFAULT_ROW_SIZE)(0.0, 1.0, 0.0),
+            "row_size": _DEFAULT_ROW_SIZE,
+            "num_aggressors": 0,
+            "sample_interval": c_double(25.0e-12),
+            "bit_time": c_double(0.1e-9),
+        }
+        self.ami_params = {"root_name": "", **ami_params}
         self.info_params = info_params
 
         # Need to reverse sort, in order to catch ``sample_interval`` and ``row_size``,
         # before ``channel_response``, since ``channel_response`` depends upon ``sample_interval``,
         # when ``h`` is a file name, and overwrites ``row_size``, in any case.
-        keys = list(optional_args.keys())
+        keys: list[str] = list(optional_args.keys())
         keys.sort(reverse=True)
         if keys:
             for key in keys:
                 if key in self._init_data:
-                    self._init_data[key] = optional_args[key]
+                    self._init_data[key] = optional_args[key]  # type: ignore[literal-required]
 
     def __str__(self):
         return "\n\t".join([
             "AMIModelInitializer instance:",
             f"`ami_params`: {self.ami_params}",
-            f"`info_params`: {self._info_params}"])
+            f"`info_params`: {self.info_params}"])
 
     def _getChannelResponse(self):
         return list(map(float, self._init_data["channel_response"]))
@@ -336,26 +343,15 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             self._amiClose(self._ami_mem_handle)
 
         # Set up the AMI_Init() arguments.
+        # channel_response must be fetched as a ctypes array; the public property returns a plain list.
         self._channel_response = (   # pylint: disable=attribute-defined-outside-init
-            init_object._init_data[  # pylint: disable=protected-access
-                "channel_response"
-            ]
+            init_object._init_data["channel_response"]  # pylint: disable=protected-access
         )
         self._initOut = cp.copy(self._channel_response)  # type: ignore  # pylint: disable=attribute-defined-outside-init
-        self._row_size = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "row_size"
-        ]
-        self._num_aggressors = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "num_aggressors"
-        ]
-        self._sample_interval = (    # pylint: disable=attribute-defined-outside-init
-            init_object._init_data[  # pylint: disable=protected-access
-                "sample_interval"
-            ]
-        )
-        self._bit_time = init_object._init_data[  # pylint: disable=protected-access,attribute-defined-outside-init
-            "bit_time"
-        ]
+        self._row_size = init_object.row_size  # pylint: disable=attribute-defined-outside-init
+        self._num_aggressors = init_object.num_aggressors  # pylint: disable=attribute-defined-outside-init
+        self._sample_interval = c_double(init_object.sample_interval)  # pylint: disable=attribute-defined-outside-init
+        self._bit_time = c_double(init_object.bit_time)  # pylint: disable=attribute-defined-outside-init
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
 
         # Check GetWave() consistency if possible.

@@ -52,6 +52,7 @@ ami-config = "pyibisami.ami.config:main"
 run-tests = "pyibisami.tools.run_tests:main"
 run-notebook = "pyibisami.tools.run_notebook:main"
 test-model = "pyibisami.testing.test_models:main"
+check-ami = "pyibisami.testing.ami_test_config:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

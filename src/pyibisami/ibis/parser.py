@@ -106,6 +106,8 @@ def rest_line() -> GenParser[str]:  # type: ignore
 skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
 name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name: Parser = word(name_only)
+# Parameters must begin with a letter in column 1.
+param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true: Parser = lexeme(string("True")).result(True)
 false: Parser = lexeme(string("False")).result(False)
@@ -185,6 +187,31 @@ ex_line: Parser = (
     + count(name, 2)  # noqa: W503
     << ignore  # noqa: W503
 )
+
+
+@generate("[AMI Test Configuration] subparam")
+def ami_tc_param() -> GenParser[tuple[str, str]]:
+    "Parse a single [AMI Test Configuration] subparameter line."
+    pname = yield param_name
+    pval = yield rest_line
+    return (pname.lower(), pval.strip())
+
+
+@generate("[AMI Test Configuration]")
+def ami_test_config() -> GenParser[tuple[str, dict[str, str]]]:
+    "Parse [AMI Test Configuration] block (name + subparameters)."
+    cfg_name = yield rest_line
+    params = yield many(ami_tc_param)
+    return (cfg_name.strip(), dict(params))
+
+
+@generate("[Algorithmic Model]")
+def algo_model() -> GenParser[dict]:
+    "Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks."
+    execs = yield many1(ex_line)
+    cfg_pairs = yield many(keyword("ami_test_configuration") >> ami_test_config)
+    yield keyword("end_algorithmic_model")
+    return {"executables": execs, "test_configs": dict(cfg_pairs)}
 
 
 def manyTrue(p: Parser) -> Parser:
@@ -271,8 +298,7 @@ model_type = reduce(try_choice, model_type_parsers)
 @generate("IBIS parameter")
 def param() -> GenParser[tuple[str, Any]]:
     "Parse IBIS parameter."
-    # Parameters must begin with a letter in column 1.
-    pname = yield word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
+    pname = yield param_name
     if DEBUG:
         print(f"Parsing parameter {pname}...", end="", flush=True)
     match pname:  # Handle special cases.
@@ -370,7 +396,7 @@ Model_keywords: dict[str, Parser] = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
-    "algorithmic_model": many1(ex_line) << keyword("end_algorithmic_model"),
+    "algorithmic_model": algo_model,
     "voltage_range": typminmax,
     "temperature_range": typminmax,
     "gnd_clamp": many1(vi_line),
