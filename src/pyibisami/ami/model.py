@@ -567,8 +567,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 ignore_bits = info_params["Ignore_Bits"].pvalue
 
         # Capture/convert instance variables.
-        chnl_imp = np.array(self.channel_response) * ts     # input (a.k.a. - "channel") impulse response (V/sample)
-        out_imp = np.array(self.initOut) * ts               # output impulse response (V/sample)
+        chnl_imp = np.array(self.channel_response[:self.row_size]) * ts   # input (a.k.a. - "channel") impulse response (V/sample)
+        out_imp = np.array(self.initOut[:self.row_size]) * ts             # output impulse response (V/sample)
 
         # Calculate some needed intermediate values.
         nspui = int(ui / ts)            # samps per UI
