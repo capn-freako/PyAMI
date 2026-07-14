@@ -459,7 +459,7 @@ def test_ami_model(
 
     # Fetch parameter sweepers or create a defaults template.
     flowables.append(Paragraph("AMI Parameter Sweeps Info", H2))
-    model_sweeps_dir = test_sweeps_dir / ibis_file.parent.relative_to(test_sweeps_dir.parent) / ibis_file.stem / model_name
+    model_sweeps_dir = test_sweeps_dir / ibis_file.stem / model_name
     test_sweepers = get_all_sweepers(model_sweeps_dir)
     if test_sweepers:
         flowables.append(Paragraph("Using parameter sweep definitions in:", P))
