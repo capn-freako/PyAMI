@@ -22,7 +22,7 @@ dependencies = [
     "papermill==2.7.0",
     "parsec==3.17",
     "reportlab==5.0.0",
-    "scipy>=1.9",
+    "scipy>=1.15",
     "traits==7.1.0",
     "traitsui==8.0.0",
     "types-reportlab==4.5.1.20260712",
