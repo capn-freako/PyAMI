@@ -195,8 +195,14 @@ class AMIParamConfigurator(HasTraits):
         """
 
         param_dict = self.ami_param_defs
+        tname_parts: list[str] = []  # Fully hierarchical trait name, minus the root key.
+        root_key: Optional[str] = None
         while branch_names:
             branch_name = branch_names.pop(0)
+            if root_key is None:
+                root_key = branch_name  # "Reserved_Parameters" or "Model_Specific"; not part of the trait name.
+            else:
+                tname_parts.append(branch_name)
             if branch_name in param_dict:
                 param_dict = param_dict[branch_name]
             else:
@@ -205,12 +211,27 @@ class AMIParamConfigurator(HasTraits):
                 )
         if isinstance(param_dict, AMIParameter):
             param_dict.pvalue = new_val
-            try:
-                eval(f"self.set({branch_name}_={new_val})")  # pylint: disable=eval-used
-            except Exception:  # pylint: disable=broad-exception-caught
-                eval(f"self.set({branch_name}={new_val})")  # pylint: disable=eval-used
+            tname = "_".join(tname_parts)
+            if tname:
+                try:
+                    self.trait_set(**{f"{tname}_": new_val})
+                except Exception:  # pylint: disable=broad-exception-caught
+                    self.trait_set(**{tname: new_val})
         else:
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
+
+    @property
+    def tunable_params(self) -> list[tuple[list[str], "AMIParameter"]]:
+        """Every *Model Specific* parameter of type 'In' or 'InOut' with a
+        numeric 'Range' format (i.e. - has real min/max bounds and so is a
+        candidate for automated sweeping/optimization), paired with its
+        fully hierarchical branch name path.
+
+        The returned branch name paths are ready to pass directly into
+        ``fetch_param_val()``/``set_param_val()`` (i.e. - they are rooted at
+        ``"Model_Specific"``).
+        """
+        return _walk_tunable_params(self._model_specific_dict, ["Model_Specific"])
 
     @property
     def ami_parsing_errors(self) -> list[str]:
@@ -286,7 +307,7 @@ class AMIParamConfigurator(HasTraits):
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs: ParamValues = {}
             for sname in param:
-                subs.update(self.input_ami_param(param, sname, prefix=pname + "_"))  # type: ignore
+                subs.update(self.input_ami_param(param, sname, prefix=tname + "_"))  # type: ignore
             res[pname] = subs
         return res
 
@@ -330,6 +351,33 @@ class AMIParamConfigurator(HasTraits):
         # Don't try to pack this into the parentheses above!
         initializer.channel_response = channel_response
         return initializer
+
+
+def _walk_tunable_params(
+    params: Parameters, prefix: list[str]
+) -> list[tuple[list[str], "AMIParameter"]]:
+    """Recursively collect every numeric, sweepable ('Range' format, 'In'/'InOut'
+    usage) leaf of a *Model Specific* parameter (sub)tree.
+
+    Args:
+        params: The (sub)dictionary of AMI parameters to walk.
+        prefix: The branch name path leading to ``params``.
+
+    Returns:
+        A list of (branch name path, parameter) pairs, one per sweepable leaf.
+    """
+
+    results: list[tuple[list[str], "AMIParameter"]] = []
+    for pname, param in params.items():
+        if pname == "description":  # A branch's optional descriptive text, not a subparameter.
+            continue
+        path = prefix + [pname]
+        if isinstance(param, AMIParameter):
+            if param.pusage in ("In", "InOut") and param.pformat == "Range":
+                results.append((path, param))
+        else:  # Subparameter branch.
+            results.extend(_walk_tunable_params(param, path))
+    return results
 
 
 #####
