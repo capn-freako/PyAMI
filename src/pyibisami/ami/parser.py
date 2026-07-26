@@ -210,7 +210,17 @@ class AMIParamConfigurator(HasTraits):
                     f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"
                 )
         if isinstance(param_dict, AMIParameter):
-            param_dict.pvalue = new_val
+            # Coerce to the parameter's declared type. Notably: a `Bool` trait rejects a
+            # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
+            # Integer-typed value (e.g. a List-format mode selector) is expected.
+            if param_dict.ptype == "Boolean":
+                new_val = bool(round(new_val)) if not isinstance(new_val, bool) else new_val
+            elif param_dict.ptype in ("Integer", "Tap"):
+                new_val = int(round(new_val))
+            # `pvalue`, for 'List' format, holds the list of *legal* values, not the
+            # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
+            if param_dict.pformat != "List":
+                param_dict.pvalue = new_val
             tname = "_".join(tname_parts)
             if tname:
                 try:
@@ -222,10 +232,17 @@ class AMIParamConfigurator(HasTraits):
 
     @property
     def tunable_params(self) -> list[tuple[list[str], "AMIParameter"]]:
-        """Every *Model Specific* parameter of type 'In' or 'InOut' with a
-        numeric 'Range' format (i.e. - has real min/max bounds and so is a
-        candidate for automated sweeping/optimization), paired with its
-        fully hierarchical branch name path.
+        """Every *Model Specific* parameter of type 'In' or 'InOut' that is a
+        candidate for automated sweeping/optimization, paired with its fully
+        hierarchical branch name path. This includes:
+
+            - numeric 'Range'-format parameters (real min/max bounds),
+            - 'Boolean' parameters (True/False), and
+            - 'List'-format 'Integer' parameters whose legal values form a
+              contiguous range (e.g. a mode selector like `(List 0 1)`) --
+              this is deliberately conservative: a non-contiguous legal set
+              (e.g. `(List 6 12 18)`) can't be swept with a uniform step
+              without risking illegal intermediate values, so it's excluded.
 
         The returned branch name paths are ready to pass directly into
         ``fetch_param_val()``/``set_param_val()`` (i.e. - they are rooted at
@@ -353,11 +370,25 @@ class AMIParamConfigurator(HasTraits):
         return initializer
 
 
+def _is_sweepable(param: "AMIParameter") -> bool:
+    "See `AMIParamConfigurator.tunable_params` for the exact criteria."
+    if param.pusage not in ("In", "InOut"):
+        return False
+    if param.pformat == "Range":
+        return True
+    if param.pformat == "Value" and param.ptype == "Boolean":
+        return True
+    if param.pformat == "List" and param.ptype == "Integer":
+        vals = sorted(int(v) for v in param.pvalue)
+        return vals == list(range(vals[0], vals[-1] + 1))  # Contiguous?
+    return False
+
+
 def _walk_tunable_params(
     params: Parameters, prefix: list[str]
 ) -> list[tuple[list[str], "AMIParameter"]]:
-    """Recursively collect every numeric, sweepable ('Range' format, 'In'/'InOut'
-    usage) leaf of a *Model Specific* parameter (sub)tree.
+    """Recursively collect every sweepable (see `_is_sweepable`) leaf of a
+    *Model Specific* parameter (sub)tree.
 
     Args:
         params: The (sub)dictionary of AMI parameters to walk.
@@ -373,7 +404,7 @@ def _walk_tunable_params(
             continue
         path = prefix + [pname]
         if isinstance(param, AMIParameter):
-            if param.pusage in ("In", "InOut") and param.pformat == "Range":
+            if _is_sweepable(param):
                 results.append((path, param))
         else:  # Subparameter branch.
             results.extend(_walk_tunable_params(param, path))

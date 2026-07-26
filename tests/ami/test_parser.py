@@ -205,5 +205,76 @@ def described_group_ami_config():
 class TestDescribedGroupParams:
     def test_tunable_params_skips_description_key(self, described_group_ami_config):
         ami = ami_parser.AMIParamConfigurator(described_group_ami_config)
-        paths = [path for path, _ in ami.tunable_params]
-        assert paths == [["Model_Specific", "debug", "dbg_level"]]
+        paths = {tuple(path) for path, _ in ami.tunable_params}
+        # Both the Boolean 'dbg_enable' and the Range 'dbg_level' are sweepable;
+        # the 'description' key must not show up as a bogus third entry.
+        assert paths == {
+            ("Model_Specific", "debug", "dbg_enable"),
+            ("Model_Specific", "debug", "dbg_level"),
+        }
+
+
+@pytest.fixture
+def mode_selector_ami_config():
+    """A real-world pattern (see the repo-bundled `example_rx.ami`'s
+    `ctle_mode`): an Integer, List-format 'mode selector' that gates whether
+    a sibling Range-format parameter has any effect at all. Also includes a
+    non-contiguous List, which must NOT be treated as sweepable (there's no
+    safe uniform step that stays within the legal value set)."""
+    return r"""(example_tx
+
+    (Reserved_Parameters
+         (Init_Returns_Impulse (Usage Info) (Type Boolean) (Value True) (Description "x"))
+         (GetWave_Exists (Usage Info) (Type Boolean) (Value False) (Description "x"))
+    )
+    (Model_Specific
+         (eq_mode
+             (Usage In )
+             (Type Integer )
+             (List 0 1 )
+             (List_Tip "Off" "Manual" )
+             (Description "EQ operating mode." )
+         )
+         (eq_mag
+             (Usage In )
+             (Type Float )
+             (Range 0.0 0.0 12.0 )
+             (Description "EQ peaking magnitude (dB)." )
+         )
+         (odd_steps
+             (Usage In )
+             (Type Integer )
+             (List 6 12 18 )
+             (Description "Non-contiguous discrete choices." )
+         )
+    )
+
+)
+
+"""
+
+
+class TestModeSelectorParams:
+    def test_contiguous_list_integer_is_sweepable(self, mode_selector_ami_config):
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        paths = {tuple(path) for path, _ in ami.tunable_params}
+        assert ("Model_Specific", "eq_mode") in paths
+        assert ("Model_Specific", "eq_mag") in paths
+
+    def test_noncontiguous_list_integer_is_excluded(self, mode_selector_ami_config):
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        paths = {tuple(path) for path, _ in ami.tunable_params}
+        assert ("Model_Specific", "odd_steps") not in paths
+
+    def test_set_param_val_on_mode_selector_actually_gates_downstream_value(
+        self, mode_selector_ami_config
+    ):
+        "Regression: sweeping a Boolean/List value must not corrupt AMIParameter.pvalue."
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        eq_mode_param = ami.ami_param_defs["Model_Specific"]["eq_mode"]
+        assert eq_mode_param.pvalue == [0, 1]  # The legal-value list, untouched so far.
+
+        ami.set_param_val(["Model_Specific", "eq_mode"], 1.0)  # As a sweep would pass it.
+        assert ami.input_ami_params["eq_mode"] == 1
+        # `pvalue` must still be the legal-value list, not clobbered with a scalar.
+        assert eq_mode_param.pvalue == [0, 1]
