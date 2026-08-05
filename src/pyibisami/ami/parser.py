@@ -21,7 +21,7 @@ from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
 from .model                     import AMIModelInitializer
-from .parameter                 import AMIParamError, AMIParameter
+from .parameter                 import AmiParamTuner, AMIParamError, AMIParameter
 from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
 
 # New types and aliases.
@@ -249,6 +249,43 @@ class AMIParamConfigurator(HasTraits):
         ``"Model_Specific"``).
         """
         return _walk_tunable_params(self._model_specific_dict, ["Model_Specific"])
+
+    def mk_tap_tuners(self) -> list[AmiParamTuner]:
+        """Build a fresh list of `AmiParamTuner`s from this AMI model's tunable
+        Model_Specific parameters (see `tunable_params` for exactly which ones
+        qualify: Range-format, Boolean, and contiguous Integer/List "mode
+        selector" parameters)."""
+        tuners = []
+        for branch_names, param in self.tunable_params:
+            tname = "_".join(branch_names[1:])  # Drop the "Model_Specific" root.
+            if param.pformat == "Range":
+                pmin, pmax = float(param.pmin), float(param.pmax)
+                step = (pmax - pmin) / 10 or 1.0
+                is_int = param.ptype == "Integer"
+                value = float(param.pvalue)
+            elif param.pformat == "Value" and param.ptype == "Boolean":
+                pmin, pmax, step, is_int = 0.0, 1.0, 1.0, True
+                value = float(param.pvalue)
+            else:  # List-format Integer "mode selector" (contiguous legal values).
+                vals = [float(v) for v in param.pvalue]
+                pmin, pmax, step, is_int = min(vals), max(vals), 1.0, True
+                # `pvalue`, for 'List' format, is the list of *legal* values, not the
+                # current one -- that lives on the Trait `make_gui_items()` registered.
+                try:
+                    value = float(self.trait_get(tname + "_")[tname + "_"])
+                except Exception:  # pylint: disable=broad-exception-caught
+                    value = float(self.trait_get(tname)[tname])
+            tuners.append(AmiParamTuner(
+                name=tname,
+                branch_names=branch_names,
+                enabled=False,
+                min_val=pmin,
+                max_val=pmax,
+                step=step,
+                value=value,
+                is_int=is_int,
+            ))
+        return tuners
 
     @property
     def ami_parsing_errors(self) -> list[str]:
