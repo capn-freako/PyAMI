@@ -214,9 +214,17 @@ class AMIParamConfigurator(HasTraits):
             # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
             # Integer-typed value (e.g. a List-format mode selector) is expected.
             if param_dict.ptype == "Boolean":
-                new_val = bool(round(new_val)) if not isinstance(new_val, bool) else new_val
+                if not isinstance(new_val, bool):
+                    if isinstance(new_val, str):
+                        match new_val:
+                            case "FALSE" | "False" | "false":
+                                new_val = False
+                            case _:
+                                new_val = bool(new_val)
+                    else:
+                        new_val = bool(new_val)
             elif param_dict.ptype in ("Integer", "Tap"):
-                new_val = int(round(new_val))
+                new_val = int(new_val)
             # `pvalue`, for 'List' format, holds the list of *legal* values, not the
             # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
             if param_dict.pformat != "List":

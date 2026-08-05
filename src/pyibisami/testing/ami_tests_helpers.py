@@ -96,7 +96,7 @@ class AmiTestHelperInitVsGetwave(AmiTestHelper):
                PLOT_LINESTYLE: "dashed"}))]
 
         fig = plt.figure(figsize=(fig_x, fig_y))
-        top_fig, bottom_fig = fig.subfigures(2, 1)
+        top_fig, bottom_fig = fig.subfigures(2, 1)  # type: ignore
         top_fig.suptitle("Model Responses (Post-Adaptation)")
         top_fig.subplots_adjust(left=.1, right=.9, wspace=.3)
         bottom_fig.subplots_adjust(top=.7, bottom=.1)
@@ -120,7 +120,7 @@ class AmiTestHelperSamplesPerBit(AmiTestHelper):
         model_responses = do_samples_per_bit(model, initializer, nbits)
 
         fig = plt.figure(figsize=(fig_x, fig_y))
-        top_fig, bottom_fig = fig.subfigures(2, 1)
+        top_fig, bottom_fig = fig.subfigures(2, 1)  # type: ignore
         top_fig.suptitle("Model Responses (Post-Adaptation)")
         top_fig.subplots_adjust(left=.1, right=.9, wspace=.3)
         bottom_fig.subplots_adjust(top=.7, bottom=.1)
