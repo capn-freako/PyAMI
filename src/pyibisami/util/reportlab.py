@@ -10,7 +10,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 
 import sys
 
-from datetime   import datetime
+from datetime   import datetime, timezone, timedelta
 from pathlib    import Path
 
 import numpy as np
@@ -112,7 +112,7 @@ def title_page(ibis_file: Path) -> list[Flowable]:
 
     flowables: list[Flowable] = [Spacer(1, 3 * inch)]
     flowables.append(Paragraph(f"<em>PyIBIS-AMI</em> v{pyibisami.__version__} - IBIS-AMI Model Testing Report", title_style))
-    flowables.append(Paragraph(f"{bold('Date:')} {datetime.now()}", P))
+    flowables.append(Paragraph(f"{bold('Date:')} {datetime.now(tz=timezone(timedelta(hours=0)))}", P))
     flowables.append(Paragraph(f"{bold('Tested:')} {ibis_file}", P))
     flowables.append(Paragraph(f"{bold('Python:')} {sys.version}", P))
     flowables.append(Paragraph(f"{bold('NumPy:')} {np.__version__}", P))

@@ -11,7 +11,8 @@ from __future__     import annotations
 from ctypes         import c_double
 from dataclasses    import dataclass
 import re
-from typing         import Any, Callable, NewType, Optional, TypeAlias
+from typing         import Any, NewType, Optional, TypeAlias
+from collections.abc import Callable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -47,7 +48,7 @@ class AmiLeaf:
 @dataclass(frozen=True)
 class AmiBranch:
     name: AmiName
-    children: list["AmiNode"]
+    children: list[AmiNode]
 
 
 AmiNode:       TypeAlias = AmiLeaf | AmiBranch
@@ -60,7 +61,7 @@ AmiRootName = NewType("AmiRootName", str)
 ReservedParamDict: TypeAlias = dict[AmiReservedParameterName, AMIParameter]
 ModelSpecificDict: TypeAlias = dict[ParamName, "'AMIParameter' | 'ModelSpecificDict'"]
 
-__all__ = [
+__all__ = [  # ruff: ignore=RUF022
     "ParamName", "ParamValue", "Parameters", "ParamValues",
     "AmiName", "AmiAtom", "AmiNode", "AmiNodeParser", "AmiParser",
     "ami_parse", "AMIParamConfigurator"]
@@ -239,7 +240,7 @@ class AMIParamConfigurator(HasTraits):
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
 
     @property
-    def tunable_params(self) -> list[tuple[list[str], "AMIParameter"]]:
+    def tunable_params(self) -> list[tuple[list[str], AMIParameter]]:
         """Every *Model Specific* parameter of type 'In' or 'InOut' that is a
         candidate for automated sweeping/optimization, paired with its fully
         hierarchical branch name path. This includes:
@@ -415,7 +416,7 @@ class AMIParamConfigurator(HasTraits):
         return initializer
 
 
-def _is_sweepable(param: "AMIParameter") -> bool:
+def _is_sweepable(param: AMIParameter) -> bool:
     "See `AMIParamConfigurator.tunable_params` for the exact criteria."
     if param.pusage not in ("In", "InOut"):
         return False
@@ -431,7 +432,7 @@ def _is_sweepable(param: "AMIParameter") -> bool:
 
 def _walk_tunable_params(
     params: Parameters, prefix: list[str]
-) -> list[tuple[list[str], "AMIParameter"]]:
+) -> list[tuple[list[str], AMIParameter]]:
     """Recursively collect every sweepable (see `_is_sweepable`) leaf of a
     *Model Specific* parameter (sub)tree.
 
@@ -443,7 +444,7 @@ def _walk_tunable_params(
         A list of (branch name path, parameter) pairs, one per sweepable leaf.
     """
 
-    results: list[tuple[list[str], "AMIParameter"]] = []
+    results: list[tuple[list[str], AMIParameter]] = []
     for pname, param in params.items():
         if pname == "description":  # A branch's optional descriptive text, not a subparameter.
             continue
@@ -682,7 +683,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
     init_returns_impulse_found = False
     getwave_exists_found = False
     model_spec_found = False
-    root_name, params = list(param_dict.items())[0]
+    root_name, params = next(iter(param_dict.items()))
     description = ""
     reserved_params_dict: dict[AmiReservedParameterName, AMIParameter] = {}
     model_specific_dict: ModelSpecificDict = {}
@@ -730,8 +731,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
 # Legacy client code support:
 def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any]]:
     "The legacy version of ``parse_ami_file_contents()``."
-    # err_msg, root_name, description, reserved_params_dict, model_specific_dict = parse_ami_file_contents(file_contents)
-    errors, warnings, root_name, description, reserved_params_dict, model_specific_dict = parse_ami_file_contents(file_contents)
+    errors, _warnings, root_name, description, reserved_params_dict, model_specific_dict = parse_ami_file_contents(file_contents)
     if errors:
         err_msg = errors[0]
     else:
@@ -774,8 +774,8 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[tuple[str, TraitTyp
     # but no pre-existing enclosing group, in a ``VGroup``.
     # - Generate grouped parameter names and list of unique group names.
     pnames = list(params.keys())
-    pnames_split = list(map(lambda n: n.split('_'), pnames))
-    group_names = list(map(lambda xs: xs[0], pnames_split))
+    pnames_split = [n.split('_') for n in pnames]
+    group_names = [xs[0] for xs in pnames_split]
     grouped_pnames = list(zip(pnames, group_names))
     # The following doesn't preserve the parameter ordering of the AMI file!
     # for group_name in set(group_names):  # Iterate over unique group names.
@@ -853,7 +853,7 @@ def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
                 if list_tips:
                     tmp_dict: dict[str, Any] = {}
                     tmp_dict.update(list(zip(list_tips, param.pvalue)))
-                    val = list(tmp_dict.keys())[0]
+                    val = next(iter(tmp_dict.keys()))
                     if default:
                         for tip in tmp_dict.items():
                             if tip[1] == default:

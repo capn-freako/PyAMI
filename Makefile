@@ -30,7 +30,7 @@ format:
 
 lint:
 	${UVX_EXEC} ruff check ${SRC_DIR}
-	${UVX_EXEC} flake8 --ignore=E501,E272,E241,E222,E221 ${SRC_DIR}
+	${UVX_EXEC} flake8 --ignore=E501,E272,E241,E222,E221,W504 ${SRC_DIR}
 
 type-check:
 	${UV_EXEC} run python -m mypy ${SRC_DIR}

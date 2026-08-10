@@ -355,11 +355,12 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._info_params = init_object.info_params  # pylint: disable=attribute-defined-outside-init
 
         # Check GetWave() consistency if possible.
-        if init_object.info_params and init_object.info_params["GetWave_Exists"] and init_object.info_params["GetWave_Exists"].pvalue:
-            if not self._amiGetWave:
-                raise RuntimeError(
-                    "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
-                )
+        if (init_object.info_params and init_object.info_params["GetWave_Exists"] and
+            init_object.info_params["GetWave_Exists"].pvalue and
+            not self._amiGetWave):  # noqa: E129
+            raise RuntimeError(
+                "Reserved parameter `GetWave_Exists` is True, but I can't bind to `AMI_GetWave()`!"
+            )
 
         # Construct the AMI parameters string.
         def sexpr(pname: str, pval: Any) -> str:
@@ -387,7 +388,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         self._root_name = root_name  # pylint: disable=attribute-defined-outside-init
         ami_params_in = f"({root_name} "
         for item in list(init_object.ami_params.items()):
-            if not item[0] == "root_name":
+            if item[0] != "root_name":
                 ami_params_in += sexpr(item[0], item[1])
         ami_params_in += ")"
         self._ami_params_in = ami_params_in.encode("utf-8")  # pylint: disable=attribute-defined-outside-init
@@ -424,7 +425,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             print(f"&ami_params_out = {byref(self._ami_params_out)}")
             print(f"&ami_mem_handle = {byref(self._ami_mem_handle)}")  # type: ignore
             print(f"&msg = {byref(self._msg)}")
-            raise err
+            raise
 
         # Initialize attributes used by getWave().
         bit_time = init_object.bit_time
@@ -441,7 +442,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         )
         self._getwave_step_response_out_params = None
 
-    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:  # noqa: F405
+    def getWave(self, wave: Rvec, bits_per_call: int = 0) -> tuple[Rvec, Rvec, list[str]]:
         """
         Performs time domain processing of input waveform, using the ``AMI_GetWave()`` function.
 
@@ -562,9 +563,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         ts = self.sample_interval
         info_params = self._info_params
         ignore_bits = 0
-        if info_params:
-            if "Ignore_Bits" in info_params:
-                ignore_bits = info_params["Ignore_Bits"].pvalue
+        if info_params and "Ignore_Bits" in info_params:
+            ignore_bits = info_params["Ignore_Bits"].pvalue
 
         # Capture/convert instance variables.
         chnl_imp = np.array(self.channel_response[:self.row_size]) * ts   # input (a.k.a. - "channel") impulse response (V/sample)
@@ -584,7 +584,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         ):
             pass
         else:
-            h_model = deconv_same(out_imp, chnl_imp)  # noqa: F405
+            h_model = deconv_same(out_imp, chnl_imp)
             rslt[IMP_RESP_INIT] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 
             h_init = np.roll(out_imp, pad_samps)

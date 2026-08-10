@@ -146,8 +146,8 @@ def _compare_params_out(
         golden_norm = _normalize_params_str(golden_str)
         matched = (actual_norm == golden_norm)
         msgs = [] if matched else [
-            f"params_out mismatch.\n"
-            f"  Got:      {actual_norm}\n"
+            "params_out mismatch.\n",
+            f"  Got:      {actual_norm}\n",
             f"  Expected: {golden_norm}"
         ]
         return True, matched, msgs

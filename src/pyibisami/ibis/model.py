@@ -43,7 +43,7 @@ class Component(HasTraits):
         # Set up the GUI.
         self.add_trait("manufacturer", String(self._mfr))
         self.add_trait("package", String(self._pkg))
-        self.add_trait("_pin", Trait(list(self._pins)[0], self._pins))
+        self.add_trait("_pin", Trait(next(iter(self._pins)), self._pins))
         self._content = [
             Group(
                 Item("manufacturer", label="Manufacturer", style="readonly"),
@@ -109,7 +109,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Fetch available keyword/parameter definitions.
         def maybe(name):
-            return subDict[name] if name in subDict else None
+            return subDict.get(name, None)
 
         self._mtype = maybe("model_type")
         self._ccomp = maybe("c_comp")
@@ -164,7 +164,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             pu_ityps = -np.array(pu_ityps)  # Correct for current sense, for nicer plot.
             pu_imins = -np.array(pu_imins)
             pu_imaxs = -np.array(pu_imaxs)
-            self._zout = (list(pd_zs)[0] + list(pu_zs)[0]) / 2
+            self._zout = (next(iter(pd_zs)) + next(iter(pu_zs))) / 2
             plotdata.set_data("pd_vs", pd_vs)
             plotdata.set_data("pd_ityps", pd_ityps)
             plotdata.set_data("pd_imins", pd_imins)
@@ -204,7 +204,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
             if "gnd_clamp" in subDict:
                 gc_vs, gc_ityps, gc_imins, gc_imaxs, gc_zs = proc_iv(subDict["gnd_clamp"])
-                gc_z = list(gc_zs)[0]  # Use typical value for Zin calc.
+                gc_z = next(iter(gc_zs))  # Use typical value for Zin calc.
                 plotdata.set_data("gc_vs", gc_vs)
                 plotdata.set_data("gc_ityps", gc_ityps)
                 plotdata.set_data("gc_imins", gc_imins)
@@ -214,7 +214,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
             if "power_clamp" in subDict:
                 pc_vs, pc_ityps, pc_imins, pc_imaxs, pc_zs = proc_iv(subDict["power_clamp"])
-                pc_z = list(pc_zs)[0]
+                pc_z = next(iter(pc_zs))
                 pc_vs = self._vrange[0] - np.array(pc_vs)  # Correct for Vdd-relative pull-up voltages.
                 pc_ityps = -np.array(pc_ityps)  # Correct for current sense, for nicer plot.
                 pc_imins = -np.array(pc_imins)

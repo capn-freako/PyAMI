@@ -74,7 +74,7 @@ def golden_parser_results(ibis_file: Path) -> list[Flowable]:
     """
 
     flowables: list[Flowable] = [Paragraph("IBIS Golden Parser Results", H1)]
-    result = subprocess.run([IBIS_CHK_EXEC, str(ibis_file)], capture_output=True, text=True)
+    result = subprocess.run([IBIS_CHK_EXEC, str(ibis_file)], capture_output=True, text=True, check=False)
     flowables.append(Paragraph(preformatted(result.stdout), styles['Code']))
     flowables.append(Paragraph(preformatted(result.stderr), styles['Code']))
     flowables.append(page_break)
@@ -136,7 +136,7 @@ def test_ami_models(
         do_model(model_name)
         return flowables
 
-    for model_name in ami_model_names:
-        do_model(model_name)
+    for _model_name in ami_model_names:
+        do_model(_model_name)
 
     return flowables

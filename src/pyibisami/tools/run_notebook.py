@@ -113,13 +113,9 @@ def run_notebook(
         print("\nNOTE: Since you provided no parameter sweep information,")
         print(f'a "dummy" sweep file has been created: {dummy_run_file_name}.')
         print("You may use this file as a template for creating parameter sweep specifications.")
-        print("")
+        print()
 
     # Define temp. (i.e. - parameterized) notebook and output file locations.
-    tmp_notebook = NamedTemporaryFile(
-        suffix='.ipynb',
-        prefix=(notebook.stem + "_papermill"),
-        delete_on_close=False)
     html_file = Path(out_dir.joinpath(ibis_file.name)).with_suffix(".html")
 
     # Run the notebook.
@@ -132,7 +128,9 @@ def run_notebook(
     extra_args = [tok for item in notebook_params.items()
                       for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
 
-    with tmp_notebook:
+    with NamedTemporaryFile(suffix='.ipynb',
+                            prefix=(notebook.stem + "_papermill"),
+                            delete_on_close=False) as tmp_notebook:
         subprocess.run(['papermill', str(notebook), tmp_notebook.name] + extra_args, check=True)
         subprocess.run(
             ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook.name],

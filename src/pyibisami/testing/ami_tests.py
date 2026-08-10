@@ -11,9 +11,10 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 import platform
 
 from abc     import ABC
+from collections.abc import Sequence
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing  import Optional, Sequence
+from typing  import ClassVar, Optional
 
 import em
 
@@ -58,7 +59,7 @@ class AmiTester(ABC):
     def pcfg(self):
         return self._pcfg
 
-    _test_sweepers: list[TestSweeper] = []
+    _test_sweepers: list[TestSweeper]
 
     @property
     def test_sweepers(self):
@@ -96,7 +97,7 @@ class AmiTester(ABC):
     def msg(self):
         return self._msg
 
-    _preamble: list[Flowable] = []  # Any desired introductory text for report body.
+    _preamble: list[Flowable]  # Any desired introductory text for report body.
 
     @property
     def preamble(self):
@@ -106,9 +107,8 @@ class AmiTester(ABC):
     def preamble(self, value):
         if not isinstance(value, list):
             raise TypeError(f"New value for `preamble` needs type `list[Flowable]` not {type(value)}.")
-        if len(value) > 0:
-            if not isinstance(value[0], Flowable):
-                raise TypeError(f"New value for `preamble` needs type `list[Flowable]` not `list[{type(value[0])}]`.")
+        if len(value) > 0 and not isinstance(value[0], Flowable):
+            raise TypeError(f"New value for `preamble` needs type `list[Flowable]` not `list[{type(value[0])}]`.")
         self._preamble = value
 
     @property
@@ -173,7 +173,8 @@ class AmiTester(ABC):
             self._init_ok = True
         self._getwave_ok = ami_model.has_getwave
 
-        return
+        # Set misc. defaults.
+        self._preamble = []
 
     # Execution
     def __call__(self):
@@ -218,7 +219,7 @@ class AmiTester(ABC):
 class AmiTestLinearityChecker(AmiTester):
     "Check ``AMI_Init()`` for linearity."
 
-    preamble = [
+    preamble: ClassVar = [
         Paragraph(f"{fixed('AMI_Init()')} Linearity Check", H2),
         Paragraph(f"Here, we check that the {fixed('AMI_Init()')} function is linear."),
         spacer,
@@ -297,7 +298,7 @@ class AmiTestInitVsGetwave(AmiTester):
 
     helper = AmiTestHelperInitVsGetwave(DEBUG)
 
-    preamble = [
+    preamble: ClassVar = [
         Paragraph("Init() vs. GetWave()", H2),
         Paragraph(
             "Here, we check to see that the fundamental responses of the model are the same \
@@ -327,7 +328,7 @@ class AmiTestSamplesPerBit(AmiTester):
 
     helper = AmiTestHelperSamplesPerBit()
 
-    preamble = [
+    preamble: ClassVar = [
         Paragraph("Samples per Bit", H2),
         Paragraph("Here, we test the model's sensitivity to the oversampling factor, \
                    i.e., number of samples per bit (or, symbol).", P),
@@ -420,7 +421,7 @@ def test_ami_model(
 
     # Attempt to create the AMI model and its configurator.
     ibis_file_dir = ibis_file.parent
-    dll_file, ami_file = list(map(lambda f: ibis_file_dir / Path(f), ami_files))
+    dll_file, ami_file = [ibis_file_dir / Path(f) for f in ami_files]
     try:
         ami_model = AMIModel(str(dll_file))
     except Exception as err:
@@ -435,7 +436,7 @@ def test_ami_model(
         has_getwave = pcfg.fetch_param_val(["Reserved_Parameters", "GetWave_Exists"]) or False
         ignore_bits = pcfg.fetch_param_val(["Reserved_Parameters", "Ignore_Bits"]) or 0
         returns_impulse = pcfg.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"]) or False
-        has_ts4 = True if pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]) else False
+        has_ts4 = bool(pcfg.fetch_param_val(["Reserved_Parameters", "Ts4file"]))
     except Exception as err:
         flowables.append(Paragraph(str(err), P))
         flowables.append(Paragraph(f"Error loading AMI parameter file: {ami_file}!", P))

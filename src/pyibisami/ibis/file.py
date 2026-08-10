@@ -70,14 +70,14 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     via the ``model_dict`` property.
     """
 
-    _file_name: str = ""
-    _ibis_ver: float = 0.0
-    _file_rev: str = ""
-    _date: str = ""
-    _model_dict: dict[str, Any] = {}
-    _models: dict[str, Model] = {}
-    _model_selectors: dict[str, list[str]] = {}
-    _components: dict[str, Component] = {}
+    _file_name: str
+    _ibis_ver: float
+    _file_rev: str
+    _date: str
+    _model_dict: dict[str, Any]
+    _models: dict[str, Model]
+    _model_selectors: dict[str, list[str]]
+    _components: dict[str, Component]
     _log: str = ""
 
     pin_ = Property(Any, depends_on=["pin"])
@@ -118,7 +118,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         """
 
         if mname in self._model_selectors:
-            return list(map(lambda pr: pr[0], self._model_selectors[mname]))
+            return [pr[0] for pr in self._model_selectors[mname]]
         else:
             if mname in self._models:
                 return [mname]
@@ -204,9 +204,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._components = components
         if "model_selectors" in model_dict:
             self._model_selectors = model_dict["model_selectors"]
+        else:
+            self._model_selectors = {}
 
         # Add Traits for various attributes found in the IBIS file.
-        self.add_trait("comp", Trait(list(components)[0], components))  # Doesn't need a custom mapper, because
+        self.add_trait("comp", Trait(next(iter(components)), components))  # Doesn't need a custom mapper, because
         self.pins = self.get_pins()                                     # the thing above it (file) can't change.
         try:
             self.add_trait("pin", Enum(self.pins[0], values="pins"))
@@ -227,7 +229,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._os_type = platform.system()  # These 2 are used, to choose
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
-        self._comp_changed(list(components)[0])  # Wasn't being called automatically.
+        self._comp_changed(next(iter(components)))  # Wasn't being called automatically.
         self._pin_changed(self.pins[0])  # Wasn't being called automatically.
 
         self.log("Done.")
@@ -266,7 +268,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         """Log a message to the console and, optionally, to terminal and/or
         pop-up dialog."""
         _msg = msg.strip()
-        txt = f"\n[{datetime.now()}]: IBISModel: {_msg}\n"
+        txt = f"\n[{datetime.now(datetime.timezone(hours='0'))}]: IBISModel: {_msg}\n"
         self._log += txt
         if self.debug:
             print(txt, flush=True)

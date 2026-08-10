@@ -36,7 +36,7 @@ def get_sweepers(
     return (
         mod.__doc__,
         [obj for name, obj in inspect.getmembers(mod, inspect.isclass)  # type: ignore
-         if issubclass(obj, TestSweep) and not obj == TestSweep]
+         if issubclass(obj, TestSweep) and obj != TestSweep]
     )
 
 

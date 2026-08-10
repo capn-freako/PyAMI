@@ -13,7 +13,8 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import re
 
 from functools import reduce
-from typing import Any, Generator, Iterable, Optional, TypeAlias, TypeVar
+from typing import Any, Optional, TypeAlias, TypeVar
+from collections.abc import Generator, Iterable
 
 from parsec import (
     ParseError,
@@ -419,7 +420,7 @@ def model():
     try:
         theModel = Model(dict(res))
     except LookupError as le:
-        return fail_with(f"[Model] {nm}: {str(le)}")
+        return fail_with(f"[Model] {nm}: {le!s}")
     return {nm: theModel}
 
 
@@ -501,9 +502,9 @@ def comp():
     try:
         Component(dict(res))
     except LookupError as le:
-        return fail_with(f"[Component] {nm}: {str(le)}")
+        return fail_with(f"[Component] {nm}: {le!s}")
     except Exception as err:  # pylint: disable=broad-exception-caught
-        return fail_with(f"[Component] {nm}: {str(err)}")
+        return fail_with(f"[Component] {nm}: {err!s}")
     return {nm: Component(dict(res))}
 
 

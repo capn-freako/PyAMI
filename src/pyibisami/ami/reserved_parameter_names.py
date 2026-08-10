@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class AmiReservedParameterName():
+class AmiReservedParameterName:
     "IBIS-AMI Reserved Parameter Name"
 
     pname: str

@@ -9,8 +9,8 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
 from dataclasses import dataclass
-# import logging
-from typing import Generator, Optional, Sequence, TypeAlias
+from typing import Optional, TypeAlias
+from collections.abc import Generator, Sequence
 import warnings
 
 from matplotlib import pyplot as plt
@@ -249,13 +249,13 @@ def plot_resps(
     if OUT_RESP_INIT in resps:
         if debug:
             print("Plotting OUT_RESP_INIT...")
-        t, h, s, p, f, H = resps[OUT_RESP_INIT]
+        t, _, s, p, f, H = resps[OUT_RESP_INIT]
         left_ax.plot(t * 1e9, s,            color=init_color, linestyle=init_linestyle,)
         left_ax.plot(t * 1e9, p, label=lbl, color=init_color, linestyle=init_linestyle,)
         right_ax.semilogx(f / 1e9, 20 * np.log10(np.abs(H)), label=lbl,
                           color=init_color, linestyle=init_linestyle,)
     if OUT_RESP_GETW in resps:
-        t, h, s, p, f, H = resps[OUT_RESP_GETW]
+        t, _, s, p, f, H = resps[OUT_RESP_GETW]
         left_ax.plot(t * 1e9, s, color=getwave_color, linestyle=getwave_linestyle,)
         left_ax.plot(t * 1e9, p, color=getwave_color, linestyle=getwave_linestyle,)
         right_ax.semilogx(f / 1e9, 20 * np.log10(np.abs(H)),

@@ -11,7 +11,8 @@ Copyright (C) 2026 David Banas; all rights reserved World wide.
 from abc                import abstractmethod
 from dataclasses        import dataclass
 from pathlib            import Path
-from typing             import Any, Generator, NewType, Optional
+from typing             import Any, NewType, Optional
+from collections.abc    import Generator
 
 import numpy as np
 from scipy.interpolate  import interp1d

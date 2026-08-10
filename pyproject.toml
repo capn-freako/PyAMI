@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyibis-ami"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "9.2.0"
+version = "9.3.0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           ]
 readme = "README.md"
@@ -95,6 +95,13 @@ ignore = [
 [tool.ruff]
 exclude = [
     "*.ipynb"
+]
+lint.ignore = [
+    "UP045",    # "Optional[X] -> "X | None"
+    "I001",     # import formatting
+    "BLE001",   # blind exceptions
+    "UP031",    # format specifiers instead of '%'
+    "RUF022",   # unsorted all
 ]
 
 [[tool.mypy.overrides]]

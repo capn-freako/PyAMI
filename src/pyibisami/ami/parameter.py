@@ -7,6 +7,8 @@ Original date:   December 24, 2016
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 
+from typing import ClassVar
+
 from traits.api import Bool, Float, HasTraits, List, Str
 
 #####
@@ -181,7 +183,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
     # The idea is to allow this class to grow along with the IBIS
     # standard, without having to change any of its boilerplate.
 
-    _param_def_tag_procs = {
+    _param_def_tag_procs: ClassVar = {
         "Usage": _set_usage,
         "Type": _set_type,
         "Format": _set_format,

@@ -171,7 +171,7 @@ def mk_model(
                     "param_types": param_types,
                     "model_name": model_name,
                     "description": description,
-                    "date": str(date.today()),
+                    "date": str(date.today()),  # noqa: DTZ011
                 },
             )
             try:
@@ -246,8 +246,8 @@ def mk_tests(  # pylint: disable=too-many-locals
     pname.mkdir(exist_ok=True)
     pname = (pname / file_base_name).resolve()
     pname.mkdir(exist_ok=True)
-    for fname in test_defs.keys():
-        desc, ami_defs, sim_defs, ref_fstr = test_defs[fname]
+    for fname, value in test_defs.items():
+        desc, ami_defs, sim_defs, ref_fstr = value
         ami_str, ami_dict = ami_defs
         sim_str, sim_dict = sim_defs
         with open((pname / fname).with_suffix(".run"), "w", encoding="utf-8") as f:
@@ -258,8 +258,7 @@ def mk_tests(  # pylint: disable=too-many-locals
                     pdict.update(dict(sim_comb))
                     f.write(f"\n('{ami_str.format(pdict=pdict)}_{sim_str.format(pdict=pdict)}', \\\n")
                     f.write(f"  ({{'root_name': '{file_base_name}', \\\n")
-                    for k, v in ami_comb:
-                        f.write(f"    '{k}': {v}, \\\n")
+                    f.writelines(f"    '{k}': {v}, \\\n" for k, v in ami_comb)
                     f.write("   }, \\\n")
                     if sim_comb:
                         head, *tail = sim_comb
