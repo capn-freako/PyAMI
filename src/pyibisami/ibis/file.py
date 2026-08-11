@@ -15,7 +15,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
 import platform
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from traits.api import (
@@ -268,7 +268,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         """Log a message to the console and, optionally, to terminal and/or
         pop-up dialog."""
         _msg = msg.strip()
-        txt = f"\n[{datetime.now(datetime.timezone(hours='0'))}]: IBISModel: {_msg}\n"
+        txt = f"\n[{datetime.now(tz=timezone(timedelta(hours=0)))}]: IBISModel: {_msg}\n"
         self._log += txt
         if self.debug:
             print(txt, flush=True)
