@@ -145,11 +145,11 @@ def _compare_params_out(
         actual_norm = _normalize_params_str(ami_model.ami_params_out)
         golden_norm = _normalize_params_str(golden_str)
         matched = (actual_norm == golden_norm)
-        msgs = [] if matched else [
+        msgs = [] if matched else [(
             "params_out mismatch.\n"
             f"  Got:      {actual_norm}\n"
             f"  Expected: {golden_norm}"
-        ]
+        )]
         return True, matched, msgs
     except Exception as exc:  # pylint: disable=broad-exception-caught
         return True, False, [f"params_out comparison failed: {exc}"]
