@@ -187,12 +187,22 @@ class AMIParamConfigurator(HasTraits):
             return _param.pvalue
         return None
 
-    def set_param_val(self, branch_names, new_val):
-        """Sets the value of the parameter found by traversing 'branch_names'
+    def set_param_val(
+        self: AMIParamConfigurator,
+        branch_names: list[str],
+        new_val: Any
+    ) -> None:
+        """
+        Sets the value of the parameter found by traversing 'branch_names'
         or raises an exception if not found.
 
-        Note: 'branch_names' should *not* begin with 'root_name'.
-        Note: Be careful! There is no checking done here!
+        Args:
+            branch_names: A sequence of node names, used to traverse the parameter tree.
+            new_val: The value to assign to the target parameter.
+
+        Notes:
+            1. ``branch_names`` should *not* begin with <root_name>.
+            2. Be careful! There is no checking done here!
         """
 
         param_dict = self.ami_param_defs
@@ -205,7 +215,7 @@ class AMIParamConfigurator(HasTraits):
             else:
                 tname_parts.append(branch_name)
             if branch_name in param_dict:
-                param_dict = param_dict[branch_name]
+                param_dict = param_dict[branch_name]  # type: ignore
             else:
                 raise ValueError(
                     f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"

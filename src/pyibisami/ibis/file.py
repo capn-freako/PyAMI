@@ -70,16 +70,6 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     via the ``model_dict`` property.
     """
 
-    _file_name: str
-    _ibis_ver: float
-    _file_rev: str
-    _date: str
-    _model_dict: dict[str, Any]
-    _models: dict[str, Model]
-    _model_selectors: dict[str, list[str]]
-    _components: dict[str, Component]
-    _log: str = ""
-
     pin_ = Property(Any, depends_on=["pin"])
     pin_rlcs = Property(Dict, depends_on=["pin"])
     model = Property(Any, depends_on=["mod"])
@@ -158,7 +148,12 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         return list(filter(pin_ok, list(pins)))
 
-    def __init__(self, ibis_file_name, debug=False, gui=True):
+    def __init__(
+        self: "IBISModel",
+        ibis_file_name: str,
+        debug: bool = False,
+        gui: bool = True
+    ) -> None:
         """
         Args:
             ibis_file_name (str): The name of the IBIS file.
@@ -176,6 +171,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         self.debug = debug
         self.GUI = gui
+        self._log: str = ""
         if debug:
             self.log("pyibisami.ibis_file.IBISModel initializing in debug mode...")
         else:
@@ -185,10 +181,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         with open(ibis_file_name, "r", encoding="utf-8") as file:
             ibis_file_contents_str = file.read()
         err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
-        self._file_name = model_dict.get("file_name", "(n/a)")
-        self._ibis_ver = model_dict.get("ibis_ver", "(n/a)")
-        self._file_rev = model_dict.get("file_rev", "(n/a)")
-        self._date = model_dict.get("date", "(n/a)")
+        self._file_name: str = model_dict.get("file_name", "(n/a)")
+        self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
+        self._file_rev: str = model_dict.get("file_rev", "(n/a)")
+        self._date: str = model_dict.get("date", "(n/a)")
         self.log("IBIS parsing errors/warnings:\n" + err_str)
         if "components" not in model_dict or not model_dict["components"]:
             if debug:
@@ -199,24 +195,25 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             if debug:
                 print(f":\n{model_dict}", flush=True)
             raise ValueError("This IBIS model has no models!")
-        self._model_dict = model_dict
-        self._models = model_dict["models"]
-        self._components = components
+
+        self._model_dict: dict[str, Any] = model_dict
+        self._models: dict[str, Model] = model_dict["models"]
+        self._components: dict[str, Component] = components
+        self._model_selectors: dict[str, list[str]] = {}
         if "model_selectors" in model_dict:
-            self._model_selectors = model_dict["model_selectors"]
-        else:
-            self._model_selectors = {}
+            self._model_selectors.update(model_dict["model_selectors"])
 
         # Add Traits for various attributes found in the IBIS file.
-        self.add_trait("comp", Trait(next(iter(components)), components))  # Doesn't need a custom mapper, because
-        self.pins = self.get_pins()                                     # the thing above it (file) can't change.
+        # Doesn't need a custom mapper because the thing above it (file) can't change:
+        self.add_trait("comp", Trait(next(iter(components)), components))
+        self.pins = self.get_pins()  # type: ignore
         try:
-            self.add_trait("pin", Enum(self.pins[0], values="pins"))
+            self.add_trait("pin", Enum(self.pins[0], values="pins"))  # type: ignore
         except Exception as err:
             raise ValueError(f"self.pins: {self.pins}") from err
         (mname, _) = self.pin_
-        self.models = self.get_models(mname)
-        self.add_trait("mod", Enum(self.models[0], values="models"))
+        self.models = self.get_models(mname)  # type: ignore
+        self.add_trait("mod", Enum(self.models[0], values="models"))  # type: ignore
         self.add_trait("ibis_ver", Float(model_dict["ibis_ver"]))
         self.add_trait("file_name", String(model_dict["file_name"]))
         self.add_trait("file_rev", String(model_dict["file_rev"]))
@@ -230,7 +227,8 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
         self._comp_changed(next(iter(components)))  # Wasn't being called automatically.
-        self._pin_changed(self.pins[0])  # Wasn't being called automatically.
+        # Wasn't being called automatically:
+        self._pin_changed(self.pins[0])  # type: ignore
 
         self.log("Done.")
 
