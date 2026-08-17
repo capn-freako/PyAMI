@@ -5,7 +5,7 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check format lint type-check docs build upload upload_test test clean distclean
+.PHONY: dflt help check format lint type-check docs requirements.txt build upload upload_test test clean distclean
 
 SRC_DIR := src/pyibisami
 DOCS_DIR := docs
@@ -38,7 +38,10 @@ type-check:
 docs:
 	pushd ${DOCS_DIR}; PROJ_VER=${PROJ_VER} ${UV_EXEC} run sphinx-build -j auto -b html source/ build/; popd
 
-build:
+requirements.txt:
+	${UV_EXEC} export --package pyibis-ami --no-dev --no-hashes --no-emit-project -o requirements.txt
+
+build: requirements.txt
 	${UV_EXEC} build --clear --no-create-gitignore --out-dir dist
 
 upload: build
@@ -69,6 +72,7 @@ help:
 	@echo "\ttype-check: Run type checking, via 'mypy', on the source code."
 	@echo "\tdocs: Run 'sphinx' on the source code, to generate documentation."
 	@echo "\t\tTo view the resultant API documentation, open 'docs/build/index.html' in a browser."
+	@echo "\trequirements.txt: Regenerate 'requirements.txt' from 'uv.lock', for inclusion in the sdist."
 	@echo "\tbuild: Build both the source tarball and wheel."
 	@echo "\tupload: Upload both the source tarball and wheel to PyPi."
 	@echo "\tupload_test: Upload both the source tarball and wheel to TestPyPi."
