@@ -1,5 +1,6 @@
 include README.md
 include LICENSE
+include requirements.txt
 include src/pyibisami/tools/test_results.xsl
 include src/pyibisami/ami/generic.ami.em
 include src/pyibisami/ami/generic.ibs.em
