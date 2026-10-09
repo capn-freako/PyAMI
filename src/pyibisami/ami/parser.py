@@ -18,8 +18,6 @@ import numpy as np
 from numpy.typing import NDArray
 from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
-from traitsui.api import Group, HGroup, Item, VGroup, View
-from traitsui.menu import ModalButtons
 
 from .model                     import AMIModelInitializer
 from .parameter                 import AmiParamTuner, AMIParamError, AMIParameter
@@ -127,15 +125,14 @@ class AMIParamConfigurator(HasTraits):
             raise RuntimeError("\n\t".join(err_msgs))
         if not reserved_param_dict:
             raise ValueError("No 'Reserved_Parameters' section found!")
-        gui_items, new_traits = make_gui(model_specific_dict)
         trait_names = []
-        for trait in new_traits:
-            self.add_trait(trait[0], trait[1])
-            trait_names.append(trait[0])
+        for pname, param in model_specific_dict.items():
+            for trait_name, trait in make_param_traits(pname, param):
+                self.add_trait(trait_name, trait)
+                trait_names.append(trait_name)
         self._param_trait_names = trait_names
         self._root_name = root_name
         self._ami_parsing_errors = errors + warnings
-        self._content = gui_items
         self._reserved_param_dict = reserved_param_dict
         self._model_specific_dict = model_specific_dict
         self._description = description
@@ -150,14 +147,9 @@ class AMIParamConfigurator(HasTraits):
         self.configure_traits()
 
     def default_traits_view(self):
-        "Default Traits/UI view definition."
-        view = View(
-            resizable=False,
-            buttons=ModalButtons,
-            title=f"{self._root_name} AMI Parameter Configurator",
-        )
-        view.set_content(self._content)
-        return view
+        "Default Traits/UI view definition. (Requires the optional GUI dependencies.)"
+        from .gui import make_view  # pylint: disable=import-outside-toplevel
+        return make_view(self._root_name, self._model_specific_dict)
 
     def fetch_param(self, branch_names):
         """Returns the parameter found by traversing 'branch_names' or None if
@@ -289,7 +281,7 @@ class AMIParamConfigurator(HasTraits):
                 vals = [float(v) for v in param.pvalue]
                 pmin, pmax, step, is_int = min(vals), max(vals), 1.0, True
                 # `pvalue`, for 'List' format, is the list of *legal* values, not the
-                # current one -- that lives on the Trait `make_gui_items()` registered.
+                # current one -- that lives on the Trait `make_param_traits()` registered.
                 try:
                     value = float(self.trait_get(tname + "_")[tname + "_"])
                 except Exception:  # pylint: disable=broad-exception-caught
@@ -756,7 +748,7 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
     )
 
 
-def make_gui(params: ModelSpecificDict) -> tuple[Group, list[tuple[str, TraitType]]]:  # pylint: disable=too-many-locals
+def make_gui(params: ModelSpecificDict) -> tuple[Any, list[tuple[str, TraitType]]]:
     """
     Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
 
@@ -770,86 +762,45 @@ def make_gui(params: ModelSpecificDict) -> tuple[Group, list[tuple[str, TraitTyp
             - a list of new ``Trait`` s created.
 
     Notes:
-        1. The dictionary passed through ``params`` may have sub-dictionaries.
-        The window layout will reflect this nesting.
-        2. Some AMI files are written to encode the AMI parameter hierarchy
-        via some parameter naming scheme. This function makes a primitive attempt
-        to decode one particular example of this: ``<grp>_<param>``.
+        1. Requires the optional GUI dependencies (``pip install "pyibis-ami[gui]"``).
+        Headless code should use ``make_param_traits()`` instead.
     """
 
-    gui_items: list[Item | Group] = []
+    from .gui import make_gui_group  # pylint: disable=import-outside-toplevel
+
     new_traits: list[tuple[str, TraitType]] = []
-
-    # Place parameters with a common prefix in their names,
-    # but no pre-existing enclosing group, in a ``VGroup``.
-    # - Generate grouped parameter names and list of unique group names.
-    pnames = list(params.keys())
-    pnames_split = [n.split('_') for n in pnames]
-    group_names = [xs[0] for xs in pnames_split]
-    grouped_pnames = list(zip(pnames, group_names))
-    # The following doesn't preserve the parameter ordering of the AMI file!
-    # for group_name in set(group_names):  # Iterate over unique group names.
-    unique_group_names = []
-    for group_name in group_names:
-        if group_name not in unique_group_names:
-            unique_group_names.append(group_name)
-    # - Process all parameters, trapping those from a non-explicit group for special processing.
-    for group_name in unique_group_names:
-        pnames_in_group = [pname for pname, grp_name in grouped_pnames if grp_name == group_name]
-        if len(pnames_in_group) > 1:
-            _gui_items: list[Item | Group] = []
-            for pname in pnames_in_group:
-                gui_item, new_trait = make_gui_items(pname, params[pname])
-                _gui_items.extend(gui_item)
-                new_traits.extend(new_trait)
-            gui_items.append(VGroup(*_gui_items, label=group_name, show_border=True))
-        else:
-            pname = pnames_in_group[0]
-            gui_item, new_trait = make_gui_items(pname, params[pname])
-            gui_items.extend(gui_item)
-            new_traits.extend(new_trait)
-
-    # Finally, split into two rows if necessary.
-    MAX_ITEMS_PER_ROW = 8
-    if len(gui_items) > MAX_ITEMS_PER_ROW:
-        rslt_grp = VGroup(
-            HGroup(*(gui_items[:MAX_ITEMS_PER_ROW])),
-            HGroup(*(gui_items[MAX_ITEMS_PER_ROW:])))
-    else:
-        rslt_grp = HGroup(*gui_items)
-
-    return (rslt_grp, new_traits)
+    for pname, param in params.items():
+        new_traits.extend(make_param_traits(pname, param))
+    return (make_gui_group(params), new_traits)
 
 
-def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
+def make_param_traits(  # pylint: disable=too-many-branches
     pname: str,
     param: AMIParameter | Parameters
-) -> tuple[list[Item | Group], list[tuple[str, TraitType]]]:
+) -> list[tuple[str, TraitType]]:
     """
-    Builds list of GUI items and list of traits from AMI parameter or dictionary.
+    Builds list of traits from AMI parameter or dictionary.
 
     Args:
         pname: Parameter or sub-group name.
         param: AMI parameter or dictionary of AMI parameters to be configured.
 
     Returns:
-        A pair consisting of:
-
-            - the list of GUI items for the ``View``, and
-            - the list of new ``Trait`` s created.
+        The list of new ``(name, Trait)`` pairs created, one per *In*/*InOut* parameter.
 
     Notes:
         1. A dictionary passed through ``param`` may have sub-dictionaries.
-        These will be converted into sub- ``Group`` s in the returned list of GUI items.
+        Their parameters are named ``<pname>_<subparam_name>``, recursively.
+        (``pyibisami.ami.gui.make_gui_items()`` uses the same naming.)
     """
 
     if isinstance(param, AMIParameter):  # pylint: disable=no-else-return
         pusage = param.pusage
         if pusage not in ("In", "InOut"):
-            return ([], [])
+            return []
 
         if param.ptype == "Boolean":
-            return ([Item(pname, tooltip=param.pdescription)], [(pname, Bool(param.pvalue))])
+            return [(pname, Bool(param.pvalue))]
 
         pformat = param.pformat
         match pformat:
@@ -881,25 +832,11 @@ def make_gui_items(  # pylint: disable=too-many-locals,too-many-branches
             the_trait.metadata.update({"transient": False})  # Required to support modal dialogs.
         else:
             the_trait.metadata = {"transient": False}
-        return ([Item(name=pname, label=pname.split("_")[-1], tooltip=param.pdescription)], [(pname, the_trait)])
+        return [(pname, the_trait)]
 
     else:  # subparameter branch
-        gui_items: list[Item | Group] = []
         new_traits: list[tuple[str, TraitType]] = []
-        subparam_names = list(param.keys())
-        subparam_names.sort()
-        group_desc = None
-
-        # Build GUI items for this branch.
-        for subparam_name in subparam_names:
-            if subparam_name == "description":
-                group_desc = param[subparam_name]
-            else:
-                tmp_items, tmp_traits = make_gui_items(pname + "_" + subparam_name, param[subparam_name])
-                gui_items.extend(tmp_items)
-                new_traits.extend(tmp_traits)
-
-        if group_desc:
-            gui_items = [Item(label=group_desc)] + gui_items
-
-        return ([VGroup(*gui_items, label=pname.split("_")[-1], show_border=True)], new_traits)
+        for subparam_name in sorted(param.keys()):
+            if subparam_name != "description":
+                new_traits.extend(make_param_traits(pname + "_" + subparam_name, param[subparam_name]))
+        return new_traits

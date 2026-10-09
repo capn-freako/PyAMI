@@ -30,8 +30,6 @@ from traits.api import (
     Trait,
     cached_property,
 )
-from traitsui.api import HGroup, Item, ModalButtons, VGroup, View, spring
-from traitsui.message import message
 
 from .model import Component, Model
 from .parser import parse_ibis_file
@@ -54,7 +52,8 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         parsing its contents, and reporting any errors or warnings
         it encounters, in its ``ibis_parsing_errors`` property.
 
-     2. When you want to let the user select a particular component/pin/model,
+     2. When you want to let the user select a particular component/pin/model
+        (requires the optional GUI dependencies: ``pip install "pyibis-ami[gui]"``),
         call the newly created instance, as if it were a function, passing
         no arguments.
         The instance will then present a GUI to the user,
@@ -271,10 +270,19 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         if self.debug:
             print(txt, flush=True)
         if alert and self.GUI:
-            message(_msg, "PyAMI Alert")
+            try:
+                from traitsui.message import message  # pylint: disable=import-outside-toplevel
+            except ImportError:  # GUI dependencies not installed; fall back to the console.
+                if not self.debug:
+                    print(txt, flush=True)
+            else:
+                message(_msg, "PyAMI Alert")
 
     def default_traits_view(self):
-        "Default Traits/UI view definition."
+        "Default Traits/UI view definition. (Requires the optional GUI dependencies.)"
+        from pyibisami.common import require_gui  # pylint: disable=import-outside-toplevel
+        with require_gui():
+            from traitsui.api import HGroup, Item, ModalButtons, VGroup, View, spring  # pylint: disable=import-outside-toplevel
         view = View(
             VGroup(
                 HGroup(

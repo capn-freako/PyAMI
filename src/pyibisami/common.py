@@ -8,6 +8,8 @@ Original date:   May 15, 2024
 Copyright (c) 2024 David Banas; all rights reserved World wide.
 """
 
+from collections.abc    import Iterator
+from contextlib         import contextmanager
 from typing             import Any, TypeAlias, TypeVar
 
 import numpy        as np
@@ -29,6 +31,20 @@ EPS:   float = 0.0001  # Used to test floats for "== 0".
 # TestSweep:  TypeAlias = tuple[str, str, list[TestConfig]]
 TestConfig = tuple[str, tuple[dict[str, Any], dict[str, Any]]]
 TestSweep = tuple[str, str, list[TestConfig]]
+
+GUI_INSTALL_HINT = 'The PyIBIS-AMI GUI requires its optional dependencies: pip install "pyibis-ami[gui]"'
+
+
+@contextmanager
+def require_gui() -> Iterator[None]:
+    """
+    Guard the imports of the optional GUI dependencies (``traitsui``, ``chaco``, ``enable``),
+    turning their absence into an ``ImportError`` that says how to install them.
+    """
+    try:
+        yield
+    except ImportError as err:
+        raise ImportError(f"{GUI_INSTALL_HINT}\n({err})") from err
 
 
 def deconv_same(y: Rvec, x: Rvec) -> Rvec:

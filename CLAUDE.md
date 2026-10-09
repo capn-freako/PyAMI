@@ -45,13 +45,15 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 - **`model.py`**: Core ctypes wrappers.
   - `AMIModelInitializer`: holds all data needed to call `AMI_Init()` — channel response, timing, AMI params string. `channel_response` is set via property setter; `bit_time` and `sample_interval` must be `c_double` instances passed as keyword args.
   - `AMIModel`: loads a DLL/SO, binds `AMI_Init`/`AMI_GetWave`/`AMI_Close`, calls them. `__del__` calls `AMI_Close()` automatically. `initialize(AMIModelInitializer)` → `initOut` (impulse response), `ami_params_out`. `getWave(input_wave, bits_per_call)` → `(wave_out, clocks, params_list)`.
-- **`parser.py`**: Parsec-based parser for `.ami` S-expression files. Exports `ignore`, `root`, and `AMIParamConfigurator`. `AMIParamConfigurator.get_init()` is the standard way to build an `AMIModelInitializer` from a parsed `.ami` file.
+- **`parser.py`**: Parsec-based parser for `.ami` S-expression files. Exports `ignore`, `root`, and `AMIParamConfigurator`. `AMIParamConfigurator.get_init()` is the standard way to build an `AMIModelInitializer` from a parsed `.ami` file. Its parameter values live on Traits built by `make_param_traits()` (`traits` only, no TraitsUI).
+- **`gui.py`**: the optional GUI layer -- builds the configurator's TraitsUI `View`; its item names must match `make_param_traits()`'s trait names. Imported only lazily (`default_traits_view()`).
 - **`parameter.py`**: `AMIParameter` dataclass representing one leaf parameter with type/range/usage/value metadata.
 - **`config.py`**: `ami-config` CLI entry point; reads a Python model-config file and renders `.ami`/`.ibs` via EmPy templates.
 
 ### `ibis/` — IBIS file parsing layer
 - **`parser.py`**: Parsec-based parser for `.ibs` files. Entry point: `parse_ibis_file(content: str) → (status_str, ibis_dict)`. Parsers are `@generate`-decorated generator functions. The `ignore` combinator (whitespace + `|` comments) is called at the end of `rest_line`; `word(p)` = `ignore >> p`. The `[Algorithmic Model]` block parser (`algo_model`) returns `{"executables": [...], "test_configs": {...}}`.
-- **`model.py`**: `Component` and `Model` (both `HasTraits`). `Model` unpacks the `algo_model` dict; exposes `.test_configs: dict` and `.executables: list` properties alongside the existing exec-split properties (`_exec64Lins`, etc.).
+- **`model.py`**: `Component` and `Model` -- plain classes, no GUI machinery. `Model` unpacks the `algo_model` dict; exposes `.test_configs: dict` and `.executables: list` properties alongside the existing exec-split properties (`_exec64Lins`, etc.), and its processed I-V tables as `.iv_curves` (plain arrays).
+- **`gui.py`**: the optional GUI layer -- `ComponentView`/`ModelView` (TraitsUI) and `make_iv_plot()` (Chaco). Imported only lazily (`Model()`/`Component()`/`Model.plot_iv`).
 - **`file.py`**: `IBISModel(HasTraits)` — high-level object that holds the full parsed IBIS file, including all `Component` and `Model` instances.
 
 ### `testing/` — Model test runners
@@ -65,6 +67,8 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 - **`run_tests.py`**: `run-tests` CLI; old EmPy-based XML test runner.
 
 ## Key patterns
+
+**Headless core / optional GUI**: Chaco, Enable, and TraitsUI are the optional `gui` extra (`pip install "pyibis-ami[gui]"`; Issue #95). Never import them -- or `matplotlib`, outside a debug/plot path -- at module level in the parsing/modeling modules; put GUI code in a `gui.py` module (guarded by `common.require_gui()`) and import it lazily. `tests/test_headless.py` enforces this. `traits` itself stays a core dependency.
 
 **Parsec parsers**: use `@generate` + `yield`. The `ignore` combinator is always safe to call (matches zero or more whitespace/comment tokens). `word(p) = ignore >> p`. Keyword-keyed blocks use `keyword("name") >> parser`.
 

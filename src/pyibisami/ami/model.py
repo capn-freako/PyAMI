@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, TypeAlias, TypedDict
 
-from matplotlib import pyplot as plt
 import numpy as np
 from numpy.random     import default_rng
 
@@ -609,6 +608,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             ).repeat(nspui) - 0.5   # Apply oversampling.
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
             if debug:
+                from matplotlib import pyplot as plt  # pylint: disable=import-outside-toplevel
                 plt.plot(wave_out)
                 plt.show()
 
@@ -619,6 +619,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             wave_in = np.convolve(u, chnl_imp)[:len(u)]
             wave_out, _, self._getwave_step_response_out_params = self.getWave(wave_in, bits_per_call=bits_per_call)
             if debug:
+                from matplotlib import pyplot as plt  # pylint: disable=import-outside-toplevel
                 plt.plot(wave_out)
                 plt.show()
             s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5

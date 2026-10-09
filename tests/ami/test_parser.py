@@ -147,7 +147,7 @@ class TestNestedModelSpecificParams:
     """Regression coverage for nested (grouped) `Model_Specific` parameters,
     which exercise a hierarchical-trait-name path that `set_param_val()`
     previously got wrong (it synced only the leaf name, not the full,
-    underscore-joined hierarchical trait name that `make_gui_items()`
+    underscore-joined hierarchical trait name that `make_param_traits()`
     actually registers)."""
 
     def test_tunable_params_nested(self, nested_ami_config):

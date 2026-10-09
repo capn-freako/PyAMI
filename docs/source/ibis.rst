@@ -13,6 +13,11 @@ model
 
 .. automodule:: pyibisami.ibis.model
 
+gui
+---
+
+.. automodule:: pyibisami.ibis.gui
+
 parser
 ------
 

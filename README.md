@@ -8,6 +8,10 @@ command line applications.
 
 It can be installed via: `pip install PyIBIS-AMI`.
 
+That installs everything needed for parsing IBIS/AMI files and driving AMI models, headlessly.
+The interactive viewers/configurators (e.g. - calling an `IBISModel`, `Model`, or `AMIParamConfigurator` instance)
+need the optional GUI dependencies (Chaco, Enable, and TraitsUI), installed via: `pip install "PyIBIS-AMI[gui]"`.
+
 [View API/Developer's Documentation.](https://pyibis-ami.readthedocs.io/en/latest/)
 
 ## Command Line Tools

@@ -8,6 +8,15 @@ If you don't mind installing *PyIBIS-AMI* into your system Python package librar
 
 `pip install pyibis-ami`
 
+Optional GUI dependencies
+-------------------------
+
+The above installs everything needed for parsing IBIS/AMI files and driving AMI models, headlessly.
+The interactive viewers/configurators (e.g. - calling an ``IBISModel``, ``Model``, or ``AMIParamConfigurator`` instance)
+need the optional GUI dependencies (*Chaco*, *Enable*, and *TraitsUI*), which you can add with:
+
+`pip install "pyibis-ami[gui]"`
+
 Installation into custom virtual Python environment
 ---------------------------------------------------
 

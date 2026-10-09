@@ -8,16 +8,17 @@ For information regarding the IBIS modeling standard, visit:
 https://ibis.org/
 
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
+
+**Note:** These classes hold no GUI machinery, so that IBIS parsing doesn't require
+the (optional) GUI dependencies. Their viewers live in ``pyibisami.ibis.gui``.
 """
 
 import numpy as np
-from chaco.api import ArrayPlotData, Plot
-from enable.component_editor import ComponentEditor
-from traits.api import HasTraits, String, Trait
-from traitsui.api import Group, Item, ModalButtons, View
+
+IVCurve = dict[str, np.ndarray]  # Keys: "vs", "ityps", "imins", "imaxs".
 
 
-class Component(HasTraits):
+class Component:
     """Encapsulation of a particular component from an IBIS model file."""
 
     def __init__(self, subDict):
@@ -25,10 +26,6 @@ class Component(HasTraits):
         Args:
             subDict(dict): Dictionary of [Component] sub-keywords/params.
         """
-
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
 
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
@@ -39,20 +36,7 @@ class Component(HasTraits):
         self._pkg = subDict["package"]
         self._pins = subDict["pin"]
         self._diffs = subDict.get("diff_pin")  # Won't flag error; returns `None`.
-
-        # Set up the GUI.
-        self.add_trait("manufacturer", String(self._mfr))
-        self.add_trait("package", String(self._pkg))
-        self.add_trait("_pin", Trait(next(iter(self._pins)), self._pins))
-        self._content = [
-            Group(
-                Item("manufacturer", label="Manufacturer", style="readonly"),
-                Item("package", label="Package", style="readonly"),
-                Item("_pin", label="Pin"),
-                label="Component",
-                show_border=True,
-            ),
-        ]
+        self._pin_name = next(iter(self._pins))  # Updated by the GUI viewer.
 
     def __str__(self):
         res = "Manufacturer:\t" + self._mfr + "\n"
@@ -63,18 +47,19 @@ class Component(HasTraits):
         return res
 
     def __call__(self):
-        self.edit_traits()
+        """Present a GUI viewer. (Requires the optional GUI dependencies.)"""
+        from .gui import ComponentView  # pylint: disable=import-outside-toplevel
+        ComponentView(self).edit_traits()
 
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        view = View(
-            resizable=False,
-            buttons=ModalButtons,
-            title="PyBERT IBIS Component Viewer",
-            id="pyibisami.ibis_parser.Component",
-        )
-        view.set_content(self._content)
-        return view
+    @property
+    def manufacturer(self):
+        "The component manufacturer."
+        return self._mfr
+
+    @property
+    def package(self):
+        "The component package parasitics."
+        return self._pkg
 
     @property
     def pin(self):
@@ -83,7 +68,7 @@ class Component(HasTraits):
         Returns the first pin in the list, if the user hasn't made a
         selection yet.
         """
-        return self._pin_
+        return self._pins[self._pin_name]
 
     @property
     def pins(self):
@@ -91,7 +76,7 @@ class Component(HasTraits):
         return self._pins
 
 
-class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
+class Model:  # pylint: disable=too-many-instance-attributes
     """Encapsulation of a particular I/O model from an IBIS model file."""
 
     def __init__(self, subDict):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
@@ -100,12 +85,9 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             subDict (dict): Dictionary of sub-keywords/params.
         """
 
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
-
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
+        self._iv_curves: dict[str, IVCurve] = {}
 
         # Fetch available keyword/parameter definitions.
         def maybe(name):
@@ -152,12 +134,14 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             zs = map(calcZ, zip([vs, vs, vs], [ityps, imins, imaxs]))
             return vs, ityps, imins, imaxs, zs
 
+        def iv_curve(vs, ityps, imins, imaxs) -> IVCurve:
+            return {"vs": np.array(vs), "ityps": np.array(ityps), "imins": np.array(imins), "imaxs": np.array(imaxs)}
+
         # Infer impedance and/or rise/fall time, as per model type.
         mtype = self._mtype.lower()
         if mtype in ("output", "i/o"):
             if "pulldown" not in subDict or "pullup" not in subDict:
                 raise LookupError("Missing I-V curves!")
-            plotdata = ArrayPlotData()
             pd_vs, pd_ityps, pd_imins, pd_imaxs, pd_zs = proc_iv(subDict["pulldown"])
             pu_vs, pu_ityps, pu_imins, pu_imaxs, pu_zs = proc_iv(subDict["pullup"])
             pu_vs = self._vrange[0] - np.array(pu_vs)  # Correct for Vdd-relative pull-up voltages.
@@ -165,32 +149,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             pu_imins = -np.array(pu_imins)
             pu_imaxs = -np.array(pu_imaxs)
             self._zout = (next(iter(pd_zs)) + next(iter(pu_zs))) / 2
-            plotdata.set_data("pd_vs", pd_vs)
-            plotdata.set_data("pd_ityps", pd_ityps)
-            plotdata.set_data("pd_imins", pd_imins)
-            plotdata.set_data("pd_imaxs", pd_imaxs)
-            plotdata.set_data("pu_vs", pu_vs)
-            plotdata.set_data("pu_ityps", pu_ityps)
-            plotdata.set_data("pu_imins", pu_imins)
-            plotdata.set_data("pu_imaxs", pu_imaxs)
-            plot_iv = Plot(plotdata)  # , padding_left=75)
-            # The 'line_style' trait of a LinePlot instance must be 'dash' or 'dot dash' or 'dot' or 'long dash' or 'solid'.
-            plot_iv.plot(("pd_vs", "pd_ityps"), type="line", color="blue", line_style="solid", name="PD-Typ")
-            plot_iv.plot(("pd_vs", "pd_imins"), type="line", color="blue", line_style="dot", name="PD-Min")
-            plot_iv.plot(("pd_vs", "pd_imaxs"), type="line", color="blue", line_style="dash", name="PD-Max")
-            plot_iv.plot(("pu_vs", "pu_ityps"), type="line", color="red", line_style="solid", name="PU-Typ")
-            plot_iv.plot(("pu_vs", "pu_imins"), type="line", color="red", line_style="dot", name="PU-Min")
-            plot_iv.plot(("pu_vs", "pu_imaxs"), type="line", color="red", line_style="dash", name="PU-Max")
-            plot_iv.title = "Pull-Up/Down I-V Curves"
-            plot_iv.index_axis.title = "Vout (V)"
-            plot_iv.value_axis.title = "Iout (A)"
-            plot_iv.index_range.low_setting = 0
-            plot_iv.index_range.high_setting = self._vrange[0]
-            plot_iv.value_range.low_setting = 0
-            plot_iv.value_range.high_setting = 0.1
-            plot_iv.legend.visible = True
-            plot_iv.legend.align = "ul"
-            self.plot_iv = plot_iv
+            self._iv_curves["pulldown"] = iv_curve(pd_vs, pd_ityps, pd_imins, pd_imaxs)
+            self._iv_curves["pullup"] = iv_curve(pu_vs, pu_ityps, pu_imins, pu_imaxs)
 
             if not self._ramp:
                 raise LookupError("Missing [Ramp]!")
@@ -200,15 +160,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             if "gnd_clamp" not in subDict and "power_clamp" not in subDict:
                 pass
 
-            plotdata = ArrayPlotData()
-
             if "gnd_clamp" in subDict:
                 gc_vs, gc_ityps, gc_imins, gc_imaxs, gc_zs = proc_iv(subDict["gnd_clamp"])
                 gc_z = next(iter(gc_zs))  # Use typical value for Zin calc.
-                plotdata.set_data("gc_vs", gc_vs)
-                plotdata.set_data("gc_ityps", gc_ityps)
-                plotdata.set_data("gc_imins", gc_imins)
-                plotdata.set_data("gc_imaxs", gc_imaxs)
+                self._iv_curves["gnd_clamp"] = iv_curve(gc_vs, gc_ityps, gc_imins, gc_imaxs)
             else:
                 gc_z = 2e6
 
@@ -219,33 +174,9 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 pc_ityps = -np.array(pc_ityps)  # Correct for current sense, for nicer plot.
                 pc_imins = -np.array(pc_imins)
                 pc_imaxs = -np.array(pc_imaxs)
-                plotdata.set_data("pc_vs", pc_vs)
-                plotdata.set_data("pc_ityps", pc_ityps)
-                plotdata.set_data("pc_imins", pc_imins)
-                plotdata.set_data("pc_imaxs", pc_imaxs)
+                self._iv_curves["power_clamp"] = iv_curve(pc_vs, pc_ityps, pc_imins, pc_imaxs)
             else:
                 pc_z = 2e6
-
-            plot_iv = Plot(plotdata)  # , padding_left=75)
-            # The 'line_style' trait of a LinePlot instance must be 'dash' or 'dot dash' or 'dot' or 'long dash' or 'solid'.
-            if "gnd_clamp" in subDict:
-                plot_iv.plot(("gc_vs", "gc_ityps"), type="line", color="blue", line_style="solid", name="PD-Typ")
-                plot_iv.plot(("gc_vs", "gc_imins"), type="line", color="blue", line_style="dot", name="PD-Min")
-                plot_iv.plot(("gc_vs", "gc_imaxs"), type="line", color="blue", line_style="dash", name="PD-Max")
-            if "power_clamp" in subDict:
-                plot_iv.plot(("pc_vs", "pc_ityps"), type="line", color="red", line_style="solid", name="PU-Typ")
-                plot_iv.plot(("pc_vs", "pc_imins"), type="line", color="red", line_style="dot", name="PU-Min")
-                plot_iv.plot(("pc_vs", "pc_imaxs"), type="line", color="red", line_style="dash", name="PU-Max")
-            plot_iv.title = "Power/GND Clamp I-V Curves"
-            plot_iv.index_axis.title = "Vin (V)"
-            plot_iv.value_axis.title = "Iin (A)"
-            plot_iv.index_range.low_setting = 0
-            plot_iv.index_range.high_setting = self._vrange[0]
-            plot_iv.value_range.low_setting = 0
-            plot_iv.value_range.high_setting = 0.1
-            plot_iv.legend.visible = True
-            plot_iv.legend.align = "ul"
-            self.plot_iv = plot_iv
 
             if "gnd_clamp" in subDict and "power_clamp" in subDict:
                 # Parallel combination, as both clamps are always active.
@@ -296,45 +227,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
             self._exec64Wins, self._exec64Lins = splitExecs(exec64s)
 
-        # Set up the GUI.
-        self.add_trait("model_type", String(self._mtype))
-        self.add_trait("c_comp", String(self._ccomp))
-        self.add_trait("cref", String(self._cref))
-        self.add_trait("vref", String(self._vref))
-        self.add_trait("vmeas", String(self._vmeas))
-        self.add_trait("rref", String(self._rref))
-        self.add_trait("trange", String(self._trange))
-        self.add_trait("vrange", String(self._vrange))
-        if mtype in ("output", "i/o"):
-            self.add_trait("zout", String(self._zout))
-            self.add_trait("slew", String(self._slew))
-        elif mtype == "input":
-            self.add_trait("zin", String(self._zin))
-        self._content = [
-            Group(
-                Item("model_type", label="Model type", style="readonly"),
-                Item("c_comp", label="Ccomp", style="readonly"),
-                Item("trange", label="Temperature Range", style="readonly"),
-                Item("vrange", label="Voltage Range", style="readonly"),
-                Group(
-                    Item("cref", label="Cref", style="readonly"),
-                    Item("vref", label="Vref", style="readonly"),
-                    Item("vmeas", label="Vmeas", style="readonly"),
-                    Item("rref", label="Rref", style="readonly"),
-                    orientation="horizontal",
-                ),
-                label="Model",
-                show_border=True,
-            ),
-        ]
-        if mtype in ("output", "i/o"):
-            self._content.append(Item("zout", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
-            self._content.append(Item("slew", label="Slew Rate (V/ns)", style="readonly", format_str="%4.1f"))
-            self._content.append(Item("plot_iv", editor=ComponentEditor(), show_label=False))
-        elif mtype == "input":
-            self._content.append(Item("zin", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
-            self._content.append(Item("plot_iv", editor=ComponentEditor(), show_label=False))
-
     def __str__(self):
         res = "Model Type:\t" + self._mtype + "\n"
         res += "C_comp:    \t" + str(self._ccomp) + "\n"
@@ -358,18 +250,55 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return res
 
     def __call__(self):
-        self.edit_traits(kind="livemodal")
+        """Present a GUI viewer. (Requires the optional GUI dependencies.)"""
+        from .gui import ModelView  # pylint: disable=import-outside-toplevel
+        ModelView(self).edit_traits(kind="livemodal")
 
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        view = View(
-            resizable=False,
-            buttons=ModalButtons,
-            title="PyBERT IBIS Model Viewer",
-            id="pyibisami.ibis_parser.Model",
-        )
-        view.set_content(self._content)
-        return view
+    @property
+    def iv_curves(self) -> dict[str, IVCurve]:
+        """The processed I-V curves, keyed by IBIS keyword:
+
+        "pulldown"/"pullup" (Output, I/O) or "gnd_clamp"/"power_clamp" (Input, if present).
+        Each holds "vs", "ityps", "imins", and "imaxs" arrays, with pull-up/power-clamp
+        voltages made ground-relative and their currents negated.
+        """
+        return self._iv_curves
+
+    @property
+    def plot_iv(self):
+        """A Chaco plot of the I-V curves. (Requires the optional GUI dependencies.)"""
+        from .gui import make_iv_plot  # pylint: disable=import-outside-toplevel
+        return make_iv_plot(self)
+
+    @property
+    def trange(self):
+        "Temperature range."
+        return self._trange
+
+    @property
+    def vrange(self):
+        "Voltage range."
+        return self._vrange
+
+    @property
+    def cref(self):
+        "Timing test load capacitance."
+        return self._cref
+
+    @property
+    def vref(self):
+        "Timing test load voltage."
+        return self._vref
+
+    @property
+    def vmeas(self):
+        "Timing measurement voltage."
+        return self._vmeas
+
+    @property
+    def rref(self):
+        "Timing test load resistance."
+        return self._rref
 
     @property
     def zout(self):

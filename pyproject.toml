@@ -5,13 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyibis-ami"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "9.3.1"
+version = "9.4.0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           ]
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "chaco==6.1.1",
     "click==8.4.2",
     "empy==4.2.1",
     "importlib_resources==7.1.0",
@@ -24,7 +23,6 @@ dependencies = [
     "reportlab==5.0.0",
     "scipy>=1.15",
     "traits==7.1.0",
-    "traitsui==8.0.0",
     "types-reportlab==4.5.1.20260712",
 ]
 keywords=["ibis-ami"]
@@ -42,6 +40,14 @@ classifiers=[
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: System :: Emulators",
     "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+# Interactive viewers/configurators (``IBISModel()``, ``Model()``, ``AMIParamConfigurator()``, etc.).
+# Parsing and model evaluation don't need these; see Issue #95.
+gui = [
+    "chaco==6.1.1",
+    "traitsui==8.0.0",
 ]
 
 [project.urls]
@@ -132,6 +138,7 @@ publish-url = "https://test.pypi.org/legacy/"
 
 [dependency-groups]
 dev = [
+    "pyibis-ami[gui]",  # So the GUI tests run in development/CI.
     "m2r2>=0.3.4",
     "mypy>=1.19.1",
     "pytest>=9.0.2",
