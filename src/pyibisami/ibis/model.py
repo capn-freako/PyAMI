@@ -207,7 +207,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self.add_trait("vrange", String(self._vrange))
         if mtype in ("output", "i/o"):
             self.add_trait("zout", Float(self._zout))
-            self.add_trait("slew", String(self._slew))
+            self.add_trait("slew", Float(self._slew))
         elif mtype == "input":
             self.add_trait("zin", Float(self._zin))
 

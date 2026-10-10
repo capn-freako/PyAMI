@@ -39,3 +39,12 @@ def test_show_alerts_pops_up_once(ibis_test_file, monkeypatch):
     gui_ibis.show_alerts(model)
     model._mod_changed(model.mod)  # pylint: disable=protected-access
     assert len(shown) == 1
+
+
+def test_component_pin_selection(ibis_test_file):
+    """``Component.pin`` defaults to the first pin, and follows the selected pin."""
+    comp = IBISModel(ibis_test_file).comp_
+    first, last = list(comp.pins)[0], list(comp.pins)[-1]
+    assert comp.pin == comp.pins[first]
+    comp._pin = last  # pylint: disable=protected-access  # The trait the Component view edits.
+    assert comp.pin == comp.pins[last]

@@ -80,6 +80,20 @@ def test_gui_views_build(ibis_test_file):
         assert names and all(obj.trait(name) is not None for name in names), names
 
 
+def test_gui_input_model_view_builds():
+    """An Input model's view (clamp curves; ``zin`` instead of ``zout``/``slew``) resolves, too."""
+    pytest.importorskip("chaco")
+    from pyibisami.ibis.model import Model
+
+    iv = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]
+    model = Model({"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1], "gnd_clamp": iv, "power_clamp": iv})
+    assert model.zin == pytest.approx(25.0)  # Two 50 Ohm clamps, in parallel.
+    assert sorted(model.plot_iv.plots) == sorted(s.label for s in model.iv_data.series())
+    names = [item.name for item in _items(model.default_traits_view().content) if item.name]
+    assert "zin" in names and "zout" not in names
+    assert all(model.trait(name) is not None for name in names), names
+
+
 def _items(group):
     from traitsui.api import Group
 

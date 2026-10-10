@@ -12,9 +12,10 @@ BLOCKER = textwrap.dedent("""
     import importlib.abc, sys
 
     BLOCKED = {
-        "chaco", "enable", "pyface", "traitsui",  # gui
-        "matplotlib", "reportlab",                # report
-        "jupyter", "nbformat", "papermill",       # notebook
+        "chaco", "enable", "kiwisolver", "pyface", "traitsui",  # gui
+        "PyQt5", "PyQt6", "PySide6",                            # Qt bindings
+        "matplotlib", "reportlab",                              # report
+        "jupyter", "nbformat", "papermill",                     # notebook
     }
 
     class Blocker(importlib.abc.MetaPathFinder):
