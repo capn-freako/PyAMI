@@ -14,6 +14,7 @@ avoid circular imports.
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
+import logging
 import platform
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -30,11 +31,11 @@ from traits.api import (
     Trait,
     cached_property,
 )
-from traitsui.api import HGroup, Item, ModalButtons, VGroup, View, spring
-from traitsui.message import message
 
 from .model import Component, Model
 from .parser import parse_ibis_file
+
+logger = logging.getLogger(__name__)
 
 # ToDo: The ``is_tx`` flag, as well as the AMI files should have _model_, not _file_, scope.
 
@@ -257,7 +258,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         return res
 
     def __call__(self):
-        """Present a customized GUI to the user, for model selection, etc."""
+        """Present a customized GUI to the user, for model selection, etc.
+
+        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
+        """
+        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
         # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
         self.configure_traits()
 
@@ -271,34 +276,17 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         if self.debug:
             print(txt, flush=True)
         if alert and self.GUI:
-            message(_msg, "PyAMI Alert")
+            try:
+                from ..gui.ibis import alert as gui_alert  # pylint: disable=import-outside-toplevel
+            except ImportError:
+                logger.warning(_msg)
+            else:
+                gui_alert(_msg)
 
     def default_traits_view(self):
         "Default Traits/UI view definition."
-        view = View(
-            VGroup(
-                HGroup(
-                    Item("file_name", label="File name", style="readonly"),
-                    spring,
-                    Item("file_rev", label="rev", style="readonly"),
-                ),
-                HGroup(
-                    Item("ibis_ver", label="IBIS ver", style="readonly"),
-                    spring,
-                    Item("date", label="Date", style="readonly"),
-                ),
-                HGroup(
-                    Item("comp", label="Component"),
-                    Item("pin", label="Pin"),
-                    Item("mod", label="Model"),
-                ),
-            ),
-            resizable=False,
-            buttons=ModalButtons,
-            title="PyBERT IBIS Model Selector",
-            id="pybert_ibis_model_selector",
-        )
-        return view
+        from ..gui.ibis import make_ibis_file_view  # pylint: disable=import-outside-toplevel
+        return make_ibis_file_view(self)
 
     @cached_property
     def _get_pin_(self):

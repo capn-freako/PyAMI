@@ -21,6 +21,53 @@ If, instead, you'd prefer to confine the *PyIBIS-AMI* package to a virtual envir
 
 3. `pip install pyibis-ami` (Installs the *PyIBIS-AMI* package into your new virtual environment.)
 
+Optional features (extras)
+--------------------------
+
+The basic installation provides the core library (AMI/IBIS parsing, AMI DLL interaction)
+and the `ami-config` and `check-ami` command line tools.
+Everything else is an optional *extra*, installed by naming it in brackets:
+
+`pip install 'pyibis-ami[gui]'`
+
+=============  ============================================  ====================================================
+Extra          Adds                                          Needed for
+=============  ============================================  ====================================================
+``gui``        `chaco`, `enable`, `traitsui`                 GUIs: ``AMIParamConfigurator.open_gui()``,
+                                                             calling ``IBISModel``/``Component``/``Model``
+                                                             instances, ``Model.plot_iv``
+``report``     `matplotlib`, `reportlab`                     `test-model` & `run-tests` (PDF/plot reports)
+``notebook``   `jupyter`, `papermill`, `lxml-html-clean`,    `run-notebook`
+               `matplotlib`
+``all``        all of the above
+=============  ============================================  ====================================================
+
+Several extras may be combined, e.g.: `pip install 'pyibis-ami[gui,report]'`
+
+Using a feature whose extra isn't installed raises an ``ImportError`` naming the extra to install.
+
+The ``gui`` extra doesn't install a Qt binding, so that applications (e.g. - *PyBERT*) may choose their own.
+If none is chosen (via the ``QT_API`` environment variable), the first one installed is used.
+If you have none, install one; e.g.: `pip install pyside6`
+
+Upgrading from v9.x
+-------------------
+
+Version 10.0 makes the GUI, report, and notebook dependencies optional.
+If you relied on them being installed along with *PyIBIS-AMI*,
+install the appropriate extra (see above); e.g. - `pip install 'pyibis-ami[all]'`
+
+Other changes affecting library users:
+
+- ``make_gui()`` and ``make_gui_items()`` moved from ``pyibisami.ami.parser``
+  to ``pyibisami.gui.ami_config``, and no longer return ``Trait`` s.
+  The ``Trait`` s are built by the new ``pyibisami.ami.parser.make_param_traits()``.
+- The I-V curve data of an IBIS ``[Model]`` is now available, without any GUI dependency,
+  via ``Model.iv_data`` (see ``pyibisami.ibis.iv``).
+  ``Model.plot_iv`` is still available, but now requires the ``gui`` extra,
+  and is built upon first access.
+- ``IBISModel`` alert pop-ups fall back to logged warnings when the ``gui`` extra isn't installed.
+
 Testing the installation
 ------------------------
 

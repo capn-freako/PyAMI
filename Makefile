@@ -5,7 +5,7 @@
 #
 # Copyright (c) 2019 David Banas; all rights reserved World wide.
 
-.PHONY: dflt help check format lint type-check docs requirements.txt build upload upload_test test clean distclean
+.PHONY: dflt help check format lint type-check docs requirements.txt build upload upload_test test test-core clean distclean
 
 SRC_DIR := src/pyibisami
 DOCS_DIR := docs
@@ -57,6 +57,13 @@ test:
             --cov-report=term-missing $(TEST_EXP); \
     done
 
+# Core-only install (no extras, no dev group), to catch hard dependencies on optional packages.
+test-core:
+	@for VERSION in $(PYVERS); do \
+        $(UV_EXEC) run --isolated --no-dev --python $$VERSION --with pytest \
+            pytest -vv -p no:cacheprovider tests/test_core_only.py; \
+    done
+
 clean:
 	rm -rf .tox build/ docs/build/ .mypy_cache .pytest_cache .venv src/*.egg-info
 
@@ -77,5 +84,6 @@ help:
 	@echo "\tupload: Upload both the source tarball and wheel to PyPi."
 	@echo "\tupload_test: Upload both the source tarball and wheel to TestPyPi."
 	@echo "\ttest: Run tests, using all supported Python versions."
+	@echo "\ttest-core: Run core-only (no extras) tests, using all supported Python versions."
 	@echo "\tclean: Remove all previous build results, virtual environments, and cache contents."
 	@echo "\tdistclean: Runs a 'make clean' and removes 'dist/'."

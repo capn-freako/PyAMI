@@ -10,6 +10,12 @@ Original Date:   March 20, 2026
 Copyright (C) 2026 David Banas; all rights reserved World wide.
 """
 
+try:
+    import matplotlib  # noqa: F401  # pylint: disable=unused-import
+    import reportlab  # noqa: F401  # pylint: disable=unused-import
+except ImportError as _err:
+    raise ImportError("`test-model` requires the `report` extra: pip install 'pyibis-ami[report]'") from _err
+
 import click
 import traceback
 

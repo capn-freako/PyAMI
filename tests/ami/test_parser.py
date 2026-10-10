@@ -147,7 +147,7 @@ class TestNestedModelSpecificParams:
     """Regression coverage for nested (grouped) `Model_Specific` parameters,
     which exercise a hierarchical-trait-name path that `set_param_val()`
     previously got wrong (it synced only the leaf name, not the full,
-    underscore-joined hierarchical trait name that `make_gui_items()`
+    underscore-joined hierarchical trait name that `make_param_traits()`
     actually registers)."""
 
     def test_tunable_params_nested(self, nested_ami_config):
@@ -278,3 +278,21 @@ class TestModeSelectorParams:
         assert ami.input_ami_params["eq_mode"] == 1
         # `pvalue` must still be the legal-value list, not clobbered with a scalar.
         assert eq_mode_param.pvalue == [0, 1]
+
+
+@pytest.mark.parametrize("config", ["test_ami_config", "nested_ami_config", "described_group_ami_config"])
+def test_gui_view_items_match_traits(config, request):
+    """Every editable ``Item`` in the GUI view must name a registered parameter Trait."""
+    pytest.importorskip("traitsui")
+    from traitsui.api import Group, Item
+
+    def item_names(content):
+        for elem in content:
+            if isinstance(elem, Group):
+                yield from item_names(elem.content)
+            elif isinstance(elem, Item) and elem.name:
+                yield elem.name
+
+    ami = ami_parser.AMIParamConfigurator(request.getfixturevalue(config))
+    view = ami.default_traits_view()
+    assert sorted(item_names(view.content.content)) == sorted(ami._param_trait_names)

@@ -8,6 +8,11 @@ Original Date:   July 20, 2012
 Copyright (c) 2012 David Banas; All rights reserved World wide.
 """
 
+try:
+    import matplotlib  # noqa: F401  # pylint: disable=unused-import
+except ImportError as _err:
+    raise ImportError("`run-tests` requires the `report` extra: pip install 'pyibis-ami[report]'") from _err
+
 import shutil
 from os import chdir
 from pathlib import Path

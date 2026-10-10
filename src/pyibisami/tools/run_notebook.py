@@ -11,6 +11,7 @@ Copyright (c) 2025 David Banas; all rights reserved World wide.
 """
 
 from pathlib    import Path
+import shutil
 import subprocess
 import sys
 import shlex
@@ -100,6 +101,11 @@ def run_notebook(
     start_time = time()
 
     # Validate input.
+    missing_tools = [tool for tool in ("papermill", "jupyter") if shutil.which(tool) is None]
+    if missing_tools:
+        raise RuntimeError(
+            f"`run-notebook` can't find: {', '.join(missing_tools)}; "
+            "install the `notebook` extra: pip install 'pyibis-ami[notebook]'")
     if not ibis_file.exists():
         raise RuntimeError(f"Can't find IBIS-AMI model file, {ibis_file}!")
     if not notebook.exists():

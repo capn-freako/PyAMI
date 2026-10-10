@@ -15,13 +15,24 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, TypeAlias, TypedDict
 
-from matplotlib import pyplot as plt
 import numpy as np
 from numpy.random     import default_rng
 
 from pyibisami.common import Cvec, Rvec, deconv_same
 
 logger = logging.getLogger(__name__)
+
+
+def _debug_plot(wave: Rvec) -> None:
+    """Show a waveform, for debugging; requires the ``report`` extra (matplotlib)."""
+    try:
+        from matplotlib import pyplot as plt  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        logger.warning("Debug plot skipped; install matplotlib: pip install 'pyibis-ami[report]'")
+        return
+    plt.plot(wave)
+    plt.show()
+
 
 VALID_RESPONSE_KEYS = [
     "imp_resp_init",    # The model's impulse response, from its `AMI_Init()` function (V/sample).
@@ -612,8 +623,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             ).repeat(nspui) - 0.5   # Apply oversampling.
             wave_out, _, _ = self.getWave(u, bits_per_call=bits_per_call)
             if debug:
-                plt.plot(wave_out)
-                plt.show()
+                _debug_plot(wave_out)
 
             # Calculate impulse response from step response.
             rslt[IMP_RESP_GETW] = np.diff(wave_out[(ignore_bits + max_run_length) * nspui:])
@@ -622,8 +632,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             wave_in = np.convolve(u, chnl_imp)[:len(u)]
             wave_out, _, self._getwave_step_response_out_params = self.getWave(wave_in, bits_per_call=bits_per_call)
             if debug:
-                plt.plot(wave_out)
-                plt.show()
+                _debug_plot(wave_out)
             s_getw = wave_out[ignore_bits * nspui:][:len(t)] + 0.5
             # Match the d.c. offset of Init() output, for easier comparison of Init() & GetWave() outputs.
             s_getw -= s_getw[pad_samps - 1]
