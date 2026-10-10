@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 from pylab import *
 #import ami_model as ami           # Use this one for developing/testing.
-import pyibisami.ami_model as ami # Use this one for distribution.
+import pyibisami.ami.model as ami # Use this one for distribution.
 cla()
 for cfg in data:
     cfg_name = cfg[0]
@@ -37,9 +37,9 @@ for cfg in data:
     h = model.initOut
     T = model.sample_interval
     t = [i * T for i in range(len(h))]
-    rgb_main, rgb_ref = plot_colors.next()
-    color_main = "#%02X%02X%02X" % (rgb_main[0] * 0xFF, rgb_main[1] * 0xFF, rgb_main[2] * 0xFF)
-    color_ref = "#%02X%02X%02X" % (rgb_ref[0] * 0xFF, rgb_ref[1] * 0xFF, rgb_ref[2] * 0xFF)
+    rgb_main, rgb_ref = next(plot_colors)
+    color_main = "#%02X%02X%02X" % (int(rgb_main.color[0] * 0xFF), int(rgb_main.color[1] * 0xFF), int(rgb_main.color[2] * 0xFF))
+    color_ref = "#%02X%02X%02X" % (int(rgb_ref.color[0] * 0xFF), int(rgb_ref.color[1] * 0xFF), int(rgb_ref.color[2] * 0xFF))
     plot(t, h, label=cfg_name, color=color_main)
     if(reference):
         r = ami.interpFile(reference, T)

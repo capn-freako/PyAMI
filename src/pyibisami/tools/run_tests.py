@@ -123,15 +123,15 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
                         "ref_dir": ref_dir,
                     },
                 )
+                cwd = Path().cwd()
                 try:
-                    cwd = Path().cwd()
                     chdir(out_dir)  # So that the images are saved in the output directory.
                     with open(Path(test_dir, test), encoding="utf-8") as test_file:
                         interpreter.file(test_file)
-                    chdir(cwd)
                 except Exception as err:  # pylint: disable=broad-exception-caught
                     print("\t\t", err)
                 finally:
+                    chdir(cwd)
                     interpreter.shutdown()
         print("Test:", test_, "complete.")
     with open(xml_filename, "a", encoding="utf-8") as xml_file:

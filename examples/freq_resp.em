@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 from pylab import *
 from numpy import cumsum, concatenate
-import pyibisami.ami_model as ami
+import pyibisami.ami.model as ami
 figure(1)
 cla()
 figure(2)
@@ -52,8 +52,8 @@ for cfg in data:
     H2 = fft(h2)
     f = array([i * 1.0 // (T * len(h)) for i in range(len(h) // 2)])
     rgb_main, rgb_ref = next(plot_colors)
-    rgb_main = tuple(int(color * 0xFF) for color in rgb_main)
-    rgb_ref = tuple(int(color * 0xFF) for color in rgb_ref)
+    rgb_main = tuple(int(color * 0xFF) for color in rgb_main.color)
+    rgb_ref = tuple(int(color * 0xFF) for color in rgb_ref.color)
     color_main = f"#{rgb_main[0]:02x}{rgb_main[1]:02x}{rgb_main[2]:02x}"
     color_ref = f"#{rgb_ref[0]:02x}{rgb_ref[1]:02x}{rgb_ref[2]:02x}"
     figure(1)
