@@ -12,7 +12,7 @@ DOCS_DIR := docs
 UV_EXEC := uv
 UVX_EXEC := uvx --isolated
 PYVERS := 3.10 3.11 3.12 3.13
-PROJ_VER := $(shell ${UV_EXEC} version | cut -f 2 -d ' ') 
+PROJ_VER := $(shell ${UV_EXEC} version --short) 
 TEST_EXP ?= tests
 
 # Put it first so that "make" without arguments is like "make help".
