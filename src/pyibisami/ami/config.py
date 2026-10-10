@@ -171,7 +171,7 @@ def mk_model(
                     "param_types": param_types,
                     "model_name": model_name,
                     "description": description,
-                    "date": str(date.today()),  # noqa: DTZ011
+                    "date": str(date.today()),
                 },
             )
             try:
