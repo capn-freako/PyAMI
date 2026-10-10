@@ -19,6 +19,7 @@ from parsec    import many
 
 from ..ami.model  import AMIModel, AMIModelInitializer
 from ..ami.parser import ignore, root
+from ..cli_logging import setup_cli_logging
 from ..ibis.model import Model
 
 
@@ -465,6 +466,7 @@ def main(ibis_file, model_name, config, tol_ir, tol_wave):
 
     Exits with status 1 if any configuration fails.
     """
+    setup_cli_logging()
     from ..ibis.parser import parse_ibis_file  # local import to avoid circular deps at module load
 
     ibis_path = Path(ibis_file).resolve()

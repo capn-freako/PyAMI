@@ -66,7 +66,17 @@ Other changes affecting library users:
   via ``Model.iv_data`` (see ``pyibisami.ibis.iv``).
   ``Model.plot_iv`` is still available, but now requires the ``gui`` extra,
   and is built upon first access.
-- ``IBISModel`` alert pop-ups fall back to logged warnings when the ``gui`` extra isn't installed.
+- ``IBISModel`` no longer takes a ``gui`` argument, and never opens dialogs on its own.
+  Its notices are sent to the ``pyibisami.ibis.file`` logger (``INFO``; other messages at ``DEBUG``)
+  and fired through its new ``alert`` event (a Traits ``Event(Str)``), which applications may observe.
+  ``pyibisami.gui.ibis.show_alerts(ibis)`` shows them as pop-up dialogs;
+  calling the ``IBISModel`` instance (to open its GUI) does this automatically.
+  The notice texts are now application-neutral (no references to *PyBERT* tabs).
+- ``IBISModel.log()`` and ``IBISModel.log_txt`` were removed, and its ``debug`` argument no longer prints to the console.
+  *PyIBIS-AMI* reports through the standard ``logging`` module, under the ``pyibisami`` logger,
+  and (as a library) never configures logging itself; configure it in your application,
+  e.g. - ``logging.basicConfig(level=logging.INFO)``.
+  The command line tools do configure it, sending ``INFO`` (``DEBUG``, with ``--debug``) messages to the console.
 
 Testing the installation
 ------------------------

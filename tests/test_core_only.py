@@ -54,7 +54,7 @@ def test_core_modules_import():
 
 
 def test_ibis_model_headless(ibis_test_file):
-    """``gui=True`` is the default; its alerts must degrade to log warnings."""
+    """Alerts must only be logged and fired, never touch the GUI."""
     run_without_extras("""
         import sys
         from pyibisami.ibis.file import IBISModel

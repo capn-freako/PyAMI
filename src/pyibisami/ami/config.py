@@ -43,6 +43,7 @@ import click
 import em
 
 from ..ami.parser import ParamValues
+from ..cli_logging import setup_cli_logging
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +294,7 @@ def main(py_file):
         1. This command is deprecated! Instead, make your model configurator executable
         and import what you need from this module. This is much cleaner.
     """
+    setup_cli_logging()
     ami_config(py_file)
 
 

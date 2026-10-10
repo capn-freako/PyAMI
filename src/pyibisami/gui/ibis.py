@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from chaco.api import ArrayPlotData, Plot
 from enable.component_editor import ComponentEditor
+from traits.observation.exceptions import NotifierNotFound
 from traitsui.api import Group, HGroup, Item, ModalButtons, VGroup, View, spring
 from traitsui.message import message
 
@@ -138,6 +139,18 @@ def make_ibis_file_view(ibis: IBISModel) -> View:  # pylint: disable=unused-argu
     )
 
 
-def alert(msg: str) -> None:
-    "Pop up an alert dialog."
-    message(msg, "PyAMI Alert")
+def show_alerts(ibis: IBISModel) -> None:
+    """
+    Pop up a dialog for each ``alert`` the model fires from now on.
+
+    Calling it again for the same model doesn't add a second dialog.
+    """
+    try:
+        ibis.observe(_alert_popup, "alert", remove=True)
+    except NotifierNotFound:
+        pass
+    ibis.observe(_alert_popup, "alert")
+
+
+def _alert_popup(event) -> None:
+    message(event.new, "PyAMI Alert")

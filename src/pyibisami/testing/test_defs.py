@@ -102,7 +102,7 @@ def mk_default_test_sweep_file(
 
     # Import the `*.ibs` file.
     try:
-        ibis = IBISModel(str(ibis_file.resolve()), debug=debug, gui=False)
+        ibis = IBISModel(str(ibis_file.resolve()), debug=debug)
         dName = ibis_file.parent
         assert ibis.ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"

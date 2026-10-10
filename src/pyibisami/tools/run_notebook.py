@@ -22,6 +22,7 @@ from typing     import Any
 import click
 
 from ..ami.parser import AMIParamConfigurator, ParamName
+from ..cli_logging import setup_cli_logging
 from ..ibis.file  import IBISModel
 
 NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
@@ -42,7 +43,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
 
     # Import the `*.ibs` file.
     try:
-        ibis = IBISModel(str(ibis_file.resolve()), debug=debug, gui=False)
+        ibis = IBISModel(str(ibis_file.resolve()), debug=debug)
         dName = ibis_file.parent
         assert ibis.ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"
@@ -181,6 +182,7 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
          debug, is_tx, nspui, no_nspui_swp, nbits,
          plot_t_max, f_max, f_step, fig_x, fig_y):
     "Run a *Jupyter* notebook on an IBIS-AMI model file."
+    setup_cli_logging(debug)
     arguments_list = sys.argv
     full_command_line = "run-notebook " + " ".join(shlex.quote(arg) for arg in arguments_list[1:])
     if out_dir:

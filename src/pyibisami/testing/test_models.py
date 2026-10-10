@@ -31,6 +31,7 @@ from reportlab.platypus import (
     Paragraph, Spacer)
 from reportlab.platypus.tableofcontents import TableOfContents
 
+from ..cli_logging      import setup_cli_logging
 from ..util.reportlab   import P, bold, preformatted, title_page
 
 from .ibis_file_tests   import test_ami_models, get_ibis_contents
@@ -155,6 +156,7 @@ def test_ibis_ami_models(
 @click.argument("ibis_file", type=click.Path(exists=True))
 @click.version_option(package_name="PyIBIS-AMI")
 def main(ibis_file, model, params, debug):
+    setup_cli_logging(debug)
     ibis_file_path = Path(ibis_file).resolve()
     if not ibis_file_path.exists():
         raise RuntimeError(f"IBIS file `{ibis_file_path}` does not exist!")

@@ -13,7 +13,7 @@ CLAMP = [(-1.8, [-1.0, -1.0, -1.0]), (0.0, [0.0, 0.0, 0.0]), (1.8, [0.0, 0.0, 0.
 
 @pytest.fixture
 def tx_model(ibis_test_file):
-    return IBISModel(ibis_test_file, gui=False).model
+    return IBISModel(ibis_test_file).model
 
 
 def test_missing_min_max_default_to_typ():
@@ -69,7 +69,7 @@ def test_gui_views_build(ibis_test_file):
     pytest.importorskip("chaco")
     from chaco.api import Plot
 
-    ibis = IBISModel(ibis_test_file, gui=False)
+    ibis = IBISModel(ibis_test_file)
     model = ibis.model
     assert isinstance(model.plot_iv, Plot)
     assert model.plot_iv is model.plot_iv  # Built once.

@@ -16,17 +16,18 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 import logging
 import platform
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from traits.api import (
     Any,
     Dict,
     Enum,
+    Event,
     Float,
     HasTraits,
     List,
     Property,
+    Str,
     String,
     Trait,
     cached_property,
@@ -67,6 +68,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     Any errors or warnings encountered while parsing are available, in
     the ``ibis_parsing_errors`` property.
 
+    User-facing notices (e.g. - whether the selected model has an AMI executable
+    for this platform) are logged and also fired through the ``alert`` event,
+    which GUIs may observe; see ``pyibisami.gui.ibis.show_alerts()``.
+
     The complete dictionary containing all parsed models may be retrieved,
     via the ``model_dict`` property.
     """
@@ -76,6 +81,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     model = Property(Any, depends_on=["mod"])
     pins = List  # Always holds the list of valid pin selections, given a component selection.
     models = List  # Always holds the list of valid model selections, given a pin selection.
+    alert = Event(Str)  # Fired with each user-facing notice; GUIs observe this.
 
     def get_model(self, mname: str) -> Model:
         """
@@ -153,17 +159,14 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self: "IBISModel",
         ibis_file_name: str,
         debug: bool = False,
-        gui: bool = True
     ) -> None:
         """
         Args:
             ibis_file_name (str): The name of the IBIS file.
 
         Keyword Args:
-            debug (bool): Output debugging info to console when true.
+            debug (bool): Run the IBIS parser in debugging mode when true.
                 Default = False
-            gui (bool): Set to `False` for command line and/or script usage.
-                Default = True.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -171,12 +174,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         super().__init__()
 
         self.debug = debug
-        self.GUI = gui
-        self._log: str = ""
-        if debug:
-            self.log("pyibisami.ibis_file.IBISModel initializing in debug mode...")
-        else:
-            self.log("pyibisami.ibis_file.IBISModel initializing in non-debug mode...")
+        logger.debug("Loading IBIS file: %s", ibis_file_name)
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         with open(ibis_file_name, "r", encoding="utf-8") as file:
@@ -186,15 +184,16 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
         self._file_rev: str = model_dict.get("file_rev", "(n/a)")
         self._date: str = model_dict.get("date", "(n/a)")
-        self.log("IBIS parsing errors/warnings:\n" + err_str)
+        if err_str == "Success!":
+            logger.debug("IBIS parsing: %s", err_str)
+        else:
+            logger.warning("IBIS parsing errors/warnings in %s:\n%s", ibis_file_name, err_str)
         if "components" not in model_dict or not model_dict["components"]:
-            if debug:
-                print(f":\n{model_dict}", flush=True)
+            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
             raise ValueError("This IBIS model has no components!")
         components = model_dict["components"]
         if "models" not in model_dict or not model_dict["models"]:
-            if debug:
-                print(f":\n{model_dict}", flush=True)
+            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
             raise ValueError("This IBIS model has no models!")
 
         self._model_dict: dict[str, Any] = model_dict
@@ -231,8 +230,6 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         # Wasn't being called automatically:
         self._pin_changed(self.pins[0])  # type: ignore
 
-        self.log("Done.")
-
     def __str__(self):
         return f"IBIS Model '{self._file_name}'"
 
@@ -260,28 +257,18 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     def __call__(self):
         """Present a customized GUI to the user, for model selection, etc.
 
+        Subsequent ``alert`` s are shown as pop-up dialogs.
         Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
         """
-        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
+        from ..gui.ibis import show_alerts  # pylint: disable=import-outside-toplevel
+        show_alerts(self)
         # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
         self.configure_traits()
 
-    # Logger & Pop-up
-    def log(self, msg, alert=False):
-        """Log a message to the console and, optionally, to terminal and/or
-        pop-up dialog."""
-        _msg = msg.strip()
-        txt = f"\n[{datetime.now(tz=timezone(timedelta(hours=0)))}]: IBISModel: {_msg}\n"
-        self._log += txt
-        if self.debug:
-            print(txt, flush=True)
-        if alert and self.GUI:
-            try:
-                from ..gui.ibis import alert as gui_alert  # pylint: disable=import-outside-toplevel
-            except ImportError:
-                logger.warning(_msg)
-            else:
-                gui_alert(_msg)
+    def _notify(self, msg: str) -> None:
+        "Log a user-facing notice and fire it through the ``alert`` event."
+        logger.info(msg)
+        self.alert = msg
 
     def default_traits_view(self):
         "Default Traits/UI view definition."
@@ -306,11 +293,6 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         """Any errors or warnings encountered, while parsing the IBIS file
         contents."""
         return self._ibis_parsing_errors
-
-    @property
-    def log_txt(self):
-        """The complete log since instantiation."""
-        return self._log
 
     @property
     def model_dict(self):
@@ -359,24 +341,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         if fnames:
             dll_file = fnames[0]
             ami_file = fnames[1]
-            self.log(
-                "There was an [Algorithmic Model] keyword in this model.\n \
-If you wish to use the AMI model associated with this IBIS model,\n \
-please, go the 'Equalization' tab and enable it now.",
-                alert=True,
-            )
+            self._notify(f"Model `{new_value}` has an AMI executable for this platform: {dll_file}")
         elif "algorithmic_model" in model._subDict:  # pylint: disable=protected-access
-            self.log(
-                f"There was an [Algorithmic Model] keyword for this model,\n \
-but no executable for your platform: {os_type}-{os_bits};\n \
-PyBERT native equalization modeling being used instead.",
-                alert=True,
-            )
+            self._notify(
+                f"Model `{new_value}` has an [Algorithmic Model], but no executable for this platform: {os_type}-{os_bits}")
         else:
-            self.log(
-                "There was no [Algorithmic Model] keyword for this model;\n \
-PyBERT native equalization modeling being used instead.",
-                alert=True,
-            )
+            self._notify(f"Model `{new_value}` has no [Algorithmic Model].")
         self._dll_file = dll_file  # pylint: disable=attribute-defined-outside-init
         self._ami_file = ami_file  # pylint: disable=attribute-defined-outside-init

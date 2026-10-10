@@ -21,6 +21,7 @@ import click
 import em
 
 from pyibisami.ami.model    import AMIModel
+from pyibisami.cli_logging  import setup_cli_logging
 from pyibisami.common       import TestSweep
 from pyibisami.util.plot    import plot_name, color_picker
 
@@ -202,6 +203,7 @@ def main(**kwargs):
     sheet when processing XML then use the `xsltproc` utility to convert
     the XML/XSLT to HTML before viewing in your browser.
     """
+    setup_cli_logging()
     run_tests(**kwargs)
 
 

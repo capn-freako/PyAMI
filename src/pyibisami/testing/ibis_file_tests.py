@@ -51,7 +51,7 @@ def get_ibis_contents(
 
     # Attempt to parse `*.ibs` file.
     try:
-        ibis_model = IBISModel(str(ibis_file), gui=False, debug=debug)
+        ibis_model = IBISModel(str(ibis_file), debug=debug)
     except Exception as err:
         raise RuntimeError(f"An error occurred while trying to read/parse the IBIS model file: {ibis_file}") from err
 
