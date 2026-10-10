@@ -10,6 +10,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 from __future__     import annotations
 from ctypes         import c_double
 from dataclasses    import dataclass
+import logging
 import re
 from typing         import Any, NewType, Optional, TypeAlias
 from collections.abc import Callable
@@ -22,6 +23,8 @@ from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 from .model                     import AMIModelInitializer
 from .parameter                 import AmiParamTuner, AMIParamError, AMIParameter
 from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
+
+logger = logging.getLogger(__name__)
 
 # New types and aliases.
 # Parameters  = NewType('Parameters',  dict[str, AMIParameter] | dict[str, 'Parameters'])
@@ -615,7 +618,7 @@ def proc_branch(branch) -> tuple[str, dict[str, Any]]:
 
             results = (err_str, param_dict)
     except Exception:  # pylint: disable=broad-exception-caught
-        print(f"Error processing branch:\n{param_tags}")
+        logger.exception("Error processing branch:\n%s", param_tags)
     return results
 
 

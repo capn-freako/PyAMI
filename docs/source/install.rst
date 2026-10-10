@@ -72,11 +72,32 @@ Other changes affecting library users:
   ``pyibisami.gui.ibis.show_alerts(ibis)`` shows them as pop-up dialogs;
   calling the ``IBISModel`` instance (to open its GUI) does this automatically.
   The notice texts are now application-neutral (no references to *PyBERT* tabs).
-- ``IBISModel.log()`` and ``IBISModel.log_txt`` were removed, and its ``debug`` argument no longer prints to the console.
+- ``IBISModel.log()`` and ``IBISModel.log_txt`` were removed,
+  as was the ``debug`` argument of ``IBISModel`` and ``pyibisami.ibis.parser.parse_ibis_file()``.
   *PyIBIS-AMI* reports through the standard ``logging`` module, under the ``pyibisami`` logger,
   and (as a library) never configures logging itself; configure it in your application,
   e.g. - ``logging.basicConfig(level=logging.INFO)``.
+  (For IBIS parsing details, enable ``DEBUG`` for the ``pyibisami.ibis`` logger.)
   The command line tools do configure it, sending ``INFO`` (``DEBUG``, with ``--debug``) messages to the console.
+- The PDF/plot reporting modules moved into the new ``pyibisami.report`` package,
+  which requires the ``report`` extra:
+
+  =======================================  ======================================
+  Old                                      New
+  =======================================  ======================================
+  ``pyibisami.testing.test_models``        ``pyibisami.report.test_models``
+  ``pyibisami.testing.ami_tests``          ``pyibisami.report.ami_tests``
+  ``pyibisami.testing.ami_tests_helpers``  ``pyibisami.report.ami_tests_helpers``
+  ``pyibisami.testing.ibis_file_tests``    ``pyibisami.report.ibis_file_tests``
+  ``pyibisami.util.plot``                  ``pyibisami.report.plot``
+  ``pyibisami.util.reportlab``             ``pyibisami.report.pdf``
+  =======================================  ======================================
+
+  ``pyibisami.testing`` (test definitions, ``[AMI Test Configuration]`` runner) needs only the core install.
+  The ``debug`` argument was also removed from the functions that only passed it on to ``IBISModel``
+  (``get_ibis_contents()``, ``test_ami_models()``, ``test_ibis_ami_models()``, ``mk_default_test_sweep_file()``),
+  and from ``pyibisami.report.plot.plot_resps()``, whose debugging output is now logged.
+- `test-model` now exits with status 1 (and an ``Error:`` message) when testing fails, instead of 0.
 
 Testing the installation
 ------------------------

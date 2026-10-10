@@ -49,6 +49,10 @@ def test_core_modules_import():
         import pyibisami.ibis.model
         import pyibisami.ibis.parser
         import pyibisami.testing.ami_test_config
+        import pyibisami.testing.test_defs
+        import pyibisami.testing.util
+        import pyibisami.util.ami
+        import pyibisami.util.misc
         import pyibisami.tools.run_notebook
     """)
 
@@ -92,7 +96,7 @@ def test_ami_configurator_headless(ami_test_file):
 
 def test_report_clis_need_report_extra():
     run_without_extras("""
-        for module in ("pyibisami.testing.test_models", "pyibisami.tools.run_tests"):
+        for module in ("pyibisami.report", "pyibisami.report.test_models", "pyibisami.tools.run_tests"):
             try:
                 __import__(module)
             except ImportError as err:

@@ -12,7 +12,7 @@ def test_ibis_model_construction(ibis_test_file):
     (`datetime.timezone` doesn't exist on the `datetime.datetime` class)
     while time-stamping its own log messages.
     """
-    model = IBISModel(ibis_test_file, debug=False)
+    model = IBISModel(ibis_test_file)
     assert model.file_name == "example_tx.ibs"
 
 

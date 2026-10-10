@@ -10,14 +10,7 @@ Original Date:   March 20, 2026
 Copyright (C) 2026 David Banas; all rights reserved World wide.
 """
 
-try:
-    import matplotlib  # noqa: F401  # pylint: disable=unused-import
-    import reportlab  # noqa: F401  # pylint: disable=unused-import
-except ImportError as _err:
-    raise ImportError("`test-model` requires the `report` extra: pip install 'pyibis-ami[report]'") from _err
-
 import click
-import traceback
 
 from pathlib  import Path
 from typing   import Optional
@@ -32,7 +25,7 @@ from reportlab.platypus import (
 from reportlab.platypus.tableofcontents import TableOfContents
 
 from ..cli_logging      import setup_cli_logging
-from ..util.reportlab   import P, bold, preformatted, title_page
+from .pdf   import P, bold, preformatted, title_page
 
 from .ibis_file_tests   import test_ami_models, get_ibis_contents
 
@@ -83,8 +76,7 @@ def test_ibis_ami_models(
     ibis_file: Path, test_sweeps_dir: Path,
     model_name: Optional[str] = None,
     max_models_per_file: int = 2,
-    debug: bool = False
-) -> None:
+) -> Path:
     """
     Test some subset of the IBIS-AMI models in a ``*.ibs`` file.
 
@@ -97,8 +89,9 @@ def test_ibis_ami_models(
             Default: None (Means test all IBIS-AMI models found in ``*.ibs`` file.)
         max_models_per_file: Maximum number of models processed per ``*.ibs`` file.
             Default: 2
-        debug: Include debugging output when ``True``.
-            Default: ``False``
+
+    Returns:
+        The PDF report file.
     """
 
     ibis_file_dir = ibis_file.parent
@@ -110,7 +103,7 @@ def test_ibis_ami_models(
     doc.addPageTemplates([template])
     pages = title_page(ibis_file)
 
-    ibis_model, _ = get_ibis_contents(ibis_file, debug=debug)
+    ibis_model, _ = get_ibis_contents(ibis_file)
     if 'models' not in ibis_model.model_dict or len(ibis_model.model_dict['models']) == 0:
         raise RuntimeError("The IBIS file contains no model definitions!")
 
@@ -139,9 +132,10 @@ def test_ibis_ami_models(
     pages.extend(
         test_ami_models(
             ibis_file, ibis_model, ami_model_names,
-            test_sweeps_dir, model_name=model_name, debug=debug)
+            test_sweeps_dir, model_name=model_name)
     )
     doc.multiBuild(pages)
+    return Path(pdf_filename)
 
 
 # CLI definition
@@ -163,10 +157,10 @@ def main(ibis_file, model, params, debug):
     test_sweeps_dir = Path(params).resolve()
     test_sweeps_dir.mkdir(parents=True, exist_ok=True)
     try:
-        test_ibis_ami_models(ibis_file_path, test_sweeps_dir, model_name=model, debug=debug)
+        pdf_file = test_ibis_ami_models(ibis_file_path, test_sweeps_dir, model_name=model)
     except RuntimeError as err:
-        error_msg = traceback.format_exception_only(type(err), err)[-1].strip()
-        print(error_msg)
+        raise click.ClickException(str(err)) from err
+    click.echo(f"PDF report: {pdf_file}")
 
 
 if __name__ == "__main__":

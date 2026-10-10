@@ -10,6 +10,8 @@ Original Date:   January 31, 2025
 Copyright (c) 2025 David Banas; all rights reserved World wide.
 """
 
+from dataclasses import dataclass
+import logging
 from pathlib    import Path
 import shutil
 import subprocess
@@ -17,7 +19,7 @@ import sys
 import shlex
 from tempfile   import NamedTemporaryFile
 from time       import time
-from typing     import Any
+from typing     import Any, Optional
 
 import click
 
@@ -25,17 +27,29 @@ from ..ami.parser import AMIParamConfigurator, ParamName
 from ..cli_logging import setup_cli_logging
 from ..ibis.file  import IBISModel
 
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class NotebookRun:
+    "Files produced by ``run_notebook()``."
+
+    html_file: Path
+    "The HTML report."
+    sweep_template: Optional[Path] = None
+    "The parameter sweep template file created, when no sweeps were given."
+
+
 NOTEBOOK = Path(__file__).parent.parent.joinpath("IBIS_AMI_Tester.ipynb")
 
 
-def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
+def mk_dummy_run_file(ibis_file: Path, is_tx: bool) -> Path:
     """
     Create a parameter sweep specification template file for an IBIS-AMI model.
 
     Args:
         ibis_file: The ``*.ibs`` file defining the IBIS-AMI model of interest.
         is_tx: True for Tx model.
-        debug: True for debugging mode.
 
     Returns:
         The path to the created parameter sweep specification template file.
@@ -43,7 +57,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
 
     # Import the `*.ibs` file.
     try:
-        ibis = IBISModel(str(ibis_file.resolve()), debug=debug)
+        ibis = IBISModel(str(ibis_file.resolve()))
         dName = ibis_file.parent
         assert ibis.ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"
@@ -59,7 +73,7 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool, debug: bool) -> Path:
     except Exception as err:
         raise RuntimeError(f"Failed to open/import AMI file: {ami_file}!") from err
     if pcfg.ami_parsing_errors:
-        print(f"Non-fatal parsing errors:\n{pcfg.ami_parsing_errors}")
+        logger.warning("Non-fatal AMI parsing errors:\n%s", pcfg.ami_parsing_errors)
 
     # Write parameter sweep specification template file.
     root_name = str(pcfg.input_ami_params[ParamName("root_name")])
@@ -87,7 +101,7 @@ def run_notebook(
     notebook: Path,
     notebook_params: dict[str, Any],
     out_dir: Path
-) -> None:
+) -> NotebookRun:
     """
     Run a Jupyter notebook on the target IBIS-AMI model.
 
@@ -97,6 +111,9 @@ def run_notebook(
         notebook: The *Jupyter* notebook to use for testing the model.
         notebook_params: A dictionary of parameter overrides for the notebook.
         out_dir: The directory into which to place the resultant HTML file.
+
+    Returns:
+        The HTML report file and, when no parameter sweeps were given, the sweep template file created.
     """
 
     start_time = time()
@@ -113,23 +130,18 @@ def run_notebook(
         raise RuntimeError(f"Can't find notebook file, {notebook}!")
     if not out_dir.exists():
         raise RuntimeError(f"Can't find output directory, {out_dir}!")
+    sweep_template = None
     if "params" not in notebook_params or notebook_params["params"] == "":
-        dummy_run_file_name = mk_dummy_run_file(
-            ibis_file, notebook_params["is_tx"], notebook_params["debug"])
-        notebook_params["params"] = dummy_run_file_name
-        print("\nNOTE: Since you provided no parameter sweep information,")
-        print(f'a "dummy" sweep file has been created: {dummy_run_file_name}.')
-        print("You may use this file as a template for creating parameter sweep specifications.")
-        print()
+        sweep_template = mk_dummy_run_file(ibis_file, notebook_params["is_tx"])
+        notebook_params["params"] = sweep_template
 
     # Define temp. (i.e. - parameterized) notebook and output file locations.
     html_file = Path(out_dir.joinpath(ibis_file.name)).with_suffix(".html")
 
     # Run the notebook.
-    print(f"Testing IBIS-AMI model: {ibis_file},")
-    print(f"\tusing notebook: {notebook},")
-    print(f"\twith parameter sweeps: {notebook_params['params']},")
-    print(f"\tsending HTML output to: {html_file}...")
+    logger.info(
+        "Testing IBIS-AMI model: %s,\n\tusing notebook: %s,\n\twith parameter sweeps: %s,\n\tsending HTML output to: %s...",
+        ibis_file, notebook, notebook_params["params"], html_file)
 
     # This unconventional syntax avoids the need for flattening a list of lists.
     extra_args = [tok for item in notebook_params.items()
@@ -146,7 +158,9 @@ def run_notebook(
     run_time = int(time() - start_time)  # integer seconds
     hours, rem_secs  = divmod(run_time, 3600)
     minutes, seconds = divmod(rem_secs, 60)
-    print(f"Done after {hours} hrs., {minutes} min., {seconds} sec.")
+    logger.info("Done after %d hrs., %d min., %d sec.", hours, minutes, seconds)
+
+    return NotebookRun(html_file, sweep_template)
 
 
 @click.command(context_settings={"ignore_unknown_options": False,
@@ -164,7 +178,7 @@ def run_notebook(
     default='',
     help='Directory (or, file) containing configuration sweeps.',
 )
-@click.option("--debug", is_flag=True, help="Provide extra debugging information.")
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
 @click.option("--is_tx", is_flag=True, help="Flags a Tx model.")
 @click.option("--nspui", default=32, show_default=True, help="Number of samples per unit interval.")
 @click.option("--no-nspui-swp", is_flag=True, help="Skip samples per UI sweep.")
@@ -190,7 +204,7 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
     else:
         out_dir = Path(ibis_file).resolve().parent
     out_dir.mkdir(exist_ok=True)
-    run_notebook(
+    result = run_notebook(
         Path(ibis_file).resolve(), Path(notebook).resolve(),
         out_dir=out_dir,
         notebook_params={
@@ -210,6 +224,11 @@ def main(notebook, out_dir, params, ibis_file, bit_rate,  # pylint: disable=too-
             'params': params,
             'full_command_line': full_command_line,
         })
+    if result.sweep_template:
+        click.echo(
+            f"No parameter sweeps given; created a sweep template file: {result.sweep_template}\n"
+            "Use it as a template for your parameter sweep specifications.")
+    click.echo(f"HTML report: {result.html_file}")
 
 
 if __name__ == "__main__":

@@ -457,7 +457,8 @@ def run_all_ami_test_configs(
               help="Absolute tolerance for impulse-response comparison.")
 @click.option("--tol-wave", default=1e-6, show_default=True,
               help="Absolute tolerance for waveform comparison.")
-def main(ibis_file, model_name, config, tol_ir, tol_wave):
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
+def main(ibis_file, model_name, config, tol_ir, tol_wave, debug):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run [AMI Test Configuration] blocks embedded in an IBIS file (IBIS 8.0 §10.11).
 
     Parses IBIS_FILE, locates the target model, then calls AMI_Init() (and
@@ -466,7 +467,7 @@ def main(ibis_file, model_name, config, tol_ir, tol_wave):
 
     Exits with status 1 if any configuration fails.
     """
-    setup_cli_logging()
+    setup_cli_logging(debug)
     from ..ibis.parser import parse_ibis_file  # local import to avoid circular deps at module load
 
     ibis_path = Path(ibis_file).resolve()

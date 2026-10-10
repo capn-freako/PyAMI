@@ -17,7 +17,7 @@ from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Paragraph, Spacer
 
 from ..ibis.file import IBISModel
-from ..util.reportlab import preformatted, page_break, styles, H1
+from .pdf import preformatted, page_break, styles, H1
 
 from .ami_tests import test_ami_model
 
@@ -28,17 +28,12 @@ spacer = Spacer(1, 0.25 * inch)
 
 def get_ibis_contents(
     ibis_file: Path,
-    debug: bool = False
 ) -> tuple[IBISModel, list[Flowable]]:
     """
     List the components and models available in an IBIS model file.
 
     Args:
         ibis_file: The IBIS model file to be interrogated.
-
-    Keyword Args:
-        debug: Operate in debugging mode when ``True``.
-            Default: ``False``
 
     Returns:
         A pair containing
@@ -51,7 +46,7 @@ def get_ibis_contents(
 
     # Attempt to parse `*.ibs` file.
     try:
-        ibis_model = IBISModel(str(ibis_file), debug=debug)
+        ibis_model = IBISModel(str(ibis_file))
     except Exception as err:
         raise RuntimeError(f"An error occurred while trying to read/parse the IBIS model file: {ibis_file}") from err
 
@@ -86,7 +81,6 @@ def test_ami_models(
     ami_model_names: list[str],
     test_sweeps_dir: Path,
     model_name: Optional[str] = None,
-    debug: bool = False
 ) -> list[Flowable]:
     """
     Test a subset of the IBIS-AMI models in the ``*.ibs`` file.
@@ -102,8 +96,6 @@ def test_ami_models(
     Keyword Args:
         model_name: The name of a particular model to test.
             Default = ``None`` (Means test all IBIS-AMI models found.)
-        debug: Include extra debugging output when ``True``.
-            Default = ``False``
 
     Returns:
         The list of *ReportLab* ``Flowable``s describing the testing results.

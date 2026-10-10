@@ -8,14 +8,11 @@ Original Date:   July 20, 2012
 Copyright (c) 2012 David Banas; All rights reserved World wide.
 """
 
-try:
-    import matplotlib  # noqa: F401  # pylint: disable=unused-import
-except ImportError as _err:
-    raise ImportError("`run-tests` requires the `report` extra: pip install 'pyibis-ami[report]'") from _err
-
+import logging
 import shutil
 from os import chdir
 from pathlib import Path
+from typing import Optional
 
 import click
 import em
@@ -23,7 +20,9 @@ import em
 from pyibisami.ami.model    import AMIModel
 from pyibisami.cli_logging  import setup_cli_logging
 from pyibisami.common       import TestSweep
-from pyibisami.util.plot    import plot_name, color_picker
+from pyibisami.report.plot  import plot_name, color_picker
+
+logger = logging.getLogger(__name__)
 
 
 def expand_params(input_parameters: str) -> list[TestSweep]:
@@ -64,15 +63,18 @@ def expand_params(input_parameters: str) -> list[TestSweep]:
     return param_sweeps
 
 
-def run_tests(**kwargs):  # pylint: disable=too-many-locals
+def run_tests(**kwargs) -> Path:  # pylint: disable=too-many-locals
     """Provide a thin wrapper around the click interface so that we can test
-    the operation."""
+    the operation.
+
+    Returns:
+        The XML test results file.
+    """
 
     # Fetch options and cast into local independent variables.
     test_dir = Path(kwargs["test_dir"]).resolve()
-    ref_dir = Path(kwargs["ref_dir"]).resolve()
-    if not ref_dir.exists():
-        ref_dir = None
+    ref_path = Path(kwargs["ref_dir"]).resolve()
+    ref_dir: Optional[Path] = ref_path if ref_path.exists() else None
     model = Path(kwargs["model"]).resolve()
     out_dir = Path(kwargs["out_dir"]).resolve()
     out_dir.mkdir(exist_ok=True)
@@ -86,12 +88,12 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
     # Note: To avoid this issue entirely, incorporate `xsltproc` into your build flow.
     shutil.copy(str(Path(__file__).parent.joinpath("test_results.xsl")), str(out_dir))
 
-    print(f"Testing model: {model}")
-    print(f"Using tests in: {test_dir}")
+    logger.info("Testing model: %s", model)
+    logger.info("Using tests in: %s", test_dir)
     params = expand_params(kwargs["params"])
 
     # Run the tests.
-    print(f"Sending XHTML output to: {xml_filename}")
+    logger.info("Sending XHTML output to: %s", xml_filename)
     with open(xml_filename, "w", encoding="utf-8") as xml_file:
         xml_file.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         xml_file.write('<?xml-stylesheet type="text/xsl" href="test_results.xsl"?>\n')
@@ -102,12 +104,12 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
         tests = list(test_dir.glob("*.em"))
     for test in tests:
         test_ = test.stem
-        print(f"Running test: {test_} ...")
+        logger.info("Running test: %s ...", test_)
         theModel = AMIModel(str(model))
         plot_names = plot_name(test_)
         for cfg_item in params:
             cfg_name = cfg_item[0]
-            print(f"\tRunning test configuration: {cfg_name} ...")
+            logger.info("Running test configuration: %s ...", cfg_name)
             description = cfg_item[1]
             param_list = cfg_item[2]
             colors = color_picker(num_hues=len(param_list))
@@ -129,16 +131,16 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
                     chdir(out_dir)  # So that the images are saved in the output directory.
                     with open(Path(test_dir, test), encoding="utf-8") as test_file:
                         interpreter.file(test_file)
-                except Exception as err:  # pylint: disable=broad-exception-caught
-                    print("\t\t", err)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.exception("Test `%s` failed for configuration `%s`.", test_, cfg_name)
                 finally:
                     chdir(cwd)
                     interpreter.shutdown()
-        print("Test:", test_, "complete.")
+        logger.info("Test: %s complete.", test_)
     with open(xml_filename, "a", encoding="utf-8") as xml_file:
         xml_file.write("</tests>\n")
 
-    print(f"Please, open file, `{xml_filename}` in a Web browser, in order to view the test results.")
+    return xml_filename
 
 
 @click.command(context_settings={"ignore_unknown_options": True, "help_option_names": ["-h", "--help"]})
@@ -178,9 +180,10 @@ def run_tests(**kwargs):  # pylint: disable=too-many-locals
     type=click.Path(),
     help="Sets the name of the directory in which to place the results.",
 )
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
 @click.argument("tests", nargs=-1, type=click.UNPROCESSED)
 @click.version_option()
-def main(**kwargs):
+def main(debug, **kwargs):
     """Run a series of tests on a AMI model DLL file.
 
     If no tests are specified on the command line, run all tests found
@@ -203,8 +206,9 @@ def main(**kwargs):
     sheet when processing XML then use the `xsltproc` utility to convert
     the XML/XSLT to HTML before viewing in your browser.
     """
-    setup_cli_logging()
-    run_tests(**kwargs)
+    setup_cli_logging(debug)
+    xml_filename = run_tests(**kwargs)
+    click.echo(f"Test results: {xml_filename}\nOpen this file in a Web browser, to view them.")
 
 
 if __name__ == "__main__":

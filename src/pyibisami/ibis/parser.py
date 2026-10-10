@@ -42,8 +42,6 @@ from pyibisami.ibis.model import Component, Model
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
-
 T = TypeVar('T')
 GenParser: TypeAlias = Generator[Parser, Any, T]
 
@@ -317,7 +315,6 @@ def param() -> GenParser[tuple[str, Any]]:
 def node(
     valid_keywords: dict[str, Parser],
     stop_keywords: Iterable[str],
-    debug: bool = False
 ) -> Parser:
     """
     Build a node-specific parser.
@@ -412,7 +409,7 @@ def model():
     "Parse [Model]."
     nm = yield name << ignore
     logger.debug("Parsing model: %s...", nm)
-    res = yield many1(node(Model_keywords, IBIS_keywords, debug=DEBUG))
+    res = yield many1(node(Model_keywords, IBIS_keywords))
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
         theModel = Model(dict(res))
@@ -492,7 +489,7 @@ def comp():
     "Parse [Component]."
     nm = yield rest_line
     logger.debug("Parsing component: %s", nm)
-    res = yield many1(node(Component_keywords, IBIS_keywords, debug=DEBUG))
+    res = yield many1(node(Component_keywords, IBIS_keywords))
     try:
         Component(dict(res))
     except LookupError as le:
@@ -552,23 +549,18 @@ IBIS_kywrd_parsers.update(
 @generate("IBIS File")
 def ibis_file() -> GenParser[Any]:
     "Parse IBIS file."
-    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {}, debug=DEBUG)) << end
+    res = yield ignore >> many1True(node(IBIS_kywrd_parsers, {})) << end
     return res
 
 
 def parse_ibis_file(
     ibis_file_contents_str: str,
-    debug: bool = False
 ) -> tuple[str, dict[str, Any]]:
     """
     Parse the contents of an IBIS file.
 
     Args:
         ibis_file_contents_str: The contents of the IBIS file, as a single string.
-
-    Keyword Args:
-        debug: Output debugging info to console when ``True``.
-            Default = ``False``
 
     Example:
         ::
@@ -583,9 +575,6 @@ def parse_ibis_file(
         - A message describing the nature of any parse failure that occured.
         - A dictionary containing keyword definitions (empty upon failure).
     """
-
-    global DEBUG  # pylint: disable=W0603
-    DEBUG = debug
 
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.

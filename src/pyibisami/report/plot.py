@@ -9,6 +9,7 @@ Copyright (c) 2026 David Banas; All rights reserved World wide.
 """
 
 from dataclasses import dataclass
+import logging
 from typing import Optional, TypeAlias
 from collections.abc import Generator, Sequence
 import warnings
@@ -25,7 +26,9 @@ from ..ami.model import (
     OUT_RESP_INIT, OUT_RESP_GETW
 )
 
-from .ami import get_cdr_adaptation, get_dfe_adaptation
+from ..util.ami import get_cdr_adaptation, get_dfe_adaptation
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -211,7 +214,6 @@ def plot_resps(
     resps: AmiModelResponses,
     lbl: str,
     styles: Optional[tuple[PlotStyle, PlotStyle]] = None,
-    debug: bool = False
 ) -> None:
     """
     Plot IBIS-AMI model responses.
@@ -225,12 +227,9 @@ def plot_resps(
     Keyword Args:
         styles: Optional pair of styles to use for ``Init()``/``GetWave()`` plotting.
             Default: None (blue solid/dashed will be used.)
-        debug: Print debugging info when ``True``.
-            Default: ``False``
     """
 
-    if debug:
-        print(f"lbl: {lbl}")
+    logger.debug("lbl: %s", lbl)
     # Define the defaults.
     init_color = "blue"
     getwave_color = "blue"
@@ -243,12 +242,10 @@ def plot_resps(
         getwave_color = getwave_style.get(PLOT_COLOR, getwave_color)
         init_linestyle = init_style.get(PLOT_LINESTYLE, init_linestyle)
         getwave_linestyle = getwave_style.get(PLOT_LINESTYLE, getwave_linestyle)
-    if debug:
-        print(f"init_color: {init_color}")
+    logger.debug("init_color: %s", init_color)
     # Do the plotting.
     if OUT_RESP_INIT in resps:
-        if debug:
-            print("Plotting OUT_RESP_INIT...")
+        logger.debug("Plotting OUT_RESP_INIT...")
         t, _, s, p, f, H = resps[OUT_RESP_INIT]
         left_ax.plot(t * 1e9, s,            color=init_color, linestyle=init_linestyle,)
         left_ax.plot(t * 1e9, p, label=lbl, color=init_color, linestyle=init_linestyle,)
@@ -387,15 +384,14 @@ def plot_model_results(
     Keyword Args:
         plot_t_max: Max. x-axis value (s).
             Default: 1 ns
-        debug: Print debugging information when ``True``.
+        debug: Show the plot on screen when ``True``.
             Default: ``False``
     """
 
     left_ax, right_ax = fig.subplots(1, 2)
     for (model_response, label), styles in model_responses:
-        if debug:
-            print(f"styles: {styles}")
-        plot_resps(left_ax, right_ax, model_response, label, styles=styles, debug=debug)
+        logger.debug("styles: %s", styles)
+        plot_resps(left_ax, right_ax, model_response, label, styles=styles)
     plot_finalize_steppulse_freq(fig, plot_t_max, debug=debug)
 
 

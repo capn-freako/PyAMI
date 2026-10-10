@@ -158,28 +158,25 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self: "IBISModel",
         ibis_file_name: str,
-        debug: bool = False,
     ) -> None:
         """
         Args:
             ibis_file_name (str): The name of the IBIS file.
 
-        Keyword Args:
-            debug (bool): Run the IBIS parser in debugging mode when true.
-                Default = False
+        Notes:
+            1. For parsing details, enable ``DEBUG`` logging for the ``pyibisami.ibis`` logger.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
         # to get all the Traits/UI machinery setup correctly.
         super().__init__()
 
-        self.debug = debug
         logger.debug("Loading IBIS file: %s", ibis_file_name)
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         with open(ibis_file_name, "r", encoding="utf-8") as file:
             ibis_file_contents_str = file.read()
-        err_str, model_dict = parse_ibis_file(ibis_file_contents_str, debug=debug)
+        err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
         self._file_name: str = model_dict.get("file_name", "(n/a)")
         self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
         self._file_rev: str = model_dict.get("file_rev", "(n/a)")

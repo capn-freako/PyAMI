@@ -22,9 +22,11 @@ kDescription = "Example Tx model from ibisami package."
 # (The singular exception is 'c_comp', which should contain 3 values,
 # in NUMERICAL typ, min, max order.)
 ibis_params = {
+    "version": "5.1",
     "file_name": kFileBaseName + ".ibs",
     "file_rev": "v0.1",
     "copyright": "Copyright (c) 2016 David Banas; all rights reserved World wide.",
+    "source": "Example model, from the PyIBIS-AMI package.",
     "component": "Example_Tx",
     "manufacturer": "(n/a)",
     "r_pkg": [0.1, 0.001, 0.5],

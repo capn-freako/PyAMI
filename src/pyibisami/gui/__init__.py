@@ -13,6 +13,8 @@ Copyright (c) 2026 David Banas; all rights reserved World wide.
 """
 
 try:
+    import chaco  # noqa: F401  # pylint: disable=unused-import
+    import enable  # noqa: F401  # pylint: disable=unused-import
     import traitsui  # noqa: F401  # pylint: disable=unused-import
 except ImportError as err:
     raise ImportError(

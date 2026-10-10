@@ -152,6 +152,10 @@ def mk_model(
     Keyword Args:
         out_dir: Directory in which to place created files.
             Default: "."
+
+    Raises:
+        RuntimeError: If a template fails to render (e.g. - a required ``ibis_params`` key is missing).
+            The partially written output file is removed.
     """
 
     py_file = (Path(out_dir).resolve() / model_name).with_suffix(".py")
@@ -169,6 +173,7 @@ def mk_model(
         with open(out_file, "w", encoding="utf-8") as o_file:
             interpreter = em.Interpreter(
                 output=o_file,
+                config=em.Configuration(rawErrors=True),  # Raise template errors, instead of just printing them.
                 globals={
                     "ami_params": ami_params,
                     "ibis_params": ibis_params,
@@ -178,11 +183,19 @@ def mk_model(
                     "date": str(date.today()),
                 },
             )
+            failure: Exception | None = None
             try:
                 with open(em_file, "rt", encoding="utf-8") as in_file:
                     interpreter.file(in_file)
+            except Exception as err:
+                failure = err
             finally:
                 interpreter.shutdown()
+        if failure is not None:  # Handled after closing `out_file`, which Windows can't delete while open.
+            out_file.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Building '{out_file.name}' from '{em_file.name}' failed: {type(failure).__name__}: {failure}"
+            ) from failure
 
 
 def ami_config(py_file):
@@ -279,8 +292,9 @@ def mk_tests(  # pylint: disable=too-many-locals
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
 @click.version_option()
-def main(py_file):
+def main(py_file, debug):
     """
     Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
     This command generates three files based off the input config file.
@@ -294,8 +308,11 @@ def main(py_file):
         1. This command is deprecated! Instead, make your model configurator executable
         and import what you need from this module. This is much cleaner.
     """
-    setup_cli_logging()
-    ami_config(py_file)
+    setup_cli_logging(debug)
+    try:
+        ami_config(py_file)
+    except RuntimeError as err:
+        raise click.ClickException(str(err)) from err
 
 
 if __name__ == "__main__":

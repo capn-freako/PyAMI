@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from pyibisami.tools.run_tests import expand_params, run_tests
-from pyibisami.util.plot import RGB, color_picker, hsv2rgb, plot_name
+from pyibisami.report.plot import RGB, color_picker, hsv2rgb, plot_name
 
 EXAMPLES_DIR = Path(__file__).parent / "examples"
 DLL_PATH = EXAMPLES_DIR / {
@@ -126,7 +126,7 @@ class TestRunTests(object):
     @needs_dll
     def test_run_tests(self, tmp_path, capfd):
         out_dir = tmp_path / "test_results"
-        run_tests(
+        xml_filename = run_tests(
             model=DLL_PATH,
             test_dir=EXAMPLES_DIR / "tests",
             params=EXAMPLES_DIR / "runs",
@@ -136,7 +136,8 @@ class TestRunTests(object):
             tests=(),
         )
         assert "error" not in capfd.readouterr().err
-        xml = (out_dir / "test_results.xml").read_text(encoding="utf-8")
+        assert xml_filename == out_dir / "test_results.xml"
+        xml = xml_filename.read_text(encoding="utf-8")
         assert xml.rstrip().endswith("</tests>")
         for cfg in ("posttap1", "posttap2", "pretap"):
             assert f"<name>freq_resp ({cfg})</name>" in xml
