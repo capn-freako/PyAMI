@@ -22,6 +22,11 @@ NO_CLAMP_Z = 2e6  # Impedance assumed for a missing clamp (Ohms).
 class Component(HasTraits):
     """Encapsulation of a particular component from an IBIS model file."""
 
+    # Created dynamically in ``__init__`` via ``add_trait``; declared here for static checkers.
+    # ``_pin`` is the selected pin name; ``_pin_`` is the Traits mapped shadow, ``_pins[_pin]``.
+    _pin: str
+    _pin_: tuple[str, dict[str, float]]
+
     def __init__(self, subDict):
         """
         Args:
@@ -70,10 +75,11 @@ class Component(HasTraits):
 
     @property
     def pin(self):
-        """The pin selected most recently by the user.
+        """The data for the pin selected most recently by the user.
 
-        Returns the first pin in the list, if the user hasn't made a
-        selection yet.
+        Returns the ``(model_name, rlc_dict)`` entry from the ``[Pin]`` table,
+        not the pin name. (The name is in ``_pin``.) Defaults to the first
+        pin's entry if the user hasn't made a selection yet.
         """
         return self._pin_
 
