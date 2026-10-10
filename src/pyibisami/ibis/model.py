@@ -198,13 +198,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Expose as traits, for viewing.
         self.add_trait("model_type", String(self._mtype))
-        self.add_trait("c_comp", String(self._ccomp))
-        self.add_trait("cref", String(self._cref))
-        self.add_trait("vref", String(self._vref))
-        self.add_trait("vmeas", String(self._vmeas))
-        self.add_trait("rref", String(self._rref))
-        self.add_trait("trange", String(self._trange))
-        self.add_trait("vrange", String(self._vrange))
+        raw_values = {  # Numbers, typ/min/max lists, or `None` when absent.
+            "c_comp": self._ccomp, "cref": self._cref, "vref": self._vref, "vmeas": self._vmeas,
+            "rref": self._rref, "trange": self._trange, "vrange": self._vrange,
+        }
+        for name in raw_values:
+            self.add_trait(name, Any())  # Values set below, not as (instance-shared) defaults.
+        self.trait_set(**raw_values)
         if mtype in ("output", "i/o"):
             self.add_trait("zout", Float(self._zout))
             self.add_trait("slew", Float(self._slew))

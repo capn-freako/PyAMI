@@ -64,6 +64,18 @@ def test_model_iv_data(tx_model):
     assert tx_model.iv_data.vdd == pytest.approx(1.8)
 
 
+
+def test_model_display_traits_hold_raw_values(tx_model):
+    """The viewer's read-only model traits hold the raw IBIS values (numbers, typ/min/max lists),
+    and accept new ones of the same kind (they used to be ``String`` traits)."""
+    assert tx_model.vmeas == pytest.approx(0.5)
+    assert tx_model.vrange == pytest.approx([1.8, 1.62, 1.98])
+    assert tx_model.slew > 0
+    tx_model.vmeas = 0.6
+    tx_model.trange = [27.0, 0.0, 100.0]
+    assert tx_model.vmeas == pytest.approx(0.6)
+
+
 def test_gui_views_build(ibis_test_file):
     """Every IBIS view must resolve against the traits its object exposes."""
     pytest.importorskip("chaco")
