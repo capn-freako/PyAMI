@@ -142,7 +142,7 @@ class IVData:
             sub_dict: Parsed ``[Model]`` sub-keywords.
             vdd: Typical power rail voltage (i.e. - ``[Voltage Range]`` typ).
         """
-        curves = {kw: IVCurve.from_table(kw, sub_dict[kw]) for kw in IV_KEYWORDS if kw in sub_dict}  # type: ignore[arg-type]
+        curves: dict[IVKeyword, IVCurve] = {kw: IVCurve.from_table(kw, sub_dict[kw]) for kw in IV_KEYWORDS if kw in sub_dict}  # type: ignore[arg-type]
         return cls(curves, vdd)
 
     @property

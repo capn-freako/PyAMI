@@ -12,7 +12,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 from typing import Optional
 
-from traits.api import Any, HasTraits, Property, String, Trait, cached_property
+from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
 
 from .iv import IVData
 
@@ -206,10 +206,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self.add_trait("trange", String(self._trange))
         self.add_trait("vrange", String(self._vrange))
         if mtype in ("output", "i/o"):
-            self.add_trait("zout", String(self._zout))
+            self.add_trait("zout", Float(self._zout))
             self.add_trait("slew", String(self._slew))
         elif mtype == "input":
-            self.add_trait("zin", String(self._zin))
+            self.add_trait("zin", Float(self._zin))
 
     def __str__(self):
         res = "Model Type:\t" + self._mtype + "\n"
