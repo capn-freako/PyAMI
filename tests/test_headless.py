@@ -1,7 +1,9 @@
 """Headless (no GUI dependencies) use of PyIBIS-AMI; see Issue #95."""
 
+import os
 import subprocess
 import sys
+import textwrap
 
 import numpy as np
 import pytest
@@ -84,7 +86,7 @@ class TestGui:
 
         model = IBISModel(ibis_test_file, debug=False, gui=False).model
         view = ModelView(model)
-        assert float(view.zout) == model.zout
+        assert view.zout == model.zout
         assert len(view.plot_iv.plots) == 6  # PD/PU x Typ/Min/Max
         assert view.default_traits_view() is not None
         assert len(model.plot_iv.plots) == 6  # Backward-compatible attribute.
@@ -97,6 +99,33 @@ class TestGui:
         last_pin = list(comp.pins)[-1]
         view.pin = last_pin
         assert comp.pin == comp.pins[last_pin]
+
+    def test_views_render(self, ibis_test_file):
+        """Every viewer actually renders (offscreen), for Output and Input models.
+
+        (Building a ``View`` doesn't evaluate its items' editors; e.g. - a ``format_str``
+        applied to a non-numeric trait only fails at display time.)
+        """
+        script = textwrap.dedent(f"""
+            from pyibisami.ami.parser import AMIParamConfigurator
+            from pyibisami.ibis.file import IBISModel
+            from pyibisami.ibis.gui import ComponentView, ModelView
+            from pyibisami.ibis.model import Model
+
+            iv = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]
+            input_model = Model({{"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1],
+                                 "gnd_clamp": iv, "power_clamp": iv}})
+            ibis = IBISModel({str(ibis_test_file)!r}, debug=False, gui=False)
+            for obj in [ibis, ComponentView(ibis.comp_), ModelView(ibis.model), ModelView(input_model),
+                        AMIParamConfigurator({AMI_CONTENTS!r})]:
+                obj.edit_traits(kind="live").dispose()
+            print("rendered")
+        """)
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+        rslt = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, env=env, check=False)
+        assert rslt.returncode == 0, rslt.stderr
+        assert "rendered" in rslt.stdout
+        assert "Traceback" not in rslt.stderr, rslt.stderr
 
     def test_ibis_model_view(self, ibis_test_file):
         ibis = IBISModel(ibis_test_file, debug=False, gui=False)

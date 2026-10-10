@@ -10,7 +10,7 @@ Original Date:   October 9, 2026
 Copyright (c) 2026 by David Banas; All rights reserved World wide.
 """
 
-from traits.api import Any, HasTraits, String, Trait
+from traits.api import Any, Float, HasTraits, String, Trait
 
 from pyibisami.common import require_gui
 
@@ -131,9 +131,9 @@ class ModelView(HasTraits):  # pylint: disable=too-many-instance-attributes
     rref = String()
     trange = String()
     vrange = String()
-    zout = String()
-    slew = String()
-    zin = String()
+    zout = Float()  # (Numeric, for the views' ``format_str``.)
+    slew = Float()
+    zin = Float()
     plot_iv = Any()
 
     def __init__(self, model: Model):
@@ -153,10 +153,10 @@ class ModelView(HasTraits):  # pylint: disable=too-many-instance-attributes
         self.trange = str(model.trange)
         self.vrange = str(model.vrange)
         if self._kind == "output":
-            self.zout = str(model.zout)
-            self.slew = str(model.slew)
+            self.zout = model.zout
+            self.slew = model.slew
         elif self._kind == "input":
-            self.zin = str(model.zin)
+            self.zin = model.zin
         if self._kind:
             self.plot_iv = make_iv_plot(model)
 
