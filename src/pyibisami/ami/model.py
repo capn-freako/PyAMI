@@ -11,6 +11,7 @@ Copyright (c) 2019 David Banas; All rights reserved World wide.
 import copy as cp
 from ctypes import CDLL, byref, c_char_p, c_double  # pylint: disable=no-name-in-module
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any, Optional, TypeAlias, TypedDict
 
@@ -19,6 +20,8 @@ import numpy as np
 from numpy.random     import default_rng
 
 from pyibisami.common import Cvec, Rvec, deconv_same
+
+logger = logging.getLogger(__name__)
 
 VALID_RESPONSE_KEYS = [
     "imp_resp_init",    # The model's impulse response, from its `AMI_Init()` function (V/sample).
@@ -412,19 +415,18 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 byref(self._msg),
             )
         except OSError as err:
-            print("pyibisami.ami_model.AMIModel.initialize(): Call to AMI_Init() bombed:")
-            print(err)
-            print(f"AMI_Init() address = {self._amiInit}")
-            print("Values sent into AMI_Init():")
-            print(f"&initOut = {byref(self._initOut)}")  # type: ignore
-            print(f"row_size = {self._row_size}")
-            print(f"num_aggressors = {self._num_aggressors}")
-            print(f"sample_interval = {self._sample_interval}")
-            print(f"bit_time = {self._bit_time}")
-            print(f"ami_params_in = {ami_params_in}")
-            print(f"&ami_params_out = {byref(self._ami_params_out)}")
-            print(f"&ami_mem_handle = {byref(self._ami_mem_handle)}")  # type: ignore
-            print(f"&msg = {byref(self._msg)}")
+            logger.error("AMIModel.initialize(): AMI_Init() failed: %s", err)
+            logger.debug(
+                "AMI_Init() address=%s; row_size=%s; num_aggressors=%s; "
+                "sample_interval=%s; bit_time=%s; ami_params_in=%s; "
+                "&initOut=%s; &ami_params_out=%s; &ami_mem_handle=%s; &msg=%s",
+                self._amiInit, self._row_size, self._num_aggressors,
+                self._sample_interval, self._bit_time, ami_params_in,
+                byref(self._initOut),  # type: ignore
+                byref(self._ami_params_out),
+                byref(self._ami_mem_handle),  # type: ignore
+                byref(self._msg),
+            )
             raise
 
         # Initialize attributes used by getWave().
@@ -494,12 +496,13 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                     byref(self._ami_params_out), self._ami_mem_handle
                 )  # type: ignore
             except OSError:
-                print(self)
-                print(f"byref(_wave): {byref(_wave)}")
-                print(f"len(_wave): {len(_wave)}")
-                print(f"byref(_clock_times): {byref(_clock_times)}")
-                print(f"byref(self._ami_params_out): {byref(self._ami_params_out)}")
-                print(f"self._ami_mem_handle: {self._ami_mem_handle}")
+                logger.error("AMIModel.getWave(): AMI_GetWave() failed")
+                logger.debug(
+                    "model=%s; byref(_wave)=%s; len(_wave)=%s; "
+                    "byref(_clock_times)=%s; byref(ami_params_out)=%s; ami_mem_handle=%s",
+                    self, byref(_wave), len(_wave),
+                    byref(_clock_times), byref(self._ami_params_out), self._ami_mem_handle,
+                )
                 raise
             wave_out.extend(_wave)
             clock_times.extend(_clock_times)

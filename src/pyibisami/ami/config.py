@@ -34,6 +34,7 @@ configuration file, so as to ensure consistency between them all.
 """
 
 import importlib.util
+import logging
 from datetime import date
 from pathlib import Path
 from typing import Any, NewType
@@ -42,6 +43,8 @@ import click
 import em
 
 from ..ami.parser import ParamValues
+
+logger = logging.getLogger(__name__)
 
 NamedParamDict = NewType("NamedParamDict", tuple[str, ParamValues])
 TestDefinition = NewType("TestDefinition", tuple[str, NamedParamDict, NamedParamDict, str])
@@ -161,7 +164,7 @@ def mk_model(
         else:
             em_file = out_file.with_suffix(".cpp.em")
 
-        print(f"Building '{out_file}' from '{em_file}'...")
+        logger.info("Building '%s' from '%s'...", out_file, em_file)
         with open(out_file, "w", encoding="utf-8") as o_file:
             interpreter = em.Interpreter(
                 output=o_file,
@@ -171,7 +174,7 @@ def mk_model(
                     "param_types": param_types,
                     "model_name": model_name,
                     "description": description,
-                    "date": str(date.today()),  # noqa: DTZ011
+                    "date": str(date.today()),
                 },
             )
             try:
@@ -196,7 +199,7 @@ def ami_config(py_file):
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
-    print(f"Reading model configuration information from file: {py_file}.")
+    logger.info("Reading model configuration information from file: %s.", py_file)
     spec = importlib.util.spec_from_file_location(file_base_name, py_file)
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)

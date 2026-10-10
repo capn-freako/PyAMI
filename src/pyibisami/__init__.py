@@ -20,3 +20,6 @@ except Exception as err:  # pylint: disable=broad-exception-caught
 __date__ = "June 18, 2026"
 __authors__ = "David Banas & David Patterson"
 __copy__ = "Copyright (c) 2012 David Banas, 2019 David Patterson"
+
+import logging
+logging.getLogger(__name__).addHandler(logging.NullHandler())

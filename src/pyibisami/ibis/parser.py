@@ -10,6 +10,7 @@ https://ibis.org/
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
+import logging
 import re
 
 from functools import reduce
@@ -38,6 +39,8 @@ from parsec import (
 )
 
 from pyibisami.ibis.model import Component, Model
+
+logger = logging.getLogger(__name__)
 
 DEBUG = False
 
@@ -70,9 +73,9 @@ def logf(p: Parser, preStr: str = "") -> Parser:
     def fn(txt, ix):
         res = p(txt, ix)
         if not res.status:
-            print(
-                f"{preStr}: Expected `{res.expected}` in `{txt[res.index: res.index + 5]}` at {ParseError.loc_info(txt, res.index)}.",
-                flush=True
+            logger.debug(
+                "%s: Expected `%s` in `%s` at %s.",
+                preStr, res.expected, txt[res.index: res.index + 5], ParseError.loc_info(txt, res.index),
             )
         return res
 
@@ -300,15 +303,13 @@ model_type = reduce(try_choice, model_type_parsers)
 def param() -> GenParser[tuple[str, Any]]:
     "Parse IBIS parameter."
     pname = yield param_name
-    if DEBUG:
-        print(f"Parsing parameter {pname}...", end="", flush=True)
+    logger.debug("Parsing parameter %s...", pname)
     match pname:  # Handle special cases.
         case "Model_type":
             res = yield model_type
         case _:
             res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
-    if DEBUG:
-        print(res, flush=True)
+    logger.debug("%s", res)
     yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
 
@@ -342,8 +343,7 @@ def node(
         "Parse keyword syntax."
         nm = yield keyword()
         nmL = nm.lower()
-        if debug:
-            print(f"Parsing keyword: [{nm}]...", flush=True)
+        logger.debug("Parsing keyword: [%s]...", nm)
         if nmL in valid_keywords:
             if nmL == "end":  # Because ``ibis_file`` expects this to be the last thing it sees,
                 return fail_with("")  # we can't consume it here.
@@ -353,8 +353,7 @@ def node(
         else:
             res = yield skip_keyword
         yield ignore  # So that ``kywrd`` behaves as a lexeme.
-        if debug:
-            print(f"Finished parsing keyword: [{nm}].", flush=True)
+        logger.debug("Finished parsing keyword: [%s].", nm)
         return (nmL, res)
 
     return kywrd | param
@@ -412,11 +411,9 @@ Model_keywords: dict[str, Parser] = {
 def model():
     "Parse [Model]."
     nm = yield name << ignore
-    if DEBUG:
-        print(f"Parsing model: {nm}...", flush=True)
+    logger.debug("Parsing model: %s...", nm)
     res = yield many1(node(Model_keywords, IBIS_keywords, debug=DEBUG))
-    if DEBUG:
-        print(f"[Model] {nm} contains: {dict(res).keys()}", flush=True)
+    logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
         theModel = Model(dict(res))
     except LookupError as le:
@@ -434,8 +431,7 @@ def manufacturer():
     rslt = yield rest_line
     if not rslt:
         rslt = "(n/a)"
-    if DEBUG:
-        print(f"Manufacturer: {rslt}", flush=True)
+    logger.debug("Manufacturer: %s", rslt)
     return rslt
 
 
@@ -443,8 +439,7 @@ def manufacturer():
 def package():
     "Parse package RLC values."
     rlcs = yield many1(param)
-    if DEBUG:
-        print(f"rlcs: {rlcs}", flush=True)
+    logger.debug("rlcs: %s", rlcs)
     return dict(rlcs)
 
 
@@ -496,8 +491,7 @@ Component_keywords = {
 def comp():
     "Parse [Component]."
     nm = yield rest_line
-    if DEBUG:
-        print(f"Parsing component: {nm}", flush=True)
+    logger.debug("Parsing component: %s", nm)
     res = yield many1(node(Component_keywords, IBIS_keywords, debug=DEBUG))
     try:
         Component(dict(res))
@@ -595,8 +589,7 @@ def parse_ibis_file(
 
     try:
         nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
-        if debug:
-            print("Parsed nodes:\n", nodes, flush=True)
+        logger.debug("Parsed nodes:\n%s", nodes)
     except ParseError as pe:
         return str(pe), {}
 
