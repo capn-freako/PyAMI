@@ -37,7 +37,7 @@ class AmiExecutable(NamedTuple):
     "One ``Executable`` line of an ``[Algorithmic Model]``."
 
     direction: Optional[str]  # "tx" (``Executable_Tx``), "rx" (``Executable_Rx``), or ``None`` (``Executable``).
-    os: str  # "linux" or "windows".
+    os: str  # "linux", "windows", or another OS field, lower-cased (e.g. "solaris5.10"; kept, never selected).
     bits: str  # "32" or "64".
     dll: str  # Executable model file name, as written in the IBIS file.
     ami: str  # AMI parameter file name, as written in the IBIS file.
@@ -161,8 +161,9 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._subDict = subDict
 
         # Fetch available keyword/parameter definitions.
-        def maybe(name):
-            return subDict.get(name, None)
+        def maybe(keyword):
+            "The parsed value of ``keyword`` (lower-cased, as the parser stores it); ``None`` if absent."
+            return subDict.get(keyword, None)
 
         self._mtype = maybe("model_type")
         self._ccomp = maybe("c_comp")
@@ -189,12 +190,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Separate AMI executables by OS.
         def is64(x: AmiExecutable) -> bool:
+            "True for a 64-bit executable."
             return int(x.bits) == 64
 
-        def isWin(x: AmiExecutable) -> bool:
-            return x.os.lower() == "windows"
-
         def partition(p, xs):
+            "Split ``xs`` into ``(those satisfying p, the rest)``, each in its original order."
             ts, fs = [], []
             for x in xs:
                 if p(x):
@@ -204,11 +204,14 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             return ts, fs
 
         def getFiles(x: list[AmiExecutable]) -> list[str]:
+            "``[dll, ami]`` of the first executable in ``x`` (direction-blind); ``[]`` if ``x`` is empty."
             return [x[0].dll, x[0].ami] if x else []
 
         def splitExecs(fs):
-            wins, lins = partition(isWin, fs)
-            return (getFiles(wins), getFiles(lins))
+            """``(Windows files, Linux files)``: ``getFiles()`` of the ``fs`` entries whose OS is exactly ``"windows"``,
+            and of those whose OS is exactly ``"linux"``. Other OSes (e.g. ``"solaris5.10"``) are in neither.
+            """
+            return (getFiles([x for x in fs if x.os == "windows"]), getFiles([x for x in fs if x.os == "linux"]))
 
         self._exec32Wins, self._exec32Lins = [], []
         self._exec64Wins, self._exec64Lins = [], []
@@ -219,7 +222,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._test_configs = algo_model_data.get("test_configs", {})
             execs = [AmiExecutable(direction, os, bits, dll, ami)
                      for (direction, ((os, bits), [dll, ami])) in algo_model_data.get("executables", [])]
-            self._ami_executables = execs
+            self._ami_executables = execs  # All of them, in file order, for ``Executable_index``.
             exec64s, exec32s = partition(is64, execs)
             self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
             self._exec64Wins, self._exec64Lins = splitExecs(exec64s)

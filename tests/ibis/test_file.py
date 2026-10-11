@@ -5,6 +5,7 @@ import pytest
 from traits.api import TraitError
 
 from pyibisami.ibis.file import RX_MODEL_TYPES, TX_MODEL_TYPES, IBISModel
+from pyibisami.testing.ami_test_config import run_ami_test_config
 
 
 def test_ibis_model_construction(ibis_test_file):
@@ -519,6 +520,48 @@ def test_ibis_model_ambiguous_io_direction_warns_once(tmp_path, monkeypatch, cap
         assert ibis.dll_path == tmp_path / "io_tx.so"
     warnings = [rec for rec in caplog.records if "get_ami_files(is_tx)" in rec.getMessage()]
     assert [rec.levelno for rec in warnings] == [logging.WARNING]
+
+
+OTHER_OS_ALGO_MODEL = """Model_type   Output
+[Algorithmic Model]
+Executable Solaris5.10_gcc4.1.1_64          tx_sol.so   tx.ami
+Executable HP-UX_accA.03.52_32              tx_hp.sl    tx.ami
+Executable Windows_VisualStudio_64          tx.dll      tx.ami
+[AMI Test Configuration] Bad_index
+Type Statistical
+Executable_index 4
+[End Algorithmic Model]
+"""
+
+
+def test_executables_for_other_oses_are_kept_but_not_selected(tmp_path, monkeypatch):
+    """``Executable`` lines for OSes other than Linux/Windows used to fail the whole file."""
+    ibis_file = tmp_path / "other_os.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", OTHER_OS_ALGO_MODEL, 1), encoding="utf-8")
+    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    assert [os_name for ((os_name, _), _) in model.executables] == ["solaris5.10", "hp-ux", "windows"]
+    assert model.executables[2] == (("windows", "64"), ["tx.dll", "tx.ami"])  # What ``Executable_index 3`` reads.
+    assert model.ami_files == {"32-bit": {"lin": [], "win": []}, "64-bit": {"lin": [], "win": ["tx.dll", "tx.ami"]}}
+
+    _set_platform(monkeypatch, "Windows", "64bit")
+    assert model.get_ami_files() == (model.dll_file, model.ami_file) == ("tx.dll", "tx.ami")
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.dll_file == ""  # Solaris isn't Linux.
+
+    result = run_ami_test_config(tmp_path, model, "Bad_index")
+    assert not result.passed and "model has 3 Executable line(s)" in result.message
+
+
+def test_executable_os_field_may_carry_a_version(tmp_path, monkeypatch):
+    """The OS field may include a version (IBIS 8.0 Section 10.1, p.213); it used to fail the whole file."""
+    algo_model = ("Model_type   Output\n[Algorithmic Model]\n"
+                  "Executable Linux2.6_gcc4.1.2_64  tx.so  tx.ami\n[End Algorithmic Model]\n")
+    ibis_file = tmp_path / "os_version.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", algo_model, 1), encoding="utf-8")
+    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.executables == [(("linux", "64"), ["tx.so", "tx.ami"])]
+    assert model.dll_file == "tx.so"
 
 
 def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):

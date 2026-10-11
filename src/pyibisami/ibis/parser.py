@@ -174,6 +174,19 @@ def ratio() -> GenParser[Optional[float]]:
     return None
 
 
+def _platform_os(chars: list[str]) -> str:
+    """The OS field of an ``Executable`` line's ``Platform_Compiler_Bits``, lower-cased.
+
+    Any OS name, with an optional version, is accepted (IBIS 8.0 Section 10.1, p.213); ``Linux...``/``Windows...``
+    become exactly ``"linux"``/``"windows"``, the only platforms executables are selected for.
+    """
+    token = "".join(chars).lower()
+    for os_name in ("linux", "windows"):
+        if token.startswith(os_name):
+            return os_name
+    return token
+
+
 # ``(direction, ((os, bits), [dll, ami]))``; ``direction`` is ``"tx"``, ``"rx"``, or ``None`` for plain ``Executable``.
 ex_line: Parser = (
     word(
@@ -183,10 +196,7 @@ ex_line: Parser = (
     )
     + (  # noqa: W503
         (
-            (
-                ((string("L") | string("l")) >> string("inux")).result("linux")
-                | ((string("W") | string("w")) >> string("indows")).result("windows")  # noqa: W503
-            )
+            many1(none_of("_ \t\r\n")).parsecmap(_platform_os)
             << string("_")  # noqa: W503
             << many(none_of("_"))  # noqa: W503
             << string("_")  # noqa: W503
