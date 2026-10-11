@@ -495,6 +495,20 @@ class TestFormats:
         assert ami.input_ami_params["t"] == [1.0, 2.0]
         assert ami.ami_parsing_errors == ["Model_Specific.t: Default is not allowed with Table; ignoring it."]
 
+    def test_subparameters_named_like_tags(self):
+        """Names like ``Corner``/``Steps`` used for parameters don't turn their branch into one (bad) parameter."""
+        ami = ami_parser.AMIParamConfigurator(_ami_file(
+            '(Corner (Usage In) (Type String) (List "TT" "FF")) '
+            "(ctle (Steps (Usage In) (Type Integer) (Value 3)) (gain (Usage In) (Type Float) (Value 0.5)))"))
+        assert ami.ami_parsing_errors == []
+        assert ami.input_ami_params == {"root_name": "my_model", "Corner": "TT", "ctle": {"Steps": 3, "gain": 0.5}}
+
+    def test_boolean_table_rows(self):
+        """Table rows may start with a Boolean column (Table 18)."""
+        ami = ami_parser.AMIParamConfigurator(_ami_file("(t (Usage In) (Type Boolean Integer) (Table (True 1) (False 2)))"))
+        assert ami.ami_parsing_errors == []
+        assert ami.ami_param_defs["Model_Specific"]["t"].pvalue == [[True, 1], [False, 2]]
+
 
 @pytest.mark.parametrize(
     "config", ["test_ami_config", "nested_ami_config", "described_group_ami_config", "grouped_ami_config",

@@ -572,14 +572,15 @@ row_head = lexeme(regex(number_re.pattern + r"(?=[\s()|])")) | ami_string
 def node():
     """Parse AMI node: ``(name values...)`` gives ``(name, values)``.
 
-    A Table row (IBIS 8.0 p.242), i.e. - a number or quoted string followed only by atoms, gives a plain list instead:
+    A Table row (IBIS 8.0 p.242), i.e. - a number, quoted string or Boolean followed only by atoms, gives a plain list:
     ``(1 -0.5 2)`` gives ``["1", "-0.5", "2"]``. (A tap, e.g. ``(-1 (Usage In) ...)``, contains nodes.)
     """
     yield lparen
     label  = yield node_name ^ row_head
     values = yield many(expr)
     yield rparen
-    if (number_re.fullmatch(label) or label.startswith('"')) and all(isinstance(v, str) for v in values):
+    is_row_head = number_re.fullmatch(label) or label.startswith('"') or label in ("True", "False")
+    if is_row_head and all(isinstance(v, str) for v in values):
         return [label] + values
     return (label, values)
 
@@ -610,12 +611,9 @@ def proc_branch(  # pylint: disable=too-many-return-statements
             - parameter definition tags, or
             - subparameters.
 
-    We distinguish between the two possible kinds of payloads, by
-    peaking at the names of the first two items in the list and noting
-    whether they are keys of 'AMIParameter._param_def_tag_procs'.
-    We have to do this twice, due to the dual use of the 'Description'
-    tag and the fact that we have no guarantee of any particular
-    ordering of subparameter branch items.
+    A parameter has a 'Usage' or 'Type' tag, i.e. - an item of that name whose values are all atoms.
+    (Those names are reserved, so no subparameter has them; IBIS 8.0 Section 10.3.4, p.239.)
+    Other tag names (e.g. - 'Corner', 'Steps', 'Labels') may also name subparameters, so they don't decide it.
 
     A parameter that can't be built (or a malformed item) is skipped: it's left out of the result, and a
     ``"Skipped parameter <path>: <reason>"`` message is logged and added to ``skipped``. The rest of the tree loads.
@@ -649,10 +647,9 @@ def proc_branch(  # pylint: disable=too-many-return-statements
         return skip(param_name, "No tags or subparameters.")
     child_path = () if path is None else path + (param_name,)
 
-    tag_names = AMIParameter._param_def_tag_procs  # pylint: disable=protected-access
     try:
-        # A parameter has at least one tag other than Description (which a branch of subparameters may also have).
-        if any(isinstance(tag, tuple) and tag[0] in tag_names and tag[0] != "Description" for tag in param_tags):
+        if any(isinstance(tag, tuple) and tag[0] in ("Usage", "Type") and all(isinstance(v, str) for v in tag[1])
+               for tag in param_tags):
             try:
                 results = ("", {param_name: AMIParameter(param_name, param_tags)})
             except AMIParamError as err:
