@@ -12,7 +12,7 @@ from ctypes         import c_double
 from dataclasses    import dataclass
 import logging
 import re
-from typing         import Any, NewType, Optional, TypeAlias
+from typing         import Any, NewType, Optional, TypeAlias, cast
 from collections.abc import Callable
 
 import numpy as np
@@ -130,7 +130,7 @@ class AMIParamConfigurator(HasTraits):
             raise ValueError("No 'Reserved_Parameters' section found!")
         trait_names = []
         for pname, param in model_specific_dict.items():
-            for trait_name, trait in make_param_traits(pname, param):
+            for trait_name, trait in make_param_traits(trait_name_part(pname), param):
                 self.add_trait(trait_name, trait)
                 trait_names.append(trait_name)
         self._param_trait_names = trait_names
@@ -222,7 +222,7 @@ class AMIParamConfigurator(HasTraits):
             if root_key is None:
                 root_key = branch_name  # "Reserved_Parameters" or "Model_Specific"; not part of the trait name.
             else:
-                tname_parts.append(branch_name)
+                tname_parts.append(trait_name_part(branch_name))
             if branch_name in param_dict:
                 param_dict = param_dict[branch_name]  # type: ignore
             else:
@@ -243,8 +243,10 @@ class AMIParamConfigurator(HasTraits):
                                 new_val = bool(new_val)
                     else:
                         new_val = bool(new_val)
-            elif param_dict.ptype in ("Integer", "Tap"):
+            elif param_dict.ptype == "Integer":
                 new_val = int(new_val)
+            elif param_dict.ptype in ("Float", "UI", "Tap"):  # A Tap is a (float) tap weight.
+                new_val = float(new_val)
             # `pvalue`, for 'List' format, holds the list of *legal* values, not the
             # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
             if param_dict.pformat != "List":
@@ -285,7 +287,7 @@ class AMIParamConfigurator(HasTraits):
         selector" parameters)."""
         tuners = []
         for branch_names, param in self.tunable_params:
-            tname = "_".join(branch_names[1:])  # Drop the "Model_Specific" root.
+            tname = "_".join(map(trait_name_part, branch_names[1:]))  # Drop the "Model_Specific" root.
             if param.pformat == "Range":
                 pmin, pmax = float(param.pmin), float(param.pmax)
                 step = (pmax - pmin) / 10 or 1.0
@@ -375,7 +377,7 @@ class AMIParamConfigurator(HasTraits):
         """
 
         res = {}
-        tname = prefix + pname     # This is the fully hierarchical trait name, used by the Traits/UI machinery.
+        tname = prefix + trait_name_part(pname)  # The fully hierarchical trait name, used by the Traits/UI machinery.
         param = params[pname]
         if isinstance(param, AMIParameter):
             if tname in self._param_trait_names:  # If model specific and of type In or InOut...
@@ -476,6 +478,17 @@ def _walk_tunable_params(
     return results
 
 
+def _walk_params(params: Parameters, prefix: list[str]) -> list[tuple[list[str], AMIParameter]]:
+    "Every leaf parameter of a (sub)tree, with its branch name path."
+    results: list[tuple[list[str], AMIParameter]] = []
+    for pname, param in params.items():
+        if isinstance(param, AMIParameter):
+            results.append((prefix + [pname], param))
+        elif isinstance(param, dict):  # Subparameter branch; skips a branch's "description" text.
+            results.extend(_walk_params(param, prefix + [pname]))
+    return results
+
+
 #####
 # AMI file parser.
 #####
@@ -504,15 +517,23 @@ def int2tap(x):
     return res
 
 
+def trait_name_part(name: str) -> str:
+    """The trait/display form of one AMI parameter name.
+
+    Tap weights are named by tap number (``-1``, ``0``, ``1``; IBIS 8.0 Section 10.3.4, p.240), which isn't a valid
+    trait name, so they're shown as ``pre1``, ``post0``, ``post1`` (see ``int2tap()``). Everything sent to the
+    model (``input_ami_params``, ``fetch_param_val()``/``set_param_val()`` paths) keeps the ``.ami`` names.
+    """
+    return int2tap(name) if re.fullmatch(r"[-+]?[0-9]+", name) else name
+
+
 lparen = lexeme(string("("))
 rparen = lexeme(string(")"))
 number = lexeme(regex(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"))
 integ = lexeme(regex(r"[-+]?[0-9]+"))
 nat = lexeme(regex(r"[0-9]+"))
-# tap_ix = (integ << whitespace).parsecmap(int2tap)  # Doesn't work!
-# tap_ix = integ.parsecmap(int2tap)  # Breaks parsing of node names that begin with a numeral!
-# tap_ix = integ.parsecmap(int2tap) << whitespace  # This fails; I don't know why.
-tap_ix = lexeme(integ.parsecmap(int2tap))  # This works, as an alternative to the line above.
+# A tap number, as written; the lookahead stops it matching the start of a number (e.g. ``-0.5`` in a Table row).
+tap_ix = lexeme(regex(r"[-+]?[0-9]+(?=[\s()|])"))
 symbol = lexeme(regex(r"[0-9a-zA-Z_][^\s()]*"))
 true = lexeme(string("True")).result(True)
 false = lexeme(string("False")).result(False)
@@ -730,7 +751,23 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
         elif label == "description":
             description = str(tmp_params)
         else:
-            log_warning(f"Unrecognized group with label, '{label}', found in parameter definition string!")
+            log_warning(f"Unrecognized group with label, '{label}', found in parameter definition string! "
+                        "Only Reserved_Parameters, Model_Specific and Description may be at the top level "
+                        "(IBIS 8.0 Section 10.3.2, p.236).")
+
+    leaves = (_walk_params(cast(Parameters, reserved_params_dict), ["Reserved_Parameters"])
+              + _walk_params(model_specific_dict, ["Model_Specific"]))  # noqa: W503
+    for path, param in leaves:
+        if param.msg:  # Problems that don't stop the parameter loading (e.g. - an unusable Default).
+            log_warning(f"{'.'.join(path)}: {param.msg.strip()}")
+
+    version = reserved_params_dict.get("AMI_Version")  # type: ignore[call-overload]
+    version_match = re.match(r"\s*(\d+)\.(\d+)", str(version.pvalue)) if version else None
+    is_5_1_or_later = version_match is not None and (int(version_match[1]), int(version_match[2])) >= (5, 1)
+    labels = list(params.keys())
+    if is_5_1_or_later and model_spec_found and labels.index("Model_Specific") < labels.index("Reserved_Parameters"):
+        log_warning("For AMI_Version 5.1 and later, Reserved_Parameters must come before Model_Specific "
+                    "(IBIS 8.0 Section 10.3.2, p.237).")
 
     if not reserved_found:
         log_error("Reserved parameters section not found! It is required.")
@@ -803,14 +840,14 @@ def make_param_traits(
                     tmp_dict: dict[str, Any] = {}
                     tmp_dict.update(list(zip(list_tips, param.pvalue)))
                     val = next(iter(tmp_dict.keys()))
-                    if default:
+                    if default is not None:  # Already checked to be a List member, of the List's type.
                         for tip in tmp_dict.items():
                             if tip[1] == default:
                                 val = tip[0]
                                 break
                     the_trait = Trait(val, tmp_dict)
                 else:
-                    val = default if default else param.pvalue[0]
+                    val = default if default is not None else param.pvalue[0]
                     the_trait = Enum([val] + param.pvalue)
             case "Corner":
                 the_trait = Trait(param.pvalue[0])  # Using `Typ` value, for now.
@@ -826,5 +863,5 @@ def make_param_traits(
         new_traits: list[tuple[str, TraitType]] = []
         for subparam_name in sorted(param.keys()):
             if subparam_name != "description":
-                new_traits.extend(make_param_traits(pname + "_" + subparam_name, param[subparam_name]))
+                new_traits.extend(make_param_traits(pname + "_" + trait_name_part(subparam_name), param[subparam_name]))
         return new_traits

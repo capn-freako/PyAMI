@@ -306,8 +306,106 @@ def grouped_ami_config():
 """
 
 
+@pytest.fixture
+def tap_ami_config():
+    "A tapped delay line, its taps named by tap number (IBIS 8.0 Section 10.3.4, p.240)."
+    return _ami_file(r"""
+         (tx_tap
+             (Description "Tx FFE.")
+             (-1 (Usage In) (Type Tap) (Range 0.0 -0.2 0.0) (Description "Pre-cursor."))
+             (0 (Usage In) (Type Tap) (Range 1.0 0.6 1.0) (Description "Main."))
+             (1 (Usage In) (Type Tap) (Range 0.0 -0.4 0.0) (Description "Post-cursor."))
+         )""")
+
+
+def _ami_file(model_specific, reserved='(AMI_Version (Usage Info) (Type String) (Value "7.0"))', ms_first=False):
+    "A minimal ``.ami`` file with the given ``Model_Specific`` contents and extra reserved parameters."
+    rsv = f"""(Reserved_Parameters
+         {reserved}
+         (Init_Returns_Impulse (Usage Info) (Type Boolean) (Value True))
+         (GetWave_Exists (Usage Info) (Type Boolean) (Value False)))"""
+    ms = f"(Model_Specific {model_specific})"
+    return f"(my_model {ms} {rsv})" if ms_first else f"(my_model {rsv} {ms})"
+
+
+class TestTapNames:
+    def test_model_gets_tap_numbers(self, tap_ami_config):
+        """Taps used to reach the model as ``pre1``/``post0``/``post1``, which it doesn't recognise."""
+        ami = ami_parser.AMIParamConfigurator(tap_ami_config)
+        assert ami.input_ami_params["tx_tap"] == {"-1": 0.0, "0": 1.0, "1": 0.0}
+        ami.set_param_val(["Model_Specific", "tx_tap", "-1"], -0.1)
+        assert ami.input_ami_params["tx_tap"]["-1"] == -0.1
+
+    def test_tuners_keep_display_names(self, tap_ami_config):
+        tuners = ami_parser.AMIParamConfigurator(tap_ami_config).mk_tap_tuners()
+        assert [(t.name, t.branch_names) for t in tuners] == [
+            ("tx_tap_pre1", ["Model_Specific", "tx_tap", "-1"]),
+            ("tx_tap_post0", ["Model_Specific", "tx_tap", "0"]),
+            ("tx_tap_post1", ["Model_Specific", "tx_tap", "1"]),
+        ]
+
+    def test_names_starting_with_a_digit(self):
+        """Only a whole name is a tap number; ``2x`` used to be read as tap ``2`` (``post2``) plus an atom ``x``."""
+        assert ami_parser.ami_parse("(r (2x (Usage In)) (-1 (Usage In)))") == (
+            "r", [("2x", [("Usage", ["In"])]), ("-1", [("Usage", ["In"])])])
+
+
+@pytest.mark.parametrize("param, expected", [
+    ("(Type Integer) (List 0 1 2) (Default 2)", 2),  # Was the string "2", sent quoted to the model.
+    ("(Type Float) (Range 0.5 0 1) (Default 0.7)", 0.7),  # Was 0.5: Default ignored.
+    ('(Type Integer) (List 0 1 2) (List_Tip "a" "b" "c") (Default 2)', 2),  # Was 0: Default ignored.
+    ("(Type Integer) (List 0 1 2) (Default 0)", 0),
+])
+def test_default_is_the_initial_value(param, expected):
+    """``Default`` picks the value when the user doesn't (IBIS 8.0 Section 10.3.4, p.245)."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
+    value = ami.input_ami_params["x"]
+    assert value == expected and type(value) is type(expected)
+    assert not ami.ami_parsing_errors
+
+
+@pytest.mark.parametrize("param, expected, warning", [
+    ("(Type Float) (Range 0.5 0 1) (Default 1.5)", 0.5, "outside the Range"),
+    ("(Type Integer) (List 0 1 2) (Default 3)", 0, "not a member of the List"),
+    ("(Type Integer) (List 0 1 2) (Default high)", 0, "Couldn't read integer"),
+])
+def test_unusable_default_warns(param, expected, warning):
+    """A Default of the wrong Type or outside the allowed values is ignored, with a warning; the file still loads."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
+    assert ami.input_ami_params["x"] == expected
+    assert len(ami.ami_parsing_errors) == 1 and warning in ami.ami_parsing_errors[0]
+    assert ami.ami_parsing_errors[0].startswith("Model_Specific.x: ")
+
+
+def test_list_tip_count_must_match_list():
+    """``zip()`` used to drop the extra List entries silently (IBIS 8.0 Section 10.3.4, p.241)."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (List 0 1 2) (List_Tip "a" "b"))'))
+    assert ami.ami_parsing_errors == ["Model_Specific.x: List_Tip has 2 entries, but List has 3; they must match."]
+
+
+@pytest.mark.parametrize("reserved, warns", [
+    ('(AMI_Version (Usage Info) (Type String) (Value "5.1"))', True),
+    ("", False),  # No AMI_Version: a pre-5.1 model, for which the order is free.
+])
+def test_reserved_parameters_first_from_5_1(reserved, warns):
+    """IBIS 8.0 Section 10.3.2, p.237."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved, ms_first=True))
+    assert any("must come before Model_Specific" in w for w in ami.ami_parsing_errors) == warns
+
+
+def test_newer_reserved_parameters_are_recognised():
+    """Reserved parameters of AMI_Version 7.2 and 8.0 (IBIS 8.0 Table 41, p.338-339) used to warn."""
+    names = ["Modulation_Levels", "PAM_Offsets", "PAM_Thresholds", "Tx_Impulse_Input",
+             "Adaptation_Valid", "Rx_Port_Order", "Tx_Port_Order"]
+    reserved = " ".join(f'({name} (Usage Info) (Type String) (Value "x"))' for name in names)
+    ami = ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved))
+    assert not ami.ami_parsing_errors
+    assert set(names) <= set(ami.info_ami_params)
+
+
 @pytest.mark.parametrize(
-    "config", ["test_ami_config", "nested_ami_config", "described_group_ami_config", "grouped_ami_config"])
+    "config", ["test_ami_config", "nested_ami_config", "described_group_ami_config", "grouped_ami_config",
+               "tap_ami_config"])
 def test_gui_view_items_match_traits(config, request):
     """Every editable ``Item`` in the GUI view must name a registered parameter Trait."""
     pytest.importorskip("traitsui")

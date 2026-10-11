@@ -269,26 +269,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         # Complete the instance.
         vals = self._format_rem
         if param_format == "Value":
-            value_str = vals[0].strip()
-            if param_type in ("Float", "UI"):
-                try:
-                    self._value = float(value_str)
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read float from '{value_str}'.\n") from exc
-            elif param_type == "Integer":
-                try:
-                    self._value = int(float(value_str))  # Hack to accommodate: "1e5", for instance.
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read integer from '{value_str}'.\n") from exc
-            elif param_type == "Boolean":
-                if value_str == "True":
-                    self._value = True
-                elif value_str == "False":
-                    self._value = False
-                else:
-                    raise AMIParamError(f"Couldn't read Boolean from '{value_str}'.\n")
-            else:  # `String`
-                self._value = value_str.strip('"')
+            self._value = _read_value(param_type, vals[0])
         elif param_format == "Range":
             if param_type not in ("Float", "Integer", "UI", "Tap"):
                 raise AMIParamError(f"Illegal type, '{param_type}', for use with Range.\n")
@@ -307,6 +288,13 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             self._value = temp_vals[0]
             self._min = temp_vals[1]
             self._max = temp_vals[2]
+            default = self._typed_default(param_type)  # Tap: a float, as the Range values are.
+            if default is not None:
+                if self._min <= default <= self._max:
+                    self._value = default
+                else:
+                    self._msg += (f"Default {default} is outside the Range [{self._min}, {self._max}]; "
+                                  f"using {self._value}.\n")
         else:  # param_format == 'List'
             if param_type in ("Float", "UI"):
                 try:
@@ -325,11 +313,59 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                 except (ValueError, TypeError) as exc:
                     raise AMIParamError(f"Couldn't read strings from '{vals}'.\n") from exc
             self._value = temp_vals
+            # The current List selection lives on the trait ``make_param_traits()`` builds from ``pdefault``.
+            default = self._typed_default("Integer" if param_type == "Tap" else param_type)  # As the List values.
+            if default is not None and default not in temp_vals:
+                self._msg += f"Default {default} is not a member of the List {temp_vals}; using {temp_vals[0]}.\n"
+                default = None
+            self._default = default
+            if self._list_tip is not None and len(self._list_tip) != len(temp_vals):
+                self._msg += (f"List_Tip has {len(self._list_tip)} entries, but List has {len(temp_vals)}; "
+                              "they must match.\n")
 
         self._name = name
 
+    def _typed_default(self, param_type: str):
+        """``Default``, read as ``param_type``; ``None`` if absent or unreadable (with a warning in ``msg``).
+
+        Range and List use it, if present, as the initial value (IBIS 8.0 Section 10.3.4, p.245).
+        """
+        if self._default is None:
+            return None
+        try:
+            return _read_value(param_type, self._default)
+        except AMIParamError as err:
+            self._msg += f"Ignoring Default: {err}"
+            return None
+
     def __str__(self):
         return f"{self.pvalue}"
+
+
+def _read_value(param_type: str, value_str: str):
+    """One AMI value, as the given ``Type``.
+
+    Raises:
+        AMIParamError: ``value_str`` isn't a value of that type.
+    """
+    value_str = value_str.strip()
+    if param_type in ("Float", "UI", "Tap"):
+        try:
+            return float(value_str)
+        except (ValueError, TypeError) as exc:
+            raise AMIParamError(f"Couldn't read float from '{value_str}'.\n") from exc
+    if param_type == "Integer":
+        try:
+            return int(float(value_str))  # Hack to accommodate: "1e5", for instance.
+        except (ValueError, TypeError) as exc:
+            raise AMIParamError(f"Couldn't read integer from '{value_str}'.\n") from exc
+    if param_type == "Boolean":
+        if value_str == "True":
+            return True
+        if value_str == "False":
+            return False
+        raise AMIParamError(f"Couldn't read Boolean from '{value_str}'.\n")
+    return value_str.strip('"')  # `String`
 
 
 #####
