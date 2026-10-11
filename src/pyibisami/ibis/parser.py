@@ -592,8 +592,10 @@ def parse_ibis_file(
     Returns:
         A pair containing
 
-        - A message describing the nature of any parse failure that occured.
-        - A dictionary containing keyword definitions (empty upon failure).
+        - A message describing the nature of any parse failure that occured (``"Success!"`` otherwise).
+        - A dictionary containing keyword definitions (empty upon failure). Its ``"warnings"`` entry lists the
+          IBIS spec rules broken that didn't stop the file loading (see ``Model.spec_warnings``); each is also
+          logged at ``WARNING``.
     """
 
     try:
@@ -606,6 +608,7 @@ def parse_ibis_file(
     components = {}
     models = {}
     model_selectors = {}
+    warnings = []
     for kw, val in nodes:
         if kw == "model":
             models.update(val)
@@ -613,13 +616,21 @@ def parse_ibis_file(
             components.update(val)
         elif kw == "model_selector":
             model_selectors.update(val)
+        elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel], where it's skipped.
+            warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
+                            "permitted; ignored (IBIS 8.0 Section 10.1, p.213).")
         else:
             kw_dict.update({kw: val})
+    for mdl in models.values():
+        warnings.extend(mdl.spec_warnings)
+    for warning in warnings:
+        logger.warning("%s", warning)
     kw_dict.update(
         {
             "components": components,
             "models": models,
             "model_selectors": model_selectors,
+            "warnings": warnings,
         }
     )
     return "Success!", kw_dict

@@ -571,3 +571,54 @@ def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):
     assert ibis.ibis_dir == tmp_path
     assert ibis.resolve_file("sub/model.ami") == tmp_path / "sub" / "model.ami"
     assert ibis.resolve_file("") is None
+
+
+def _algo(model_type, *lines):
+    "A ``Model_type`` line followed by an ``[Algorithmic Model]`` holding ``lines``."
+    return f"Model_type   {model_type}\n[Algorithmic Model]\n" + "".join(f"{ln}\n" for ln in lines) + \
+        "[End Algorithmic Model]\n"
+
+
+SUBMODEL = """[Submodel]   sub_clamp
+Submodel_type   Dynamic_clamp
+[Algorithmic Model]
+Executable linux_gcc4.1.2_64  sub.so  sub.ami
+[End Algorithmic Model]
+
+[END]
+"""
+
+
+@pytest.mark.parametrize("old, new, expected", [
+    ("Model_type   Terminator\n", _algo("Terminator", "Executable linux_gcc_64  t.so  t.ami"),
+     "example_term: [Algorithmic Model] is not permitted for Model_type Terminator"),
+    ("[END]\n", SUBMODEL, "[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel])"),
+    ("Model_type   I/O\n", _algo("I/O", "Executable linux_gcc_64  io.so  io.ami"),
+     "example_io: Executable is prohibited for Model_type I/O; use Executable_Tx/Executable_Rx "
+     "(at least one is required)"),
+    ("Model_type   I/O\n", _algo("I/O", "Executable_Tx linux_gcc_64  io.so  io.ami",
+                                 "Executable_Rx linux_gcc_64  io.so  io.ami"),
+     "example_io: Executable_Tx and Executable_Rx must name different .ami files; both use io.ami"),
+    ("Model_type   Output\n", _algo("Output", "Executable_Tx linux_gcc_64  tx.so  tx.ami"),
+     "example_tx: Executable_Tx/Executable_Rx are not permitted for Model_type Output"),
+    ("Model_type   Output\n", _algo("Output", "Executable linux_gcc_64  tx.so  tx_params.txt"),
+     "example_tx: AMI parameter files must have the extension .ami: tx_params.txt"),
+    ("", "", "example_rx: Vinl and Vinh must be defined for Model_type Input"),  # ``MIXED_IBIS`` as is.
+])
+def test_spec_violations_warn_but_load(tmp_path, caplog, old, new, expected):
+    """IBIS rules on ``[Algorithmic Model]`` use and receiver thresholds are reported, but don't stop loading."""
+    ibis_file = tmp_path / "violation.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace(old, new, 1) if old else MIXED_IBIS, encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.parser"):
+        ibis = IBISModel(str(ibis_file))
+    assert ibis.ibis_parsing_errors.startswith("Success!\nWarnings:\n")
+    assert expected in ibis.ibis_parsing_errors
+    assert any(expected in rec.getMessage() for rec in caplog.records if rec.name == "pyibisami.ibis.parser")
+
+
+def test_spec_conforming_file_has_no_warnings(ibis_test_file):
+    from pyibisami.ibis.parser import parse_ibis_file
+
+    status, ibis_dict = parse_ibis_file(ibis_test_file.read_text(encoding="utf-8"))
+    assert (status, ibis_dict["warnings"]) == ("Success!", [])
+    assert IBISModel(ibis_test_file).ibis_parsing_errors == "Success!"

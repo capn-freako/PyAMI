@@ -52,6 +52,12 @@ _RECEIVER_TYPES = {"input", "i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_
 _STRICT_DRIVER_TYPES = {"output", "i/o"}  # Missing I-V tables or [Ramp] fail the model, as they always have.
 _KEYWORD_NAMES = {"pulldown": "[Pulldown]", "pullup": "[Pullup]", "ramp": "[Ramp]"}
 
+# Spec-rule checks reported by ``Model.spec_warnings``.
+_NO_ALGO_MODEL_TYPES = {"terminator", "series", "series_switch"}  # IBIS 8.0 Section 10.1, p.213.
+_VINL_VINH_TYPES = {  # IBIS 8.0 Section 6.1, Table 1, p.62.
+    "input", "i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_source", "input_ecl", "i/o_ecl",
+}
+
 
 def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]) -> float:
     "Input impedance of the clamps (in parallel, as both are always active); ``NO_CLAMP_Z`` for a missing one."
@@ -159,6 +165,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
+        self._name = name
 
         # Fetch available keyword/parameter definitions.
         def maybe(keyword):
@@ -366,6 +373,45 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
     def is_ami(self):
         "AMI model flag."
         return ("algorithmic_model" in self._subDict)
+
+    @property
+    def spec_warnings(self) -> list[str]:
+        """IBIS spec rules this model breaks, which don't stop it loading (diagnostics only).
+
+        Checks ``[Algorithmic Model]`` use per ``Model_type`` (IBIS 8.0 Section 10.1, p.213-214, Table 47),
+        the ``.ami`` file extension (p.214), and the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1).
+        """
+        mtype = self._mtype.lower()
+        execs = self._ami_executables
+        directions = {ex.direction for ex in execs}
+        problems = []
+        if self.is_ami and mtype in _NO_ALGO_MODEL_TYPES:
+            problems.append(f"[Algorithmic Model] is not permitted for Model_type {self._mtype} "
+                            "(IBIS 8.0 Section 10.1, p.213)")
+        if self.is_io:
+            if None in directions:
+                problem = f"Executable is prohibited for Model_type {self._mtype}; use Executable_Tx/Executable_Rx"
+                if not directions & {"tx", "rx"}:
+                    problem += " (at least one is required)"
+                problems.append(problem + " (IBIS 8.0 Section 10.1, p.214, Table 47)")
+            tx_amis = {ex.ami for ex in execs if ex.direction == "tx"}
+            shared = tx_amis & {ex.ami for ex in execs if ex.direction == "rx"}
+            if shared:
+                problems.append(f"Executable_Tx and Executable_Rx must name different .ami files; both use "
+                                f"{', '.join(sorted(shared))} (IBIS 8.0 Section 10.1, p.214)")
+        elif directions & {"tx", "rx"}:
+            problems.append(f"Executable_Tx/Executable_Rx are not permitted for Model_type {self._mtype}; "
+                            "use Executable (IBIS 8.0 Section 10.1, p.214, Table 47)")
+        bad_ext = sorted({ex.ami for ex in execs if not ex.ami.lower().endswith(".ami")})
+        if bad_ext:
+            problems.append(f"AMI parameter files must have the extension .ami: {', '.join(bad_ext)} "
+                            "(IBIS 8.0 Section 10.1, p.214)")
+        if mtype in _VINL_VINH_TYPES:
+            missing = [kw for kw in ("Vinl", "Vinh") if kw.lower() not in self._subDict]
+            if missing:
+                problems.append(f"{' and '.join(missing)} must be defined for Model_type {self._mtype}; "
+                                "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62)")
+        return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property
     def is_io(self) -> bool:

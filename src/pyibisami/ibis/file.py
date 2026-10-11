@@ -334,7 +334,9 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         else:
             self.add_trait("date", String("(n/a)"))
 
-        self._ibis_parsing_errors = err_str
+        self._ibis_parsing_errors = err_str  # Plus any spec warnings (already logged by the parser).
+        if model_dict.get("warnings"):
+            self._ibis_parsing_errors += "\nWarnings:\n" + "\n".join(f"- {w}" for w in model_dict["warnings"])
 
         self._comp_changed(comps[0])  # Wasn't being called automatically.
         # Wasn't being called automatically:
