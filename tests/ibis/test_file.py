@@ -1,4 +1,5 @@
 import logging
+import platform
 
 import pytest
 from traits.api import TraitError
@@ -246,3 +247,63 @@ def test_no_usable_component(tmp_path):
     ibis_file.write_text(header + BROKEN_COMPONENT + models, encoding="utf-8")
     with pytest.raises(ValueError, match="No component"):
         IBISModel(str(ibis_file))
+
+
+def _set_platform(monkeypatch, system, bits):
+    monkeypatch.setattr(platform, "system", lambda: system)
+    monkeypatch.setattr(platform, "architecture", lambda *args, **kwargs: (bits, ""))
+
+
+@pytest.mark.parametrize("system, bits, files", [
+    ("Windows", "64bit", ("example_tx_x86_amd64.dll", "example_tx.ami")),
+    ("Windows", "32bit", ("example_tx_x86.dll", "example_tx.ami")),
+    ("Linux", "64bit", ("example_tx_x86_amd64.so", "example_tx.ami")),
+    ("Linux", "32bit", ("example_tx_x86.so", "example_tx.ami")),
+])
+def test_model_executable_for_platform(ibis_test_file, monkeypatch, system, bits, files):
+    """``Model`` resolves its own executable for the running platform, without going through ``IBISModel.mod``."""
+    model = IBISModel(ibis_test_file).model_dict["models"]["example_tx"]
+    _set_platform(monkeypatch, system, bits)
+    assert (model.dll_file, model.ami_file) == files
+
+
+def test_model_without_algorithmic_model_has_no_executable(mixed_ibis_file):
+    model = IBISModel(mixed_ibis_file).model_dict["models"]["example_rx"]
+    assert (model.dll_file, model.ami_file) == ("", "")
+
+
+TX_ALGO_MODEL = """Model_type   Output
+[Algorithmic Model]
+Executable linux_gcc4.1.2_64          example_tx_x86_amd64.so   example_tx.ami
+[End Algorithmic Model]
+"""
+
+
+def test_ibis_model_executable_follows_selected_model(tmp_path, monkeypatch, caplog):
+    """``IBISModel.dll_file``/``ami_file`` are the selected model's, and follow a change of ``mod``."""
+    _set_platform(monkeypatch, "Linux", "64bit")
+    ibis_file = tmp_path / "mixed_ami.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", TX_ALGO_MODEL, 1), encoding="utf-8")
+    with caplog.at_level(logging.INFO, logger="pyibisami.ibis.file"):
+        ibis = IBISModel(str(ibis_file))
+    assert ibis.mod == "example_tx"
+    assert (ibis.dll_file, ibis.ami_file) == ("example_tx_x86_amd64.so", "example_tx.ami")
+    assert ibis.dll_path == tmp_path / "example_tx_x86_amd64.so" and ibis.ami_path == tmp_path / "example_tx.ami"
+    assert "has an AMI executable for this platform: example_tx_x86_amd64.so" in caplog.text
+    ibis.pin = "5(Rx_P)"
+    assert ibis.mod == "example_rx"
+    assert (ibis.dll_file, ibis.ami_file) == (ibis.model.dll_file, ibis.model.ami_file) == ("", "")
+    assert ibis.dll_path is None and ibis.ami_path is None
+    _set_platform(monkeypatch, "Windows", "64bit")
+    ibis.pin = "4(Tx_P)"
+    assert ibis.dll_file == ""
+    assert "but no executable for this platform: Windows-64bit" in caplog.text
+
+
+def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):
+    """Files named in the IBIS file resolve against its directory, not the working directory."""
+    monkeypatch.chdir(tmp_path.parent)
+    ibis = IBISModel(tmp_path.name + "/" + ibis_test_file.name)  # A relative IBIS file name.
+    assert ibis.ibis_dir == tmp_path
+    assert ibis.resolve_file("sub/model.ami") == tmp_path / "sub" / "model.ami"
+    assert ibis.resolve_file("") is None

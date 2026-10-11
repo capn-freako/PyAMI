@@ -16,6 +16,7 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 
 import logging
 import platform
+from pathlib import Path
 from typing import Optional
 
 from traits.api import (
@@ -46,8 +47,6 @@ TX_MODEL_TYPES = {
     "output_ecl", "3-state_ecl", "output_diff", "3-state_diff",
 } | _IO_MODEL_TYPES
 RX_MODEL_TYPES = {"input", "input_ecl", "input_diff"} | _IO_MODEL_TYPES
-
-# ToDo: The AMI and DLL files should have _model_, not _file_, scope.
 
 
 class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
@@ -219,6 +218,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         super().__init__()
 
         logger.debug("Loading IBIS file: %s", ibis_file_name)
+        self._ibis_dir = Path(ibis_file_name).absolute().parent
 
         # Parse the IBIS file contents, storing any errors or warnings, and validate it.
         with open(ibis_file_name, "r", encoding="utf-8") as file:
@@ -278,8 +278,6 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             self.add_trait("date", String("(n/a)"))
 
         self._ibis_parsing_errors = err_str
-        self._os_type = platform.system()  # These 2 are used, to choose
-        self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
         self._comp_changed(next(iter(usable)))  # Wasn't being called automatically.
         # Wasn't being called automatically:
@@ -354,16 +352,45 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         "Dictionary of all model keywords."
         return self._model_dict
 
-    # ToDo: The following 2 properties are really model-specific.
     @property
-    def dll_file(self):
-        "Shared object file."
-        return self._dll_file
+    def dll_file(self) -> str:
+        "The selected model's executable model file for this platform (``Model.dll_file``)."
+        return self.model.dll_file
 
     @property
-    def ami_file(self):
-        "AMI file."
-        return self._ami_file
+    def ami_file(self) -> str:
+        "The selected model's AMI parameter file for this platform (``Model.ami_file``)."
+        return self.model.ami_file
+
+    @property
+    def ibis_dir(self) -> Path:
+        "Absolute path of the directory holding the IBIS file."
+        return self._ibis_dir
+
+    def resolve_file(self, file_name: str) -> Optional[Path]:
+        """Resolve a file named in the IBIS file (e.g. - an ``Executable`` entry) against ``ibis_dir``.
+
+        Args:
+            file_name: The file name, as written in the IBIS file.
+
+        Returns:
+            ``ibis_dir / file_name``, or ``None`` if ``file_name`` is empty.
+
+        Notes:
+            1. IBIS 8.0 Section 10.1 (p.214) requires the executable model file and the AMI parameter file
+            to be in the IBIS file's directory, or in a relative path under it.
+        """
+        return self._ibis_dir / file_name if file_name else None
+
+    @property
+    def dll_path(self) -> Optional[Path]:
+        "The selected model's executable model file for this platform, resolved; ``None`` if none."
+        return self.resolve_file(self.dll_file)
+
+    @property
+    def ami_path(self) -> Optional[Path]:
+        "The selected model's AMI parameter file for this platform, resolved; ``None`` if none."
+        return self.resolve_file(self.ami_file)
 
     def _comp_changed(self, new_value):
         del new_value
@@ -378,29 +405,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     def _mod_changed(self, new_value):
         model = self._models[new_value]
-        os_type = self._os_type
-        os_bits = self._os_bits
-        fnames = []
-        dll_file = ""
-        ami_file = ""
-        if os_type.lower() == "windows":
-            if os_bits == "64bit":
-                fnames = model._exec64Wins  # pylint: disable=protected-access
-            else:
-                fnames = model._exec32Wins  # pylint: disable=protected-access
-        else:
-            if os_bits == "64bit":
-                fnames = model._exec64Lins  # pylint: disable=protected-access
-            else:
-                fnames = model._exec32Lins  # pylint: disable=protected-access
-        if fnames:
-            dll_file = fnames[0]
-            ami_file = fnames[1]
-            self._notify(f"Model `{new_value}` has an AMI executable for this platform: {dll_file}")
-        elif "algorithmic_model" in model._subDict:  # pylint: disable=protected-access
+        if model.dll_file:
+            self._notify(f"Model `{new_value}` has an AMI executable for this platform: {model.dll_file}")
+        elif model.is_ami:
             self._notify(
-                f"Model `{new_value}` has an [Algorithmic Model], but no executable for this platform: {os_type}-{os_bits}")
+                f"Model `{new_value}` has an [Algorithmic Model], but no executable for this platform: "
+                f"{platform.system()}-{platform.architecture()[0]}")
         else:
             self._notify(f"Model `{new_value}` has no [Algorithmic Model].")
-        self._dll_file = dll_file  # pylint: disable=attribute-defined-outside-init
-        self._ami_file = ami_file  # pylint: disable=attribute-defined-outside-init

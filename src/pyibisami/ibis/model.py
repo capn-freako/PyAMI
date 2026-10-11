@@ -10,6 +10,7 @@ https://ibis.org/
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
+import platform
 from typing import Optional
 
 from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
@@ -287,6 +288,25 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
     def is_ami(self):
         "AMI model flag."
         return ("algorithmic_model" in self._subDict)
+
+    def _platform_files(self) -> list[str]:
+        "``[dll, ami]`` of the first ``Executable`` for the running platform; ``[]`` if none."
+        os_bits = platform.architecture()[0]  # The Python interpreter's, which the executable must match.
+        if platform.system().lower() == "windows":
+            return self._exec64Wins if os_bits == "64bit" else self._exec32Wins
+        return self._exec64Lins if os_bits == "64bit" else self._exec32Lins
+
+    @property
+    def dll_file(self) -> str:
+        "The executable model file for the running platform; empty if none."
+        files = self._platform_files()
+        return files[0] if files else ""
+
+    @property
+    def ami_file(self) -> str:
+        "The AMI parameter file for the running platform; empty if none."
+        files = self._platform_files()
+        return files[1] if files else ""
 
     @property
     def ami_files(self):
