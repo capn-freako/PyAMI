@@ -51,6 +51,16 @@ def test_driver_series_exclude_clamps():
     assert [s.label for s in iv.series()] == ["PD-Typ", "PD-Min", "PD-Max", "PU-Typ", "PU-Min", "PU-Max"]
 
 
+def test_unused_bad_table_skipped():
+    """A malformed table the model doesn't use is dropped; a required one still raises."""
+    short = [(0.0, [0.0, 0.0, 0.0])]
+    iv = IVData.from_model_dict({"pulldown": PULLDOWN, "pullup": PULLUP, "gnd_clamp": short}, 1.8,
+                                required=("pulldown", "pullup"))
+    assert set(iv.curves) == {"pulldown", "pullup"}
+    with pytest.raises(ValueError):
+        IVData.from_model_dict({"pulldown": short, "pullup": PULLUP}, 1.8, required=("pulldown", "pullup"))
+
+
 def test_input_series():
     iv = IVData.from_model_dict({"gnd_clamp": CLAMP, "power_clamp": CLAMP}, 1.8)
     assert not iv.is_driver

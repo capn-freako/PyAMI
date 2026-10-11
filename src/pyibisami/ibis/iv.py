@@ -12,12 +12,15 @@ Copyright (c) 2026 by David Banas; All rights reserved World wide.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, Optional
 
 import numpy as np
 from numpy.typing import NDArray
+
+logger = logging.getLogger(__name__)
 
 IVKeyword = Literal["pulldown", "pullup", "gnd_clamp", "power_clamp"]
 IVCorner = Literal["typ", "min", "max"]
@@ -134,15 +137,31 @@ class IVData:
     vdd: float
 
     @classmethod
-    def from_model_dict(cls, sub_dict: Mapping[str, object], vdd: float) -> IVData:
+    def from_model_dict(
+        cls, sub_dict: Mapping[str, object], vdd: float, required: Sequence[IVKeyword] = IV_KEYWORDS
+    ) -> IVData:
         """
         Collect every I-V table found in a parsed ``[Model]`` dictionary.
 
         Args:
             sub_dict: Parsed ``[Model]`` sub-keywords.
             vdd: Typical power rail voltage (i.e. - ``[Voltage Range]`` typ).
+            required: Keywords whose tables must be valid, if present.
+                Any other invalid table is skipped, with a warning.
+
+        Raises:
+            ValueError: If a ``required`` table is invalid.
         """
-        curves: dict[IVKeyword, IVCurve] = {kw: IVCurve.from_table(kw, sub_dict[kw]) for kw in IV_KEYWORDS if kw in sub_dict}  # type: ignore[arg-type]
+        curves: dict[IVKeyword, IVCurve] = {}
+        for kw in IV_KEYWORDS:
+            if kw not in sub_dict:
+                continue
+            try:
+                curves[kw] = IVCurve.from_table(kw, sub_dict[kw])  # type: ignore[arg-type]
+            except ValueError as err:
+                if kw in required:
+                    raise
+                logger.warning("Ignoring unusable I-V table: %s", err)
         return cls(curves, vdd)
 
     @property

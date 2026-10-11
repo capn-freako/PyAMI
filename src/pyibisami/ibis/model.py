@@ -134,7 +134,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         if mtype in ("output", "i/o"):
             if "pulldown" not in subDict or "pullup" not in subDict:
                 raise LookupError("Missing I-V curves!")
-            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0])
+            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=("pulldown", "pullup"))
             curves = self._iv_data.curves
             self._zout = (curves["pulldown"].impedance(self._vmeas) + curves["pullup"].impedance(self._vmeas)) / 2
 
@@ -143,7 +143,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             ramp = subDict["ramp"]
             self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
         elif mtype == "input":
-            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0])
+            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=("gnd_clamp", "power_clamp"))
             curves = self._iv_data.curves
             gc_z = curves["gnd_clamp"].impedance(self._vmeas) if "gnd_clamp" in curves else NO_CLAMP_Z
             pc_z = curves["power_clamp"].impedance(self._vmeas) if "power_clamp" in curves else NO_CLAMP_Z
