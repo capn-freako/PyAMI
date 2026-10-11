@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from traits.api import TraitError
 
 from pyibisami.ibis.file import IBISModel
 
@@ -48,3 +49,200 @@ def test_component_pin_selection(ibis_test_file):
     assert comp.pin == comp.pins[first]
     comp._pin = last  # pylint: disable=protected-access  # The trait the Component view edits.
     assert comp.pin == comp.pins[last]
+
+
+MIXED_IBIS = r"""[IBIS Ver]   5.1
+[File Name]  mixed.ibs
+[File Rev]   v0.1
+
+[Component]    Mixed
+[Manufacturer] (n/a)
+
+[Package]
+R_pkg     0.10     0.00     0.50
+L_pkg    10.00n    0.10n   50.00n
+C_pkg     1.00p    0.01p    5.00p
+
+[Pin]  signal_name        model_name
+1      VDD                POWER
+2      VSS                GND
+3      Mystery            no_such_model
+4      Tx_P               example_tx
+5      Rx_P               example_rx
+6      IO_P               example_io
+7      Spare              NC
+8      OE_P               example_3state
+9      Term               example_term
+10     Circ               CIRCUITCALL
+11     Sel_P              sel_bad
+
+[Model]   example_tx
+Model_type   Output
+Vmeas = 0.5
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[Pulldown]
+-1.80    -1.000e+01    -1.000e+01    -1.000e+01
+0.00     0.000e+00     0.000e+00     0.000e+00
+1.80     3.600e-02     4.000e-02     3.273e-02
+3.60     1.000e+01     1.000e+01     1.000e+01
+
+[Pullup]
+-1.80    1.000e+01     1.000e+01     1.000e+01
+0.00     -0.000e+00    -0.000e+00    -0.000e+00
+1.80     -3.600e-02    -4.000e-02    -3.273e-02
+3.60     -1.000e+01    -1.000e+01    -1.000e+01
+
+[Ramp]
+dV/dt_r    0.540/108.00p    0.512/511.58p    0.566/56.57p
+dV/dt_f    0.540/108.00p    0.512/511.58p    0.566/56.57p
+
+[Model]   example_rx
+Model_type   Input
+Vmeas = 0.5
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[GND Clamp]
+-1.80    -1.000e+01    -1.000e+01    -1.000e+01
+0.00     0.000e+00     0.000e+00     0.000e+00
+1.80     3.600e-02     4.000e-02     3.273e-02
+
+[POWER Clamp]
+-1.80    1.000e+01     1.000e+01     1.000e+01
+0.00     -0.000e+00    -0.000e+00    -0.000e+00
+1.80     -3.600e-02    -4.000e-02    -3.273e-02
+
+[Model]   example_io
+Model_type   I/O
+Vmeas = 0.5
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[Pulldown]
+-1.80    -1.000e+01    -1.000e+01    -1.000e+01
+0.00     0.000e+00     0.000e+00     0.000e+00
+1.80     3.600e-02     4.000e-02     3.273e-02
+3.60     1.000e+01     1.000e+01     1.000e+01
+
+[Pullup]
+-1.80    1.000e+01     1.000e+01     1.000e+01
+0.00     -0.000e+00    -0.000e+00    -0.000e+00
+1.80     -3.600e-02    -4.000e-02    -3.273e-02
+3.60     -1.000e+01    -1.000e+01    -1.000e+01
+
+[Ramp]
+dV/dt_r    0.540/108.00p    0.512/511.58p    0.566/56.57p
+dV/dt_f    0.540/108.00p    0.512/511.58p    0.566/56.57p
+
+[Model]   example_3state
+Model_type   3-state
+Vmeas = 0.5
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[Model]   example_term
+Model_type   Terminator
+
+[Temperature_Range]     25.0      0.0    100.0
+[Voltage_Range]         1.80     1.62     1.98
+
+[Model Selector] sel_bad
+example_tx      Defined model
+no_such_model   Undefined model
+
+[END]
+"""
+
+
+def test_get_pins_qualified(ibis_test_file):
+    """All 6 pins of the fixture use an ``Output`` model, so they're all Tx."""
+    model = IBISModel(ibis_test_file)
+    all_pins = model.get_pins()
+    assert len(all_pins) == 6
+    assert model.get_pins_qualified(True) == all_pins
+    assert model.get_pins_qualified(False) == []
+    assert model.get_pins_qualified(True, comp_name="Example_Tx") == all_pins
+    with pytest.raises(ValueError, match="Example_Tx"):
+        model.get_pins_qualified(True, comp_name="No_Such_Comp")
+
+
+@pytest.fixture
+def mixed_ibis_file(tmp_path):
+    """An IBIS file whose component leads with ``POWER``/``GND`` pins and a pin naming an undefined model."""
+    ibis_file = tmp_path / "mixed.ibs"
+    ibis_file.write_text(MIXED_IBIS, encoding="utf-8")
+    return str(ibis_file)
+
+
+def test_pin_selection_skips_modelless_pins(mixed_ibis_file):
+    """Pins without a model aren't selectable, so loading doesn't crash on a leading one.
+
+    The parser drops ``POWER``/``GND``/``NC``/``CIRCUITCALL`` pins; a pin naming an undefined model used to raise
+    ``IndexError``.
+    """
+    model = IBISModel(mixed_ibis_file)
+    assert "10(Circ)" not in model.get_pins()
+    assert model.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
+    assert model.pin == "4(Tx_P)" and model.mod == "example_tx"
+    model.pin = "5(Rx_P)"
+    assert model.mod == "example_rx"
+
+
+def test_get_pins_qualified_mixed(mixed_ibis_file):
+    """Tx/Rx pins follow IBIS Table 47: ``I/O`` is both, ``Terminator`` neither; pins without a model are skipped."""
+    model = IBISModel(mixed_ibis_file)
+    assert model.get_pins_qualified(True) == ["4(Tx_P)", "6(IO_P)", "8(OE_P)", "11(Sel_P)"]
+    assert model.get_pins_qualified(False) == ["5(Rx_P)", "6(IO_P)"]
+
+
+def test_model_selector_skips_undefined_models(mixed_ibis_file):
+    """A model selector entry naming an undefined model is dropped, rather than crashing selection."""
+    model = IBISModel(mixed_ibis_file)
+    assert model.get_model_names("sel_bad") == ["example_tx"]
+    model.pin = "11(Sel_P)"
+    assert model.models == ["example_tx"]
+    assert model.model.mtype.lower() == "output"
+
+
+BROKEN_COMPONENT = r"""[Component]    Broken
+[Manufacturer] (n/a)
+
+[Package]
+R_pkg     0.10     0.00     0.50
+L_pkg    10.00n    0.10n   50.00n
+C_pkg     1.00p    0.01p    5.00p
+
+[Pin]  signal_name        model_name
+1      Mystery            no_such_model
+
+"""
+
+
+def test_unusable_component_not_selectable(tmp_path, caplog):
+    """A leading component with no usable pins is skipped for selection; the file still loads."""
+    ibis_file = tmp_path / "broken_first.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", BROKEN_COMPONENT + "[Component]    Mixed"),
+                         encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
+        model = IBISModel(str(ibis_file))
+    assert "Broken" in caplog.text
+    assert model.comp == "Mixed" and model.pin == "4(Tx_P)"
+    with pytest.raises(TraitError):
+        model.comp = "Broken"
+    assert model.get_pins_qualified(True, comp_name="Broken") == []
+
+
+def test_no_usable_component(tmp_path):
+    """Loading fails only when no component has a pin with a defined model."""
+    ibis_file = tmp_path / "all_broken.ibs"
+    header = MIXED_IBIS[:MIXED_IBIS.index("[Component]")]
+    models = MIXED_IBIS[MIXED_IBIS.index("[Model]"):]
+    ibis_file.write_text(header + BROKEN_COMPONENT + models, encoding="utf-8")
+    with pytest.raises(ValueError, match="No component"):
+        IBISModel(str(ibis_file))

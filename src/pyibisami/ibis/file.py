@@ -38,7 +38,16 @@ from .parser import parse_ibis_file
 
 logger = logging.getLogger(__name__)
 
-# ToDo: The ``is_tx`` flag, as well as the AMI files should have _model_, not _file_, scope.
+# Signal direction of each ``Model_type``, per IBIS 8.0 Table 47 (lower-cased).
+# ``I/O`` types are both; ``Terminator``, ``Series`` and ``Series_switch`` are neither.
+_IO_MODEL_TYPES = {"i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_source", "i/o_ecl", "i/o_diff"}
+TX_MODEL_TYPES = {
+    "output", "3-state", "open_drain", "open_sink", "open_source",
+    "output_ecl", "3-state_ecl", "output_diff", "3-state_diff",
+} | _IO_MODEL_TYPES
+RX_MODEL_TYPES = {"input", "input_ecl", "input_diff"} | _IO_MODEL_TYPES
+
+# ToDo: The AMI and DLL files should have _model_, not _file_, scope.
 
 
 class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
@@ -112,10 +121,17 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         Notes:
             1. The caller may provide the name of either a model or model selector.
             2. An empty list is returned if the given name is unrecognized.
+            3. A model selector's entries naming an undefined model are dropped, with a warning.
         """
 
         if mname in self._model_selectors:
-            return [pr[0] for pr in self._model_selectors[mname]]
+            names = []
+            for pr in self._model_selectors[mname]:
+                if pr[0] in self._models:
+                    names.append(pr[0])
+                else:
+                    logger.warning("Model selector '%s' names undefined model '%s'; ignoring it.", mname, pr[0])
+            return names
         else:
             if mname in self._models:
                 return [mname]
@@ -129,6 +145,21 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     def get_pins(self):
         return list(self.comp_.pins)
 
+    def _selectable_pins(self, comp: Optional[Component] = None) -> list[str]:
+        """
+        A component's pins that name a defined model or model selector.
+
+        Keyword Args:
+            comp: The component to inspect; the currently selected one when ``None``.
+                Default: ``None``
+
+        Notes:
+            1. The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.
+            2. Components with none aren't offered for selection; see ``__init__``.
+        """
+        pins = (comp if comp is not None else self.comp_).pins  # type: ignore
+        return [pname for pname in pins if self.get_models(pins[pname][0])]
+
     def get_pins_qualified(self, is_tx: bool, comp_name: Optional[str] = None) -> list[Any]:
         """
         Get the list of appropriate pins, given requested type (i.e. - Tx or Rx).
@@ -140,18 +171,34 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             comp_name: Fetch the pins for the named component when given;
                 otherwise, use the currently selected component.
                 Default: ``None``
+
+        Returns:
+            The names of the qualifying pins, in file order.
+
+        Raises:
+            ValueError: If ``comp_name`` names no component in this file.
+
+        Notes:
+            1. A pin's direction follows its model's ``Model_type`` (IBIS 8.0 Table 47);
+                see ``TX_MODEL_TYPES`` and ``RX_MODEL_TYPES``. ``I/O`` types are both;
+                ``Terminator``, ``Series`` and ``Series_switch`` are neither.
+            2. Pins naming an undefined model are skipped. (The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.)
         """
-        pins = self.comp_.pins  # type: ignore
+        if comp_name is None:
+            comp = self.comp_  # type: ignore
+        elif comp_name in self._components:
+            comp = self._components[comp_name]
+        else:
+            raise ValueError(f"No component named '{comp_name}'; available: {list(self._components)}")
+        pins = comp.pins
 
         def pin_ok(pname):
             (mname, _) = pins[pname]
             mods = self.get_models(mname)
-            mod = self._models[mods[0]]
-            mod_type = mod.mtype.lower()
-            tx_ok = mod_type in ("output", "i/o")
-            if self._is_tx:
-                return tx_ok
-            return not tx_ok
+            if not mods:
+                return False
+            mtype = self._models[mods[0]].mtype.lower()
+            return mtype in (TX_MODEL_TYPES if is_tx else RX_MODEL_TYPES)
 
         return list(filter(pin_ok, list(pins)))
 
@@ -200,10 +247,21 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         if "model_selectors" in model_dict:
             self._model_selectors.update(model_dict["model_selectors"])
 
+        # Only components with a pin naming a defined model are offered for selection.
+        # (Skipped ones remain in ``_components``; e.g. - for ``get_pins_qualified()``.)
+        usable = {}
+        for cname, comp in components.items():
+            if self._selectable_pins(comp):
+                usable[cname] = comp
+            else:
+                logger.warning("Component '%s' has no pins with a defined model; it can't be selected.", cname)
+        if not usable:
+            raise ValueError("No component in this IBIS model has a pin with a defined model!")
+
         # Add Traits for various attributes found in the IBIS file.
         # Doesn't need a custom mapper because the thing above it (file) can't change:
-        self.add_trait("comp", Trait(next(iter(components)), components))
-        self.pins = self.get_pins()  # type: ignore
+        self.add_trait("comp", Trait(next(iter(usable)), usable))
+        self.pins = self._selectable_pins()  # type: ignore
         try:
             self.add_trait("pin", Enum(self.pins[0], values="pins"))  # type: ignore
         except Exception as err:
@@ -223,7 +281,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._os_type = platform.system()  # These 2 are used, to choose
         self._os_bits = platform.architecture()[0]  # the correct AMI executable.
 
-        self._comp_changed(next(iter(components)))  # Wasn't being called automatically.
+        self._comp_changed(next(iter(usable)))  # Wasn't being called automatically.
         # Wasn't being called automatically:
         self._pin_changed(self.pins[0])  # type: ignore
 
@@ -309,7 +367,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     def _comp_changed(self, new_value):
         del new_value
-        self.pins = self.get_pins()
+        self.pins = self._selectable_pins()
         self.pin = self.pins[0]
 
     def _pin_changed(self, new_value):

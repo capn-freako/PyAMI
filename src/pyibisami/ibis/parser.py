@@ -465,7 +465,7 @@ def pins():
     def filt(x):
         (_, (mod, _)) = x
         m = mod.upper()
-        return m not in ("POWER", "GND", "NC")
+        return m not in ("POWER", "GND", "NC", "CIRCUITCALL")
 
     # Parse the section header.
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
