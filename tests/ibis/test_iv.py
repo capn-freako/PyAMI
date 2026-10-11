@@ -134,7 +134,7 @@ def _model(model_type, name="m", **tables):
     ("Open_source", {"pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, None),
     ("I/O_open_drain", {"pulldown": PULLDOWN, "ramp": RAMP, "gnd_clamp": CLAMP_50}, 50.0, 2.0, 50.0),
     ("I/O", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, 2e6),  # No clamps: NO_CLAMP_Z.
-    ("Output_ECL", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, None, None, None),  # Task 13.
+    ("Output_ECL", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, None, None, None),  # Not supported yet.
     ("Terminator", {"gnd_clamp": CLAMP_50}, None, None, None),
 ])
 def test_analog_values_per_model_type(model_type, tables, zout, slew, zin):

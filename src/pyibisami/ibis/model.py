@@ -44,7 +44,7 @@ class AmiExecutable(NamedTuple):
 
 
 # Which analog characteristics each ``Model_type`` has, per IBIS 8.0 Section 6.1, Table 1 (lower-cased).
-# ``*_ECL`` (Vcc-relative I-V tables; task 13) and ``*_diff`` types are deliberately absent: no zout/zin/slew.
+# ``*_ECL`` (Vcc-relative I-V tables; not supported yet) and ``*_diff`` types are deliberately absent: no zout/zin/slew.
 _PUSH_PULL_TYPES = {"output", "3-state", "i/o"}
 _PULLDOWN_ONLY_TYPES = {"open_drain", "open_sink", "i/o_open_drain", "i/o_open_sink"}  # Pull-up is external.
 _PULLUP_ONLY_TYPES = {"open_source", "i/o_open_source"}  # Pull-down is external.
@@ -410,7 +410,9 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             missing = [kw for kw in ("Vinl", "Vinh") if kw.lower() not in self._subDict]
             if missing:
                 problems.append(f"{' and '.join(missing)} must be defined for Model_type {self._mtype}; "
-                                "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62)")
+                                "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62); "
+                                "not needed if the model is only used through [Diff Pin], whose vdiff supersedes them "
+                                "(Section 5, p.55)")
         return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property

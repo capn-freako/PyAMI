@@ -109,8 +109,8 @@ skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
 name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name: Parser = word(name_only)
 # Pin, signal and model names: any non-blank run (e.g. - ``TX+``, ``DQ<0>``), except a keyword (``[``) or comment (``|``).
-token_only: Parser = regex(r"[^\s\[|]\S*")
-token: Parser = word(token_only)
+token_only: Parser = regex(r"[^\s\[|][^\s|]*")  # A ``|`` also ends it: a comment may follow at once.
+token: Parser = token_only << regex(r"\s+|(?=\|)")  # Like ``word()``, but a comment may also follow at once.
 # Parameters must begin with a letter in column 1.
 param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
@@ -162,7 +162,7 @@ def typminmax() -> GenParser[list[float]]:
     yield ignore  # So that ``typminmax`` behaves as a lexeme.
     if minmax == [None, None]:  # ``typ NA NA``: just the typical value, as always.
         return [typ]
-    # Either one may be ``NA``, meaning the typical value (IBIS 8.0 Section 6.1, p.64).
+    # Either one may be ``NA``, meaning the typical value (IBIS 8.0 Section 6.1, p.67 and p.80).
     return [typ] + [typ if val is None else val for val in minmax]
 
 

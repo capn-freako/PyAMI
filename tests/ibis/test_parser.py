@@ -66,8 +66,17 @@ def test_model_names_with_punctuation(ibis_test_file):
     assert {mod for (mod, _) in ibis_dict["components"]["Example_Tx"].pins.values()} == {"rx+lp"}
 
 
+def test_comment_right_after_a_name(ibis_test_file):
+    """A ``|`` ends a name (IBIS 8.0 Section 3.2, rule 5, p.19), even with no space before it."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("             example_tx\n", "             example_tx|note\n"),
+                                      ("[Model]   example_tx", "[Model]   example_tx|note"))
+    assert status == "Success!"
+    assert list(ibis_dict["models"]) == ["example_tx"]
+    assert {mod for (mod, _) in ibis_dict["components"]["Example_Tx"].pins.values()} == {"example_tx"}
+
+
 @pytest.mark.parametrize("values, expected", [
-    ("1.80     NA       1.98", [1.8, 1.8, 1.98]),  # ``NA`` means the typical value (IBIS 8.0 Section 6.1, p.64).
+    ("1.80     NA       1.98", [1.8, 1.8, 1.98]),  # ``NA`` means the typical value (IBIS 8.0 Section 6.1, p.67).
     ("1.80     1.62     NA", [1.8, 1.62, 1.8]),
     ("1.80     NA       NA", [1.8]),  # Unchanged: just the typical value.
 ])
