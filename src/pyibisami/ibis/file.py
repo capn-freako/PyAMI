@@ -31,6 +31,7 @@ from traits.api import (
     Property,
     Str,
     String,
+    TraitType,
     cached_property,
 )
 
@@ -39,6 +40,26 @@ from .model import RX_MODEL_TYPES, TX_MODEL_TYPES, Component, Model
 from .parser import parse_ibis_file
 
 logger = logging.getLogger(__name__)
+
+
+class ModelTypes(TraitType):
+    """``None``, or a collection of ``Model_type`` names, held as a lower-cased ``frozenset``.
+
+    A single string is rejected (it would otherwise be read one character at a time).
+    """
+
+    default_value = None
+    info_text = "None or a collection of Model_type names (not a single string)"
+
+    def validate(self, obj, name, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            self.error(obj, name, value)
+        try:
+            return frozenset(str(mtype).lower() for mtype in value)
+        except TypeError:
+            return self.error(obj, name, value)
 
 
 class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
@@ -87,7 +108,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     pins = List  # Always holds the list of valid pin selections, given a component selection.
     models = List  # Always holds the list of valid model selections, given a pin selection.
     alert = Event(Str)  # Fired with each user-facing notice; GUIs observe this.
-    model_types = Any  # ``Model_type`` s offered for selection (any case); ``None`` (the default) offers all.
+    model_types = ModelTypes  # ``Model_type`` s offered for selection (any case); ``None`` (the default) offers all.
 
     def get_model(self, mname: str) -> Model:
         """
@@ -147,8 +168,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         names = self.get_model_names(mname)
         if self.model_types is None:
             return names
-        mtypes = {mtype.lower() for mtype in self.model_types}  # type: ignore
-        return [name for name in names if self._models[name].mtype.lower() in mtypes]
+        return [name for name in names if self._models[name].mtype.lower() in self.model_types]  # type: ignore
 
     def _selectable_pins(self, comp: Optional[Component] = None) -> list[str]:
         """
@@ -237,6 +257,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         Raises:
             ValueError: If no component has a pin to offer.
+            TraitError: If ``model_types`` is a single string, or not a collection.
 
         Notes:
             1. For parsing details, enable ``DEBUG`` logging for the ``pyibisami.ibis`` logger.
@@ -290,7 +311,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
                     logger.warning("Component '%s' has no pins with a defined model; it can't be selected.", cname)
                 else:
                     logger.warning("Component '%s' has no pins with a model of Model_type %s; it can't be selected.",
-                                   cname, sorted(model_types))
+                                   cname, sorted(self.model_types))  # type: ignore
         if not comps:
             raise ValueError(self._no_selectable_component())
 
@@ -442,7 +463,10 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     def _comp_changed(self, new_value):
         del new_value
         self.pins = self._selectable_pins()
+        old_pin = self.pin  # type: ignore
         self.pin = self.pins[0]
+        if self.pin == old_pin:  # A pin of the same name in the new component fires no ``pin`` change.
+            self._pin_changed(self.pin)
 
     def _pin_changed(self, new_value):
         # (mname, rlc_dict) = self.pin_  # Doesn't work. Because ``pin_`` is a cached property and hasn't yet been marked "dirty"?

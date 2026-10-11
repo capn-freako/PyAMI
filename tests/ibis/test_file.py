@@ -314,6 +314,35 @@ def test_model_types_changed_after_loading(tmp_path):
     assert ibis.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
 
 
+SAME_PIN_COMPONENT = BROKEN_COMPONENT.replace("Broken", "Second").replace("1      Mystery            no_such_model",
+                                                                          "4      Tx_P               example_rx")
+
+
+def test_component_change_with_same_pin_name(tmp_path):
+    """A new component whose first pin has the current pin's name still gets its own model."""
+    ibis_file = tmp_path / "same_pin.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Model]   example_tx", SAME_PIN_COMPONENT + "[Model]   example_tx", 1),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    assert (ibis.comp, ibis.pin, ibis.mod) == ("Mixed", "4(Tx_P)", "example_tx")
+    ibis.comp = "Second"
+    assert (ibis.pin, ibis.models, ibis.mod) == ("4(Tx_P)", ["example_rx"], "example_rx")
+
+
+@pytest.mark.parametrize("model_types", ["Output", 5])
+def test_model_types_must_be_a_collection(ibis_test_file, model_types):
+    """A single string would be read one character at a time; it's rejected, like a non-collection."""
+    with pytest.raises(TraitError):
+        IBISModel(ibis_test_file, model_types=model_types)
+
+
+def test_model_types_from_a_generator(mixed_ibis_file):
+    """``model_types`` is read once, so a generator works for every pin."""
+    ibis = IBISModel(mixed_ibis_file, model_types=(t for t in ("Output", "I/O")))
+    assert ibis.pins == ["4(Tx_P)", "6(IO_P)", "11(Sel_P)"]
+    assert ibis.model_types == {"output", "i/o"}
+
+
 def test_old_is_tx_argument_rejected(ibis_test_file):
     """The pre-10.0 positional ``is_tx`` isn't silently misread."""
     with pytest.raises(TypeError):
@@ -366,8 +395,8 @@ def test_ibis_model_executable_follows_selected_model(tmp_path, monkeypatch, cap
     _set_platform(monkeypatch, "Linux", "64bit")
     ibis_file = tmp_path / "mixed_ami.ibs"
     ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", TX_ALGO_MODEL, 1), encoding="utf-8")
-    with caplog.at_level(logging.INFO, logger="pyibisami.ibis.file"):
-        ibis = IBISModel(str(ibis_file))
+    caplog.set_level(logging.INFO, logger="pyibisami.ibis.file")  # For the whole test (notices follow selection).
+    ibis = IBISModel(str(ibis_file))
     assert ibis.mod == "example_tx"
     assert (ibis.dll_file, ibis.ami_file) == ("example_tx_x86_amd64.so", "example_tx.ami")
     assert ibis.dll_path == tmp_path / "example_tx_x86_amd64.so" and ibis.ami_path == tmp_path / "example_tx.ami"
