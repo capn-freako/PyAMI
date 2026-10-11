@@ -1,53 +1,48 @@
-"""Traits/UI GUI construction for the IBIS-AMI parameter configurator.
-
-Kept separate from ``pyibisami.ami.parser``, so that AMI parsing doesn't require the
-(optional) GUI dependencies, which are installed via: ``pip install "pyibis-ami[gui]"``.
-
-Original author: David Banas <capn.freako@gmail.com>
-
-Original date:   October 9, 2026
-
-Copyright (c) 2026 David Banas; all rights reserved World wide.
 """
+Traits/UI view for ``AMIParamConfigurator``.
+
+Original Author: David Banas <capn.freako@gmail.com>
+
+Original Date:   December 17, 2016
+
+Copyright (c) 2019 David Banas; all rights reserved World wide.
+"""
+
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyibisami.common import require_gui
+from traitsui.api import Group, HGroup, Item, VGroup, View
+from traitsui.menu import ModalButtons
 
-with require_gui():
-    from traitsui.api import Group, HGroup, Item, VGroup, View
-    from traitsui.menu import ModalButtons
-
-from .parameter import AMIParameter
+from ..ami.parameter import AMIParameter
 
 if TYPE_CHECKING:
-    from .parser import ModelSpecificDict
+    from ..ami.parser import AMIParamConfigurator, ModelSpecificDict, Parameters
 
 MAX_ITEMS_PER_ROW = 8
 
 
-def make_view(root_name: str, params: "ModelSpecificDict") -> View:
+def make_view(cfg: AMIParamConfigurator) -> View:
     """
-    Builds the configurator ``View`` for a model's AMI parameters.
+    Builds the parameter configuration ``View`` for an ``AMIParamConfigurator``.
 
     Args:
-        root_name: The AMI file's root name.
-        params: Dictionary of (``Model_Specific``) AMI parameters to be configured.
+        cfg: The configurator whose *In* and *InOut* parameters are to be presented.
 
     Returns:
-        The ``View`` for an ``AMIParamConfigurator``, whose traits were built by ``make_param_traits()``.
+        The Traits/UI ``View``.
     """
-
     view = View(
         resizable=False,
         buttons=ModalButtons,
-        title=f"{root_name} AMI Parameter Configurator",
+        title=f"{cfg.root_name} AMI Parameter Configurator",
     )
-    view.set_content([make_gui_group(params)])
+    view.set_content([make_gui(cfg.model_specific_dict)])
     return view
 
 
-def make_gui_group(params: "ModelSpecificDict") -> Group:
+def make_gui(params: ModelSpecificDict) -> Group:
     """
     Builds top-level ``Group`` from AMI parameter dictionary.
 
@@ -56,13 +51,6 @@ def make_gui_group(params: "ModelSpecificDict") -> Group:
 
     Returns:
         The top-level ``Group`` for the ``View``.
-
-    Notes:
-        1. The dictionary passed through ``params`` may have sub-dictionaries.
-        The window layout will reflect this nesting.
-        2. Some AMI files are written to encode the AMI parameter hierarchy
-        via some parameter naming scheme. This function makes a primitive attempt
-        to decode one particular example of this: ``<grp>_<param>``.
     """
 
     gui_items: list[Item | Group] = []
@@ -100,7 +88,7 @@ def make_gui_group(params: "ModelSpecificDict") -> Group:
     return HGroup(*gui_items)
 
 
-def make_gui_items(pname: str, param: "AMIParameter | ModelSpecificDict") -> list[Item | Group]:
+def make_gui_items(pname: str, param: AMIParameter | Parameters) -> list[Item | Group]:
     """
     Builds list of GUI items from AMI parameter or dictionary.
 
@@ -112,9 +100,9 @@ def make_gui_items(pname: str, param: "AMIParameter | ModelSpecificDict") -> lis
         The list of GUI items for the ``View``.
 
     Notes:
-        1. A dictionary passed through ``param`` may have sub-dictionaries.
-        These will be converted into sub- ``Group`` s in the returned list of GUI items.
-        2. Item names must match the trait names ``pyibisami.ami.parser.make_param_traits()`` creates.
+        1. Item names must match the trait names registered by ``make_param_traits()``.
+        2. A dictionary passed through ``param`` may have sub-dictionaries.
+           These will be converted into sub- ``Group`` s in the returned list of GUI items.
     """
 
     if isinstance(param, AMIParameter):

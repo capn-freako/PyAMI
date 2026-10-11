@@ -1,9 +1,18 @@
+import platform
 from pathlib import Path
 
 import pytest
 
 from pyibisami.tools.run_tests import expand_params, run_tests
-from pyibisami.util.plot import RGB, color_picker, hsv2rgb, plot_name
+from pyibisami.report.plot import RGB, color_picker, hsv2rgb, plot_name
+
+EXAMPLES_DIR = Path(__file__).parent / "examples"
+DLL_PATH = EXAMPLES_DIR / {
+    "windows": "example_tx_x86_amd64.dll",
+    "darwin": "example_tx_x86_amd64_osx.so",
+}.get(platform.system().lower(), "example_tx_x86_amd64.so")
+
+needs_dll = pytest.mark.skipif(not DLL_PATH.exists(), reason=f"AMI DLL not found: {DLL_PATH}")
 
 class TestRunTests(object):
     def test_hsv2rgb(self):
@@ -114,20 +123,24 @@ class TestRunTests(object):
             )
         ]
 
-    @pytest.mark.xfail(reason="EMPY looses its stdout proxy.")
-    def test_run_tests(self):
-        model = Path(__file__).parents[1].joinpath("examples", "example_tx_x86_amd64.so")
-        test_dir = Path(__file__).parents[1].joinpath("examples", "tests")
-        params = Path(__file__).parents[1].joinpath("examples", "runs")
-        xml_file = "test_results.xml"
-        ref_dir = Path().cwd()
-        out_dir = Path(__file__).parents[1].joinpath("examples", "test_results")
-        run_tests(
-            model=model,
-            test_dir=test_dir,
-            params=params,
-            xml_file=xml_file,
-            ref_dir=ref_dir,
+    @needs_dll
+    def test_run_tests(self, tmp_path, capfd):
+        out_dir = tmp_path / "test_results"
+        xml_filename = run_tests(
+            model=DLL_PATH,
+            test_dir=EXAMPLES_DIR / "tests",
+            params=EXAMPLES_DIR / "runs",
+            xml_file="test_results.xml",
+            ref_dir=tmp_path,
             out_dir=out_dir,
             tests=(),
         )
+        assert "error" not in capfd.readouterr().err
+        assert xml_filename == out_dir / "test_results.xml"
+        xml = xml_filename.read_text(encoding="utf-8")
+        assert xml.rstrip().endswith("</tests>")
+        for cfg in ("posttap1", "posttap2", "pretap"):
+            assert f"<name>freq_resp ({cfg})</name>" in xml
+        assert "Model Initialization" in xml
+        assert (out_dir / "test_results.xsl").exists()
+        assert list(out_dir.glob("freq_resp_plot_*.png"))

@@ -24,8 +24,8 @@ from reportlab.platypus     import Flowable, Image, ListFlowable, Paragraph
 from ..ami.model        import AMIModel, OUT_RESP_INIT
 from ..ami.parser       import AMIParamConfigurator
 from ..ibis.model       import Model
-from ..util.plot        import plt
-from ..util.reportlab   import (
+from .plot        import plt
+from .pdf   import (
     bold, fixed, page_break, spacer, preformatted,
     P, H2, H3, H4)
 
@@ -33,13 +33,17 @@ from .ami_tests_helpers import (
     AmiTestHelper, AmiTestHelperInitVsGetwave,
     AmiTestHelperSamplesPerBit, AmiTestHelperGetwaveInputLength,
     plot_sweep)
-from .test_defs         import TestSweeper
-from .util              import get_all_sweepers
+from ..testing.test_defs         import TestSweeper
+from ..testing.util              import get_all_sweepers
 
 
 FIG_X_DFLT = 6.0
 FIG_Y_DFLT = 4.0
 DEBUG = False
+
+# Template for the default test sweep file. It lives in `pyibisami.testing`,
+# alongside the `test_defs` that the generated file imports.
+SWEEP_TEMPLATE = Path(__file__).parent.parent.joinpath("testing", "generic_test_sweep.py.em")
 
 
 class AmiTester(ABC):
@@ -469,7 +473,7 @@ def test_ami_model(
         model_sweeps_dir.mkdir(parents=True, exist_ok=True)
         dflt_test_sweep_file = model_sweeps_dir / "defaults_template.py"
         # Make default sweep file, using template, here.
-        em_file = Path(__file__).parent.joinpath("generic_test_sweep.py.em")
+        em_file = SWEEP_TEMPLATE
         with open(dflt_test_sweep_file, "w", encoding="utf-8") as o_file:
             interpreter = em.Interpreter(
                 output=o_file,

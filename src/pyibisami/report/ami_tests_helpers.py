@@ -1,5 +1,5 @@
 """
-Low level helper routines used by the API functions in ``pyibisami.testing.ami_tests``.
+Low level helper routines used by the API functions in ``pyibisami.report.ami_tests``.
 
 Original Author: David Banas <capn.freako@gmail.com>
 
@@ -22,12 +22,12 @@ from scipy.signal           import convolve
 from ..ami.model        import AMIModel, AMIModelInitializer
 from ..ami.parser       import AMIParamConfigurator
 
-from ..util.plot        import (
+from .plot        import (
     RGB, RED, GREEN, BLUE, PLOT_COLOR, PLOT_LINESTYLE,
     plt, do_samples_per_bit, plot_model_adaptation, plot_model_results)
-from ..util.reportlab   import P, preformatted
+from .pdf   import P, preformatted
 
-from .test_defs         import TestSweep
+from ..testing.test_defs         import TestSweep
 
 FIG_X_DFLT = 6
 FIG_Y_DFLT = 4

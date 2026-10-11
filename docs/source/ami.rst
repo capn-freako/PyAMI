@@ -13,11 +13,6 @@ model
 
 .. automodule:: pyibisami.ami.model
 
-gui
----
-
-.. automodule:: pyibisami.ami.gui
-
 parameter
 ---------
 

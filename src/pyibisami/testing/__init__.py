@@ -7,8 +7,10 @@ Original date: April 3, 2026
 
 Copyright (c) 2026 David Banas; all rights reserved World wide.
 
-**Note:** This testing infrastructure relies on the _ReportLab_ package
-and is intended to produce a final model testing report in PDF format.
+**Note:** This package holds the test definitions and the IBIS 8.0 ``[AMI Test Configuration]`` runner,
+which need only the core dependencies.
+The final model testing report, in PDF format, is produced by ``pyibisami.report``,
+which requires the ``report`` extra (_ReportLab_ & _Matplotlib_).
 
 **Note:** Unlike previous model testing mechanisms included in the _PyIBIS-AMI_ package,
 this new testing infrastructure makes no use of either:

@@ -9,6 +9,7 @@ Copyright (C) 2026 David Banas; all rights reserved World wide.
 """
 
 from abc                import abstractmethod
+import logging
 from dataclasses        import dataclass
 from pathlib            import Path
 from typing             import Any, NewType, Optional
@@ -21,6 +22,8 @@ from scipy.signal       import butter, freqs, lfilter
 from ..common           import Rvec, raised_cosine
 from ..ami.parser       import AMIParamConfigurator, ParamName
 from ..ibis.file        import IBISModel
+
+logger = logging.getLogger(__name__)
 
 TestSweeper = NewType('TestSweeper', tuple[Optional[str], list[type["TestSweep"]]])
 
@@ -81,7 +84,6 @@ def mk_default_test_sweep_file(
     ibis_file: Path,
     model_name: str,
     out_dir: Path = Path("./test_runs/"),
-    debug: bool = False
 ) -> Path:
     """
     Create a default parameter sweep specification file for an IBIS-AMI model.
@@ -93,8 +95,6 @@ def mk_default_test_sweep_file(
     Keyword Args:
         out_dir: Directory in which parameter sweep definition files are stored.
             Default: ``./test_runs/``
-        debug: Set to ``True`` for debugging mode.
-            Default: ``False``
 
     Returns:
         The path to the created parameter sweep specification template file.
@@ -102,7 +102,7 @@ def mk_default_test_sweep_file(
 
     # Import the `*.ibs` file.
     try:
-        ibis = IBISModel(str(ibis_file.resolve()), debug=debug, gui=False)
+        ibis = IBISModel(str(ibis_file.resolve()))
         dName = ibis_file.parent
         assert ibis.ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"
@@ -118,7 +118,7 @@ def mk_default_test_sweep_file(
     except Exception as err:
         raise RuntimeError(f"Failed to open/import AMI file: {ami_file}!") from err
     if pcfg.ami_parsing_errors:
-        print(f"Non-fatal parsing errors:\n{pcfg.ami_parsing_errors}")
+        logger.warning("Non-fatal AMI parsing errors:\n%s", pcfg.ami_parsing_errors)
 
     # Write parameter sweep specification template file.
     root_name = str(pcfg.input_ami_params[ParamName("root_name")])

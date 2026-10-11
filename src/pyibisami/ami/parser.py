@@ -10,6 +10,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 from __future__     import annotations
 from ctypes         import c_double
 from dataclasses    import dataclass
+import logging
 import re
 from typing         import Any, NewType, Optional, TypeAlias
 from collections.abc import Callable
@@ -22,6 +23,8 @@ from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 from .model                     import AMIModelInitializer
 from .parameter                 import AmiParamTuner, AMIParamError, AMIParameter
 from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
+
+logger = logging.getLogger(__name__)
 
 # New types and aliases.
 # Parameters  = NewType('Parameters',  dict[str, AMIParameter] | dict[str, 'Parameters'])
@@ -142,14 +145,28 @@ class AMIParamConfigurator(HasTraits):
 
     def open_gui(self):
         """Present a customized GUI to the user, for parameter
-        customization."""
+        customization.
+
+        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
+        """
+        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
         # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
         self.configure_traits()
 
     def default_traits_view(self):
-        "Default Traits/UI view definition. (Requires the optional GUI dependencies.)"
-        from .gui import make_view  # pylint: disable=import-outside-toplevel
-        return make_view(self._root_name, self._model_specific_dict)
+        "Default Traits/UI view definition."
+        from ..gui.ami_config import make_view  # pylint: disable=import-outside-toplevel
+        return make_view(self)
+
+    @property
+    def root_name(self) -> str:
+        "The AMI model root name."
+        return self._root_name
+
+    @property
+    def model_specific_dict(self) -> ModelSpecificDict:
+        "The parsed ``Model_Specific`` parameter definitions."
+        return self._model_specific_dict
 
     def fetch_param(self, branch_names):
         """Returns the parameter found by traversing 'branch_names' or None if
@@ -601,7 +618,7 @@ def proc_branch(branch) -> tuple[str, dict[str, Any]]:
 
             results = (err_str, param_dict)
     except Exception:  # pylint: disable=broad-exception-caught
-        print(f"Error processing branch:\n{param_tags}")
+        logger.exception("Error processing branch:\n%s", param_tags)
     return results
 
 
@@ -748,55 +765,26 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
     )
 
 
-def make_gui(params: ModelSpecificDict) -> tuple[Any, list[tuple[str, TraitType]]]:
-    """
-    Builds top-level ``Group`` and list of ``Trait`` s from AMI parameter dictionary.
-
-    Args:
-        params: Dictionary of AMI parameters to be configured.
-
-    Returns:
-        A pair consisting of:
-
-            - the top-level ``Group`` for the ``View``, and
-            - a list of new ``Trait`` s created.
-
-    Notes:
-        1. Requires the optional GUI dependencies (``pip install "pyibis-ami[gui]"``).
-        Headless code should use ``make_param_traits()`` instead.
-    """
-
-    from .gui import make_gui_group  # pylint: disable=import-outside-toplevel
-
-    new_traits: list[tuple[str, TraitType]] = []
-    for pname, param in params.items():
-        new_traits.extend(make_param_traits(pname, param))
-    return (make_gui_group(params), new_traits)
-
-
-def make_param_traits(  # pylint: disable=too-many-branches
+def make_param_traits(
     pname: str,
     param: AMIParameter | Parameters
 ) -> list[tuple[str, TraitType]]:
     """
-    Builds list of traits from AMI parameter or dictionary.
+    Builds list of ``Trait`` s from AMI parameter or dictionary.
 
     Args:
         pname: Parameter or sub-group name.
         param: AMI parameter or dictionary of AMI parameters to be configured.
 
     Returns:
-        The list of new ``(name, Trait)`` pairs created, one per *In*/*InOut* parameter.
+        The list of new (name, ``Trait``) pairs created, one per *In* or *InOut* leaf parameter.
 
     Notes:
-        1. A dictionary passed through ``param`` may have sub-dictionaries.
-        Their parameters are named ``<pname>_<subparam_name>``, recursively.
-        (``pyibisami.ami.gui.make_gui_items()`` uses the same naming.)
+        1. Sub-parameter trait names are the underscore-joined hierarchical parameter names.
     """
 
     if isinstance(param, AMIParameter):  # pylint: disable=no-else-return
-        pusage = param.pusage
-        if pusage not in ("In", "InOut"):
+        if param.pusage not in ("In", "InOut"):
             return []
 
         if param.ptype == "Boolean":

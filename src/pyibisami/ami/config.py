@@ -34,6 +34,7 @@ configuration file, so as to ensure consistency between them all.
 """
 
 import importlib.util
+import logging
 from datetime import date
 from pathlib import Path
 from typing import Any, NewType
@@ -42,6 +43,9 @@ import click
 import em
 
 from ..ami.parser import ParamValues
+from ..cli_logging import setup_cli_logging
+
+logger = logging.getLogger(__name__)
 
 NamedParamDict = NewType("NamedParamDict", tuple[str, ParamValues])
 TestDefinition = NewType("TestDefinition", tuple[str, NamedParamDict, NamedParamDict, str])
@@ -148,6 +152,10 @@ def mk_model(
     Keyword Args:
         out_dir: Directory in which to place created files.
             Default: "."
+
+    Raises:
+        RuntimeError: If a template fails to render (e.g. - a required ``ibis_params`` key is missing).
+            The partially written output file is removed.
     """
 
     py_file = (Path(out_dir).resolve() / model_name).with_suffix(".py")
@@ -161,10 +169,11 @@ def mk_model(
         else:
             em_file = out_file.with_suffix(".cpp.em")
 
-        print(f"Building '{out_file}' from '{em_file}'...")
+        logger.info("Building '%s' from '%s'...", out_file, em_file)
         with open(out_file, "w", encoding="utf-8") as o_file:
             interpreter = em.Interpreter(
                 output=o_file,
+                config=em.Configuration(rawErrors=True),  # Raise template errors, instead of just printing them.
                 globals={
                     "ami_params": ami_params,
                     "ibis_params": ibis_params,
@@ -174,11 +183,19 @@ def mk_model(
                     "date": str(date.today()),
                 },
             )
+            failure: Exception | None = None
             try:
                 with open(em_file, "rt", encoding="utf-8") as in_file:
                     interpreter.file(in_file)
+            except Exception as err:
+                failure = err
             finally:
                 interpreter.shutdown()
+        if failure is not None:  # Handled after closing `out_file`, which Windows can't delete while open.
+            out_file.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Building '{out_file.name}' from '{em_file.name}' failed: {type(failure).__name__}: {failure}"
+            ) from failure
 
 
 def ami_config(py_file):
@@ -196,7 +213,7 @@ def ami_config(py_file):
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
-    print(f"Reading model configuration information from file: {py_file}.")
+    logger.info("Reading model configuration information from file: %s.", py_file)
     spec = importlib.util.spec_from_file_location(file_base_name, py_file)
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)
@@ -275,8 +292,9 @@ def mk_tests(  # pylint: disable=too-many-locals
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("py_file", type=click.Path(exists=True, resolve_path=True))
+@click.option("--debug", "-d", is_flag=True, help="Provide extra debugging information.")
 @click.version_option()
-def main(py_file):
+def main(py_file, debug):
     """
     Configure IBIS-AMI model C++ source code, IBIS model, and AMI file.
     This command generates three files based off the input config file.
@@ -290,7 +308,11 @@ def main(py_file):
         1. This command is deprecated! Instead, make your model configurator executable
         and import what you need from this module. This is much cleaner.
     """
-    ami_config(py_file)
+    setup_cli_logging(debug)
+    try:
+        ami_config(py_file)
+    except RuntimeError as err:
+        raise click.ClickException(str(err)) from err
 
 
 if __name__ == "__main__":
