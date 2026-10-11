@@ -168,3 +168,32 @@ AMIModel *ami_model = &my_tx;  ///< The pointer required by the API implementati
         Path(__file__).parents[1].joinpath("examples", "example_tx.ami").unlink()
         Path(__file__).parents[1].joinpath("examples", "example_tx.ibs").unlink()
         Path(__file__).parents[1].joinpath("examples", "example_tx.cpp").unlink()
+
+
+def _copy_example(tmp_path, drop_line=None):
+    "Copy the example model configurator (and its C++ template) into ``tmp_path``."
+    examples = Path(__file__).parents[1].joinpath("examples")
+    lines = examples.joinpath("example_tx.py").read_text(encoding="utf-8").splitlines(keepends=True)
+    tmp_path.joinpath("example_tx.py").write_text(
+        "".join(line for line in lines if line.strip() != drop_line), encoding="utf-8")
+    tmp_path.joinpath("example_tx.cpp.em").write_text(
+        examples.joinpath("example_tx.cpp.em").read_text(encoding="utf-8"), encoding="utf-8")
+    return tmp_path.joinpath("example_tx.py")
+
+
+def test_ami_config_builds_parsable_ibs(tmp_path):
+    from pyibisami.ibis.file import IBISModel
+
+    config.ami_config(_copy_example(tmp_path))
+    assert IBISModel(str(tmp_path / "example_tx.ibs")).file_name == "example_tx.ibs"
+
+
+def test_ami_config_template_error_fails_cleanly(tmp_path):
+    """A template error must fail the command (exit 1) and leave no partial output file behind."""
+    from click.testing import CliRunner
+
+    py_file = _copy_example(tmp_path, drop_line='"version": "5.1",')
+    result = CliRunner().invoke(config.main, [str(py_file)])
+    assert result.exit_code == 1
+    assert "Error: Building 'example_tx.ibs' from 'generic.ibs.em' failed: KeyError: 'version'" in result.output
+    assert not tmp_path.joinpath("example_tx.ibs").exists()

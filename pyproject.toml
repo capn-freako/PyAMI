@@ -5,27 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyibis-ami"
 description = "Facilitates working directly with IBIS-AMI DLLs from the Python command prompt."
-version = "9.3.1"
+version = "10.0.0.dev0"
 authors = [ {name = "David Banas",     email = "capn.freako@gmail.com"}
           ]
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "chaco==6.1.1",
     "click==8.4.2",
     "empy==4.2.1",
-    "importlib_resources==7.1.0",
-    "jupyter==1.1.1",
-    "lxml-html-clean==0.4.5",
-    "matplotlib>=3.6.1",
     "numpy>=1.26",
-    "papermill==2.7.0",
     "parsec==3.17",
-    "reportlab==5.0.0",
     "scipy>=1.15",
     "traits==7.1.0",
-    "traitsui==8.0.0",
-    "types-reportlab==4.5.1.20260712",
 ]
 keywords=["ibis-ami"]
 classifiers=[
@@ -44,6 +35,26 @@ classifiers=[
     "Topic :: Utilities",
 ]
 
+[project.optional-dependencies]
+gui = [
+    "chaco==6.1.1",
+    "enable==6.1.0",
+    "traitsui==8.0.0",
+]
+report = [
+    "matplotlib>=3.6.1",
+    "reportlab==5.0.0",
+]
+notebook = [
+    "pyibis-ami[report]",  # The Tester notebook plots with `pyibisami.report.plot`.
+    "jupyter==1.1.1",
+    "lxml-html-clean==0.4.5",
+    "papermill==2.7.0",
+]
+all = [
+    "pyibis-ami[gui,report,notebook]",
+]
+
 [project.urls]
 Documentation = "https://pyibis-ami.readthedocs.io/en/latest/"
 Wiki = "https://github.com/capn-freako/PyAMI/wiki"
@@ -54,7 +65,7 @@ PyPi = "https://pypi.org/project/PyIBIS-AMI/"
 ami-config = "pyibisami.ami.config:main"
 run-tests = "pyibisami.tools.run_tests:main"
 run-notebook = "pyibisami.tools.run_notebook:main"
-test-model = "pyibisami.testing.test_models:main"
+test-model = "pyibisami.report.test_models:main"
 check-ami = "pyibisami.testing.ami_test_config:main"
 
 [tool.setuptools.packages.find]
@@ -132,12 +143,15 @@ publish-url = "https://test.pypi.org/legacy/"
 
 [dependency-groups]
 dev = [
+    "pyibis-ami[all]",
     "m2r2>=0.3.4",
     "mypy>=1.19.1",
+    "pyside6==6.10.2",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "pytest-xdist>=3.8.0",
     "sphinx>=8.1.3",
     "sphinx-rtd-theme>=3.1.0",
+    "types-reportlab==4.5.1.20260712",
     "typing-extensions>=4.15.0",
 ]

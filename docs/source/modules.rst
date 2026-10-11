@@ -9,4 +9,5 @@
 
    ibis
    ami
+   gui
    tools

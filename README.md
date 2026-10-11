@@ -8,6 +8,18 @@ command line applications.
 
 It can be installed via: `pip install PyIBIS-AMI`.
 
+The basic install contains the core library, plus the `ami-config` and `check-ami` tools.
+Optional features are installed as extras, e.g. `pip install 'PyIBIS-AMI[gui]'`:
+
+| Extra      | Needed for                                                   |
+|------------|--------------------------------------------------------------|
+| `gui`      | Traits/UI GUIs (AMI parameter configurator, IBIS model viewers) |
+| `report`   | `test-model` and `run-tests`                                 |
+| `notebook` | `run-notebook`                                               |
+| `all`      | All of the above                                             |
+
+The `gui` extra doesn't include a Qt binding; install one too, if you have none (e.g. `pip install pyside6`).
+
 [View API/Developer's Documentation.](https://pyibis-ami.readthedocs.io/en/latest/)
 
 ## Command Line Tools
