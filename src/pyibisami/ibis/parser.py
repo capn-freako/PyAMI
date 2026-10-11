@@ -108,6 +108,9 @@ def rest_line() -> GenParser[str]:  # type: ignore
 skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
 name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name: Parser = word(name_only)
+# Pin, signal and model names: any non-blank run (e.g. - ``TX+``, ``DQ<0>``), except a keyword (``[``) or comment (``|``).
+token_only: Parser = regex(r"[^\s\[|]\S*")
+token: Parser = word(token_only)
 # Parameters must begin with a letter in column 1.
 param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
@@ -155,11 +158,12 @@ na: Parser = word(string("NA") | string("na")).result(None)
 def typminmax() -> GenParser[list[float]]:
     "Parse Typ/Min/Max values."
     typ = yield number
-    minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
+    minmax = yield optional(count(number | na, 2), [])
     yield ignore  # So that ``typminmax`` behaves as a lexeme.
-    res = [typ]
-    res.extend(minmax)
-    return res
+    if minmax == [None, None]:  # ``typ NA NA``: just the typical value, as always.
+        return [typ]
+    # Either one may be ``NA``, meaning the typical value (IBIS 8.0 Section 6.1, p.64).
+    return [typ] + [typ if val is None else val for val in minmax]
 
 
 vi_line: Parser = (number + typminmax) << ignore
@@ -433,7 +437,7 @@ Model_keywords: dict[str, Parser] = {
 @generate("[Model]")
 def model():
     "Parse [Model]."
-    nm = yield name << ignore
+    nm = yield token << ignore
     logger.debug("Parsing model: %s...", nm)
     res = yield many1(node(Model_keywords, IBIS_keywords))
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
@@ -472,8 +476,8 @@ def pin(rlcs):
     @generate("Component Pin")
     def fn():
         "Parse an individual component pin."
-        [nm, sig] = yield count(name, 2)
-        mod = yield name_only
+        [nm, sig] = yield count(token, 2)
+        mod = yield token_only
         rem_line = yield rest_line
         rlc_vals = optional(count(number, 3), []).parse(rem_line)
         rlc_dict = {}
@@ -528,8 +532,8 @@ def comp():
 @generate("[Model Selector]")
 def modsel():
     "Parse [Model Selector]."
-    nm = yield name
-    res = yield ignore >> many1(name + rest_line)
+    nm = yield token
+    res = yield ignore >> many1(token + rest_line)
     return {nm: res}
 
 

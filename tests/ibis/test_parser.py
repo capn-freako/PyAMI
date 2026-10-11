@@ -1,3 +1,5 @@
+import pytest
+
 from pyibisami.ibis.parser import parse_ibis_file
 
 
@@ -37,3 +39,41 @@ def test_parse_ibis_file_with_ami_test_config(ibis_test_file_with_ami_test_confi
     assert td["input_waveform_file"] == "four_tap_input_bits.txt"
     assert td["golden_waveform_file"] == "four_tap_output_wave_typ.txt"
     assert td["executable_index"] == "2"
+
+
+def _parse_edited(ibis_test_file, *edits):
+    "Parse the fixture after replacing each ``(old, new)`` (each ``old`` must occur)."
+    text = ibis_test_file.read_text(encoding="utf-8")
+    for old, new in edits:
+        assert old in text, old
+        text = text.replace(old, new)
+    return parse_ibis_file(text)
+
+
+def test_signal_names_with_punctuation(ibis_test_file):
+    """Data-book signal names (IBIS 8.0 Section 5, p.36) like ``TX+`` and ``DQ<0>`` used to fail the whole file."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("1p     Tx_1_P", "1p     TX+"), ("1n     Tx_1_N", "1n     DQ<0>"))
+    assert status == "Success!"
+    pins = ibis_dict["components"]["Example_Tx"].pins
+    assert pins["1p(TX+)"][0] == pins["1n(DQ<0>)"][0] == "example_tx"
+
+
+def test_model_names_with_punctuation(ibis_test_file):
+    status, ibis_dict = _parse_edited(ibis_test_file, ("             example_tx", "             rx+lp"),  # [Pin]
+                                      ("[Model]   example_tx", "[Model]   rx+lp"))
+    assert status == "Success!"
+    assert list(ibis_dict["models"]) == ["rx+lp"]
+    assert {mod for (mod, _) in ibis_dict["components"]["Example_Tx"].pins.values()} == {"rx+lp"}
+
+
+@pytest.mark.parametrize("values, expected", [
+    ("1.80     NA       1.98", [1.8, 1.8, 1.98]),  # ``NA`` means the typical value (IBIS 8.0 Section 6.1, p.64).
+    ("1.80     1.62     NA", [1.8, 1.62, 1.8]),
+    ("1.80     NA       NA", [1.8]),  # Unchanged: just the typical value.
+])
+def test_na_for_min_or_max(ibis_test_file, values, expected):
+    """``NA`` for only one of min/max used to fail the whole file."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("[Voltage_Range]         1.80     1.62     1.98",
+                                                       f"[Voltage_Range]         {values}"))
+    assert status == "Success!"
+    assert ibis_dict["models"]["example_tx"].vrange == pytest.approx(expected)
