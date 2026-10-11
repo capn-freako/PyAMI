@@ -34,19 +34,11 @@ from traits.api import (
     cached_property,
 )
 
-from .model import Component, Model
+# ``TX_MODEL_TYPES``/``RX_MODEL_TYPES`` live in ``.model`` (which can't import this module); re-exported here.
+from .model import RX_MODEL_TYPES, TX_MODEL_TYPES, Component, Model
 from .parser import parse_ibis_file
 
 logger = logging.getLogger(__name__)
-
-# Signal direction of each ``Model_type``, per IBIS 8.0 Table 47 (lower-cased).
-# ``I/O`` types are both; ``Terminator``, ``Series`` and ``Series_switch`` are neither.
-_IO_MODEL_TYPES = {"i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_source", "i/o_ecl", "i/o_diff"}
-TX_MODEL_TYPES = {
-    "output", "3-state", "open_drain", "open_sink", "open_source",
-    "output_ecl", "3-state_ecl", "output_diff", "3-state_diff",
-} | _IO_MODEL_TYPES
-RX_MODEL_TYPES = {"input", "input_ecl", "input_diff"} | _IO_MODEL_TYPES
 
 
 class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
@@ -354,12 +346,18 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     @property
     def dll_file(self) -> str:
-        "The selected model's executable model file for this platform (``Model.dll_file``)."
+        """The selected model's executable model file for this platform (``Model.dll_file``).
+
+        Direction-blind (the first listed entry); for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
+        """
         return self.model.dll_file
 
     @property
     def ami_file(self) -> str:
-        "The selected model's AMI parameter file for this platform (``Model.ami_file``)."
+        """The selected model's AMI parameter file for this platform (``Model.ami_file``).
+
+        Direction-blind (the first listed entry); for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
+        """
         return self.model.ami_file
 
     @property
@@ -405,6 +403,13 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     def _mod_changed(self, new_value):
         model = self._models[new_value]
+        try:
+            model.get_ami_files()
+        except ValueError:
+            logger.warning(
+                "Model `%s` has both Executable_Tx and Executable_Rx for this platform; the direction is ambiguous, "
+                "so `dll_file`/`ami_file` give the first listed (%s). Use Model.get_ami_files(is_tx) to choose.",
+                new_value, model.dll_file)
         if model.dll_file:
             self._notify(f"Model `{new_value}` has an AMI executable for this platform: {model.dll_file}")
         elif model.is_ami:

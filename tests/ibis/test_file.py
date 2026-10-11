@@ -300,6 +300,89 @@ def test_ibis_model_executable_follows_selected_model(tmp_path, monkeypatch, cap
     assert "but no executable for this platform: Windows-64bit" in caplog.text
 
 
+IO_BOTH_ALGO_MODEL = """Model_type   I/O
+[Algorithmic Model]
+Executable_Tx linux_gcc4.1.2_64        io_tx.so    io_tx.ami
+Executable_Rx linux_gcc4.1.2_64        io_rx.so    io_rx.ami
+Executable_Tx Windows_VisualStudio_64  io_tx.dll   io_tx.ami
+[End Algorithmic Model]
+"""
+
+
+def _io_ibis_file(tmp_path, algo_model):
+    "``MIXED_IBIS`` with ``algo_model`` (starting with its ``Model_type`` line) given to ``example_io``."
+    ibis_file = tmp_path / "io_ami.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   I/O\n", algo_model, 1), encoding="utf-8")
+    return str(ibis_file)
+
+
+def test_io_model_with_both_directions(tmp_path, monkeypatch):
+    """An ``I/O`` model's Tx and Rx files are both reachable; the direction is the caller's choice."""
+    model = IBISModel(_io_ibis_file(tmp_path, IO_BOTH_ALGO_MODEL)).model_dict["models"]["example_io"]
+    assert model.is_io
+    assert [ex.direction for ex in model.ami_executables] == ["tx", "rx", "tx"]
+    assert model.executables[1] == (("linux", "64"), ["io_rx.so", "io_rx.ami"])  # Shape used by Executable_index.
+    assert "Executable_Rx" in str(model) and "io_rx.so" in str(model)
+
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.get_ami_files(is_tx=True) == ("io_tx.so", "io_tx.ami")
+    assert model.get_ami_files(is_tx=False) == ("io_rx.so", "io_rx.ami")
+    with pytest.raises(ValueError, match=r"get_ami_files\(is_tx\)"):
+        model.get_ami_files()
+    assert (model.dll_file, model.ami_file) == ("io_tx.so", "io_tx.ami")  # Direction-blind: first listed.
+
+    _set_platform(monkeypatch, "Windows", "64bit")  # Only a Tx entry for this platform.
+    assert model.get_ami_files() == model.get_ami_files(is_tx=True) == ("io_tx.dll", "io_tx.ami")
+    assert model.get_ami_files(is_tx=False) == ("", "")
+
+
+@pytest.mark.parametrize("keyword, tx_files, rx_files", [
+    ("Executable_Rx", ("", ""), ("io.so", "io.ami")),
+    ("Executable", ("io.so", "io.ami"), ("io.so", "io.ami")),  # Illegal for I/O, but tolerated for either direction.
+])
+def test_io_model_with_one_direction(tmp_path, monkeypatch, keyword, tx_files, rx_files):
+    algo_model = ("Model_type   I/O\n[Algorithmic Model]\n"
+                  f"{keyword} linux_gcc4.1.2_64  io.so  io.ami\n[End Algorithmic Model]\n")
+    model = IBISModel(_io_ibis_file(tmp_path, algo_model)).model_dict["models"]["example_io"]
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.get_ami_files() == ("io.so", "io.ami")
+    assert model.get_ami_files(is_tx=True) == tx_files
+    assert model.get_ami_files(is_tx=False) == rx_files
+
+
+@pytest.mark.parametrize("model_name, model_type, files_none, files_tx, files_rx", [
+    ("example_tx", "Output", ("m.so", "m.ami"), ("m.so", "m.ami"), ("", "")),
+    ("example_rx", "Input", ("m.so", "m.ami"), ("", ""), ("m.so", "m.ami")),
+    ("example_term", "Terminator", ("m.so", "m.ami"), ("", ""), ("", "")),
+])
+def test_non_io_model_direction_follows_model_type(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    tmp_path, monkeypatch, model_name, model_type, files_none, files_tx, files_rx
+):
+    algo_model = (f"Model_type   {model_type}\n[Algorithmic Model]\n"
+                  "Executable linux_gcc4.1.2_64  m.so  m.ami\n[End Algorithmic Model]\n")
+    ibis_file = tmp_path / "non_io.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace(f"Model_type   {model_type}\n", algo_model, 1), encoding="utf-8")
+    model = IBISModel(str(ibis_file)).model_dict["models"][model_name]
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert not model.is_io
+    assert model.get_ami_files() == files_none
+    assert model.get_ami_files(is_tx=True) == files_tx
+    assert model.get_ami_files(is_tx=False) == files_rx
+
+
+def test_ibis_model_ambiguous_io_direction_warns_once(tmp_path, monkeypatch, caplog):
+    """``IBISModel`` stays Tx/Rx-unaware: first listed entry, plus one warning on selecting the model."""
+    _set_platform(monkeypatch, "Linux", "64bit")
+    ibis = IBISModel(_io_ibis_file(tmp_path, IO_BOTH_ALGO_MODEL))
+    with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
+        ibis.pin = "6(IO_P)"
+        assert ibis.mod == "example_io"
+        assert (ibis.dll_file, ibis.ami_file) == ("io_tx.so", "io_tx.ami")
+        assert ibis.dll_path == tmp_path / "io_tx.so"
+    warnings = [rec for rec in caplog.records if "get_ami_files(is_tx)" in rec.getMessage()]
+    assert [rec.levelno for rec in warnings] == [logging.WARNING]
+
+
 def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):
     """Files named in the IBIS file resolve against its directory, not the working directory."""
     monkeypatch.chdir(tmp_path.parent)
