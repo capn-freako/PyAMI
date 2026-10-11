@@ -312,7 +312,13 @@ allowed_model_types: list[str] = [
     "Terminator",
     "Series",
     "Series_switch",
-]
+    # True differential models, defined through ``[External Model]`` (IBIS 8.0 Section 6.1, p.62).
+    # Their ``[External Model]`` block is skipped, like any other unparsed ``[Model]`` keyword.
+    "Input_diff",
+    "Output_diff",
+    "I/O_diff",
+    "3-state_diff",
+]  # ``word()`` needs whitespace after the name, so e.g. ``Output`` never matches the start of ``Output_diff``.
 model_type_parsers = [word(string(mt)) for mt in allowed_model_types]
 model_type = reduce(try_choice, model_type_parsers)
 

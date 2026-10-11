@@ -622,3 +622,73 @@ def test_spec_conforming_file_has_no_warnings(ibis_test_file):
     status, ibis_dict = parse_ibis_file(ibis_test_file.read_text(encoding="utf-8"))
     assert (status, ibis_dict["warnings"]) == ("Success!", [])
     assert IBISModel(ibis_test_file).ibis_parsing_errors == "Success!"
+
+
+DIFF_IBIS = """[IBIS Ver]   7.0
+[File Name]  diff.ibs
+[File Rev]   v0.1
+
+[Component]    Diff
+[Manufacturer] (n/a)
+
+[Package]
+R_pkg     0.10     0.00     0.50
+L_pkg    10.00n    0.10n   50.00n
+C_pkg     1.00p    0.01p    5.00p
+
+[Pin]  signal_name        model_name
+1      D_P                diff_buf
+2      D_N                diff_buf
+
+[Diff Pin]  inv_pin  vdiff  tdelay_typ  tdelay_min  tdelay_max
+1           2        0.1V   0ns         NA          NA
+
+[Model]   diff_buf
+Model_type   {model_type}
+[Voltage Range]         1.80     1.62     1.98
+{algo_model}[External Model]
+Language Verilog-AMS
+| Corner  corner_name  file_name      circuit_name
+Corner    Typ          diff_typ.va    diff_buf
+Ports A_signal_pos A_signal_neg my_drive my_enable
+D_to_A D_drive my_drive my_ref 0.0 3.3 Typ
+[End External Model]
+
+[END]
+"""
+
+
+@pytest.mark.parametrize("model_type, is_tx, is_rx", [
+    ("Input_diff", False, True),
+    ("Output_diff", True, False),
+    ("3-state_diff", True, False),
+    ("I/O_diff", True, True),
+])
+def test_true_differential_model_types_load(tmp_path, model_type, is_tx, is_rx):
+    """The ``_diff`` Model_types used to fail the whole file; their ``[External Model]`` is skipped."""
+    ibis_file = tmp_path / "diff.ibs"
+    ibis_file.write_text(DIFF_IBIS.format(model_type=model_type, algo_model=""), encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    model = ibis.model
+    assert model.mtype == model_type
+    assert (model.zout, model.slew, model.zin, model.iv_data) == (None, None, None, None)
+    assert ibis.ibis_parsing_errors == "Success!"  # No Vinl/Vinh rule for ``_diff`` types (Table 1).
+    assert (ibis.get_pins_qualified(True) == ibis.get_pins()) is is_tx
+    assert (ibis.get_pins_qualified(False) == ibis.get_pins()) is is_rx
+
+
+def test_io_diff_model_executable_directions(tmp_path, monkeypatch):
+    """``I/O_diff`` uses ``Executable_Tx``/``Executable_Rx`` (Table 47), like the other I/O types."""
+    algo_model = ("[Algorithmic Model]\n"
+                  "Executable_Tx linux_gcc4.1.2_64  diff.so  diff_tx.ami\n"
+                  "Executable_Rx linux_gcc4.1.2_64  diff.so  diff_rx.ami\n"
+                  "[End Algorithmic Model]\n")
+    ibis_file = tmp_path / "io_diff.ibs"
+    ibis_file.write_text(DIFF_IBIS.format(model_type="I/O_diff", algo_model=algo_model), encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    _set_platform(monkeypatch, "Linux", "64bit")
+    model = ibis.model
+    assert model.is_io
+    assert model.get_ami_files(is_tx=True) == ("diff.so", "diff_tx.ami")
+    assert model.get_ami_files(is_tx=False) == ("diff.so", "diff_rx.ami")
+    assert ibis.ibis_parsing_errors == "Success!"
