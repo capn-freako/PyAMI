@@ -83,7 +83,7 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 
 ## Key patterns
 
-**Headless core / optional extras**: `gui` (chaco, enable, traitsui), `report` (matplotlib, reportlab), `notebook` (jupyter, papermill, …), `all`. Never import an extra's packages at module level in a core module; put such code in `gui/` or `report/` (each guarded on import) and import it lazily. `tests/test_core_only.py` enforces this (it blocks the optional packages); `make test-core` runs it in a core-only install. `traits` itself stays a core dependency.
+**Headless core / optional extras**: `gui` (chaco, enable, traitsui), `report` (matplotlib, reportlab), `notebook` (jupyter, papermill, …, plus `report`), `all`. Never import an extra's packages at module level in a core module; put such code in `gui/` or `report/` (each guarded on import) and import it lazily. `tests/test_core_only.py` enforces this (it blocks the optional packages); `make test-core` runs it in a core-only install. `traits` itself stays a core dependency.
 
 **Logging & CLI output**: the library only logs (module loggers under `pyibisami`; it never configures logging or prints). CLIs call `setup_cli_logging(debug)` and accept `-d/--debug`; a command's results go to stdout via `click.echo()`, progress/diagnostics go through logging to stderr; failures raise `click.ClickException` (exit 1).
 

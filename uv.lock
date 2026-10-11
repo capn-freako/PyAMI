@@ -2546,6 +2546,7 @@ notebook = [
     { name = "lxml-html-clean" },
     { name = "matplotlib" },
     { name = "papermill" },
+    { name = "reportlab" },
 ]
 report = [
     { name = "matplotlib" },
@@ -2577,12 +2578,12 @@ requires-dist = [
     { name = "enable", marker = "extra == 'gui'", specifier = "==6.1.0" },
     { name = "jupyter", marker = "extra == 'notebook'", specifier = "==1.1.1" },
     { name = "lxml-html-clean", marker = "extra == 'notebook'", specifier = "==0.4.5" },
-    { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.6.1" },
     { name = "matplotlib", marker = "extra == 'report'", specifier = ">=3.6.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "papermill", marker = "extra == 'notebook'", specifier = "==2.7.0" },
     { name = "parsec", specifier = "==3.17" },
     { name = "pyibis-ami", extras = ["gui", "report", "notebook"], marker = "extra == 'all'" },
+    { name = "pyibis-ami", extras = ["report"], marker = "extra == 'notebook'" },
     { name = "reportlab", marker = "extra == 'report'", specifier = "==5.0.0" },
     { name = "scipy", specifier = ">=1.15" },
     { name = "traits", specifier = "==7.1.0" },
