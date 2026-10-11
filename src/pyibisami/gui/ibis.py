@@ -70,7 +70,7 @@ def make_component_view(comp: Component) -> View:  # pylint: disable=unused-argu
         ),
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Component Viewer",
+        title="IBIS Component Viewer",
         id="pyibisami.ibis_parser.Component",
     )
 
@@ -105,7 +105,7 @@ def make_model_view(model: Model) -> View:
     view = View(
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Model Viewer",
+        title="IBIS Model Viewer",
         id="pyibisami.ibis_parser.Model",
     )
     view.set_content(content)
@@ -134,8 +134,8 @@ def make_ibis_file_view(ibis: IBISModel) -> View:  # pylint: disable=unused-argu
         ),
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Model Selector",
-        id="pybert_ibis_model_selector",
+        title="IBIS Model Selector",
+        id="pyibisami_ibis_model_selector",
     )
 
 

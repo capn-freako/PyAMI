@@ -72,6 +72,11 @@ Other changes affecting library users:
   ``pyibisami.gui.ibis.show_alerts(ibis)`` shows them as pop-up dialogs;
   calling the ``IBISModel`` instance (to open its GUI) does this automatically.
   The notice texts are now application-neutral (no references to *PyBERT* tabs).
+- ``IBISModel`` no longer takes an ``is_tx`` argument (the old ``IBISModel(ibis_file, True)`` raises ``TypeError``).
+  To offer only Tx (or Rx) pins in its selector, use the new keyword-only ``model_types`` argument;
+  e.g. - ``IBISModel(ibis_file, model_types=TX_MODEL_TYPES)``
+  (``TX_MODEL_TYPES``/``RX_MODEL_TYPES`` are in ``pyibisami.ibis.file``).
+  Its views' titles no longer mention *PyBERT*, and the selector's ``id`` is now ``pyibisami_ibis_model_selector``.
 - ``IBISModel.log()`` and ``IBISModel.log_txt`` were removed,
   as was the ``debug`` argument of ``IBISModel`` and ``pyibisami.ibis.parser.parse_ibis_file()``.
   *PyIBIS-AMI* reports through the standard ``logging`` module, under the ``pyibisami`` logger,

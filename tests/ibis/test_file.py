@@ -4,7 +4,7 @@ import platform
 import pytest
 from traits.api import TraitError
 
-from pyibisami.ibis.file import IBISModel
+from pyibisami.ibis.file import RX_MODEL_TYPES, TX_MODEL_TYPES, IBISModel
 
 
 def test_ibis_model_construction(ibis_test_file):
@@ -247,6 +247,88 @@ def test_no_usable_component(tmp_path):
     ibis_file.write_text(header + BROKEN_COMPONENT + models, encoding="utf-8")
     with pytest.raises(ValueError, match="No component"):
         IBISModel(str(ibis_file))
+
+
+RX_ONLY_COMPONENT = BROKEN_COMPONENT.replace("Broken", "RxOnly").replace("Mystery            no_such_model",
+                                                                          "Rx_Q               example_rx")
+
+
+@pytest.mark.parametrize("model_types, pins", [
+    (TX_MODEL_TYPES, ["4(Tx_P)", "6(IO_P)", "8(OE_P)", "11(Sel_P)"]),
+    (RX_MODEL_TYPES, ["5(Rx_P)", "6(IO_P)", "11(Sel_P)"]),
+    ({"Output", "I/O"}, ["4(Tx_P)", "6(IO_P)", "11(Sel_P)"]),  # Any case.
+])
+def test_model_types_restrict_pins_and_models(tmp_path, model_types, pins):
+    """Only pins with a model of an allowed type are offered, and only those models (``sel_mixed``: Tx and Rx)."""
+    ibis_file = tmp_path / "sel_mixed.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("no_such_model   Undefined model", "example_rx      Rx model"),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file), model_types=model_types)
+    assert ibis.pins == pins
+    allowed = {mtype.lower() for mtype in model_types}
+    for pin in pins:
+        ibis.pin = pin
+        assert ibis.models and all(ibis.get_model(name).mtype.lower() in allowed for name in ibis.models)
+        assert ibis.model.mtype.lower() in allowed
+
+
+def test_model_types_skip_components(tmp_path, caplog):
+    """A component with no pin of an allowed type isn't offered; loading fails only when none is."""
+    ibis_file = tmp_path / "rx_only_first.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", RX_ONLY_COMPONENT + "[Component]    Mixed"),
+                         encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
+        ibis = IBISModel(str(ibis_file), model_types=TX_MODEL_TYPES)
+    assert "RxOnly" in caplog.text
+    assert ibis.comps == ["Mixed"] and ibis.comp == "Mixed"
+    with pytest.raises(TraitError):
+        ibis.comp = "RxOnly"
+    with pytest.raises(ValueError, match=r"Mixed.*Model_types found: \['3-state', 'I/O', 'Input', 'Output'"):
+        IBISModel(str(ibis_file), model_types={"Series"})
+
+
+def test_model_types_changed_after_loading(tmp_path):
+    """Changing ``model_types`` keeps each selection that's still offered, moves the others, and never raises."""
+    ibis_file = tmp_path / "rx_only_first.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", RX_ONLY_COMPONENT + "[Component]    Mixed"),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    fired = []
+    ibis.observe(lambda event: fired.append(event.new), "alert")
+    ibis.comp = "Mixed"
+    ibis.pin = "5(Rx_P)"
+
+    ibis.model_types = TX_MODEL_TYPES  # Rx pin no longer offered: move to the first Tx one.
+    assert ibis.comps == ["Mixed"] and ibis.pin == "4(Tx_P)" and ibis.mod == "example_tx"
+    assert "example_tx" in fired[-1]
+
+    ibis.pin = "6(IO_P)"
+    ibis.model_types = RX_MODEL_TYPES  # I/O pin still offered: keep it.
+    assert ibis.comps == ["RxOnly", "Mixed"] and ibis.comp == "Mixed" and ibis.pin == "6(IO_P)"
+
+    ibis.model_types = {"Series"}  # Nothing to offer: keep the selection, and say so.
+    assert ibis.comps == ["RxOnly", "Mixed"] and ibis.pin == "6(IO_P)" and ibis.mod == "example_io"
+    assert "No component" in fired[-1]
+
+    ibis.model_types = None
+    assert ibis.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
+
+
+def test_old_is_tx_argument_rejected(ibis_test_file):
+    """The pre-10.0 positional ``is_tx`` isn't silently misread."""
+    with pytest.raises(TypeError):
+        IBISModel(ibis_test_file, True)  # pylint: disable=too-many-function-args
+
+
+def test_views_are_application_neutral(ibis_test_file):
+    pytest.importorskip("traitsui")
+    pytest.importorskip("chaco")
+    from pyibisami.gui import ibis as gui_ibis
+
+    ibis = IBISModel(ibis_test_file)
+    views = [gui_ibis.make_ibis_file_view(ibis), gui_ibis.make_component_view(ibis.comp_),
+             gui_ibis.make_model_view(ibis.model)]
+    assert not [view for view in views if "pybert" in f"{view.title} {view.id}".lower()]
 
 
 def _set_platform(monkeypatch, system, bits):
