@@ -7,13 +7,32 @@ Original date:   December 24, 2016
 Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 
-from typing import ClassVar
+import math
+from typing import Any, ClassVar, Optional
 
 from traits.api import Bool, Float, HasTraits, List, Str
 
 #####
 # AMI parameter
 #####
+
+# Data formats (IBIS 8.0 Section 10.3.4, p.240-244).
+FORMATS = ("Value", "Range", "List", "Corner", "Increment", "Steps", "Table", "Gaussian", "Dual-Dirac", "DjRj")
+# Formats whose value the user doesn't choose: Corner is picked by the simulation corner; the others are sent as
+# written. They get no trait, GUI item or tuner.
+FIXED_FORMATS = ("Corner", "Table", "Gaussian", "Dual-Dirac", "DjRj")
+# Types each format allows, where it restricts them (IBIS 8.0 Section 10.3.5, p.245; Table 18, p.247).
+_NUMERIC_TYPES = ("Float", "UI", "Integer", "Tap")
+_FORMAT_TYPES = {
+    "Range": _NUMERIC_TYPES, "Increment": _NUMERIC_TYPES, "Steps": _NUMERIC_TYPES,
+    "Table": ("Float", "UI", "Integer", "String", "Boolean"),
+    "Gaussian": ("Float", "UI"), "Dual-Dirac": ("Float", "UI"), "DjRj": ("Float", "UI"),
+}
+_NO_DEFAULT_FORMATS = ("Table", "Gaussian", "Dual-Dirac", "DjRj")  # IBIS 8.0 p.245.
+# Limit on the values an Increment or Steps parameter may expand to; a larger one is skipped, with a warning.
+# Not a spec rule (the spec sets no limit): a guard against e.g. `(Increment 0 0 1 1e-12)`. 4096 covers a 12-bit
+# code setting; the largest value set in 737 vendor/example .ami files is 255 (an 8-bit Integer Range).
+MAX_DISCRETE_VALUES = 4096
 
 
 class AMIParamError(Exception):
@@ -51,7 +70,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         "Process *Usage* tag."
 
         val = values[0]
-        if val in ("In", "Out", "InOut", "Info"):
+        if val in ("In", "Out", "InOut", "Info", "Dep"):  # Dep: set by AMI_Resolve (AMI_Version 6.1+); never sent.
             self._usage = val
         else:
             raise AMIParamError(f"Unrecognized usage value: '{val}'.")
@@ -65,22 +84,29 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
     def _set_type(self, values):
         "Process *Type* tag."
 
-        val = values[0]
-        if val in ("Float", "Integer", "String", "Boolean", "UI", "Tap"):
-            self._type = val
-        else:
-            raise AMIParamError(f"Unrecognized type value: '{val}'.")
+        for val in values:
+            if val not in ("Float", "Integer", "String", "Boolean", "UI", "Tap"):
+                raise AMIParamError(f"Unrecognized type value: '{val}'.")
+        self._type = values[0]
+        self._types = list(values)  # Format Table may give one Type per column.
 
     def _get_type(self):
         return self._type
 
-    ptype = property(_get_type, doc="Value of AMI parameter 'Type' tag.")
+    ptype = property(_get_type, doc="Value of AMI parameter 'Type' tag (the first one, for a per-column Table).")
+
+    @property
+    def ptypes(self) -> list[str]:
+        "All the values of the 'Type' tag: one, or one per column for Format Table."
+        return self._types
 
     # pformat
     def _set_format(self, values):
         "Process *Format* tag."
 
         form = values[0]
+        if form not in FORMATS:
+            raise AMIParamError(f"Unrecognized format: '{form}'.")
         if len(values) < 2:
             raise AMIParamError(f"No values provided for: '{form}'.")
         self._format = form
@@ -166,6 +192,22 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
 
         return self._set_format(["List"] + values)
 
+    @property
+    def pvalues(self) -> Optional[list]:
+        "The legal values of an Increment or Steps parameter, in increasing order; ``None`` for other formats."
+        return self._values
+
+    @property
+    def pcorners(self) -> Optional[dict[str, Any]]:
+        """A Corner parameter's values, keyed by simulation corner: ``typ``, ``min`` (slow) and ``max`` (fast)
+        (IBIS 8.0 Section 10.3.5, p.246); ``None`` for other formats."""
+        return self._corners
+
+    @property
+    def plabels(self) -> Optional[list[str]]:
+        "A Table's column ``Labels``; ``None`` if it has none (or isn't a Table). Never sent to the model."
+        return self._labels
+
     # Holds any warnings encountered, during initialization.
     # (Any errors encountered will prevent initialization from completing.)
     _msg = ""
@@ -190,7 +232,8 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         "Value": _set_value,
         "Range": _set_range,
         "List": _set_list,
-        "Corner": _set_list,
+        **{form: (lambda self, values, form=form: self._set_format([form] + values))
+           for form in ("Corner", "Increment", "Steps", "Table", "Gaussian", "Dual-Dirac", "DjRj")},
         "Default": _set_default,
         "Description": _set_description,
         "List_Tip": _set_list_tip,
@@ -219,6 +262,10 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         self._default = None
         self._description = ""
         self._list_tip = None
+        self._types: list[str] = []
+        self._values: Optional[list] = None
+        self._corners: Optional[dict[str, Any]] = None
+        self._labels: Optional[list[str]] = None
 
         # Holds any warnings encountered, during initialization.
         # (Any errors encountered will prevent initialization from completing.)
@@ -232,6 +279,8 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                     self._param_def_tag_procs[tag_name](self, tag[1])
                 except AMIParamError as err:
                     raise AMIParamError(f"Problem initializing parameter, '{name}': {err}\n") from err
+            else:
+                self._msg += f"Ignoring unrecognized tag: {tag_name}.\n"
 
         # Validate and complete the instance.
         # Check for required tags.
@@ -267,54 +316,25 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             raise AMIParamError("'Default' may not be used with parameter type 'Out'!\n")
 
         # Complete the instance.
+        # Allowed Type/Format combinations: IBIS 8.0 Section 10.3.5, p.245, and Table 18, p.247.
+        if len(self._types) > 1 and param_format != "Table":
+            raise AMIParamError(f"Only Format Table may have more than one Type; got {self._types}.\n")
+        allowed_types = _FORMAT_TYPES.get(param_format)
+        if allowed_types and any(t not in allowed_types for t in self._types):
+            raise AMIParamError(f"Illegal type, '{param_type}', for use with {param_format}.\n")
+        if param_default is not None and param_format in _NO_DEFAULT_FORMATS:
+            self._msg += f"Default is not allowed with {param_format}; ignoring it.\n"
+            self._default = None
         vals = self._format_rem
         if param_format == "Value":
             self._value = _read_value(param_type, vals[0])
-        elif param_format == "Range":
-            if param_type not in ("Float", "Integer", "UI", "Tap"):
-                raise AMIParamError(f"Illegal type, '{param_type}', for use with Range.\n")
-            if len(vals) < 3:
-                raise AMIParamError(f"Insufficient number of values, {len(vals)}, provided for Range.\n")
-            if param_type in ("Float", "UI", "Tap"):
-                try:
-                    temp_vals = list(map(float, vals[:3]))
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read floats from '{vals[:3]}'.\n") from exc
-            else:
-                try:
-                    temp_vals = list(map(int, vals[:3]))
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read integers from '{vals[:3]}'.\n") from exc
-            self._value = temp_vals[0]
-            self._min = temp_vals[1]
-            self._max = temp_vals[2]
-            default = self._typed_default(param_type)  # Tap: a float, as the Range values are.
-            if default is not None:
-                if self._min <= default <= self._max:
-                    self._value = default
-                else:
-                    self._msg += (f"Default {default} is outside the Range [{self._min}, {self._max}]; "
-                                  f"using {self._value}.\n")
-        else:  # param_format == 'List'
-            if param_type in ("Float", "UI"):
-                try:
-                    temp_vals = list(map(float, vals))
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read floats from '{vals}'.\n") from exc
-            elif param_type in ("Integer", "Tap"):
-                try:
-                    temp_vals = list(map(int, vals))
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read integers from '{vals}'.\n") from exc
-            else:  # 'param_type' == 'String'
-                try:
-                    temp_vals = list(map(str, vals))
-                    temp_vals = [x.strip('"') for x in temp_vals]
-                except (ValueError, TypeError) as exc:
-                    raise AMIParamError(f"Couldn't read strings from '{vals}'.\n") from exc
+        elif param_format in ("Range", "Increment", "Steps"):
+            self._init_range(param_format, param_type, vals)
+        elif param_format == "List":
+            temp_vals = [_read_value(param_type, v) for v in vals]
             self._value = temp_vals
             # The current List selection lives on the trait ``make_param_traits()`` builds from ``pdefault``.
-            default = self._typed_default("Integer" if param_type == "Tap" else param_type)  # As the List values.
+            default = self._typed_default(param_type)
             if default is not None and default not in temp_vals:
                 self._msg += f"Default {default} is not a member of the List {temp_vals}; using {temp_vals[0]}.\n"
                 default = None
@@ -322,8 +342,72 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             if self._list_tip is not None and len(self._list_tip) != len(temp_vals):
                 self._msg += (f"List_Tip has {len(self._list_tip)} entries, but List has {len(temp_vals)}; "
                               "they must match.\n")
+        elif param_format == "Corner":
+            if param_usage == "Out":
+                raise AMIParamError("Corner is not allowed with Usage Out.\n")
+            if len(vals) != 3:
+                raise AMIParamError(f"Corner needs 3 values (typ, slow, fast); got {len(vals)}.\n")
+            typ, slow, fast = (_read_value(param_type, v) for v in vals)
+            self._value = typ
+            self._corners = {"typ": typ, "min": slow, "max": fast}
+        elif param_format == "Table":
+            self._init_table(vals)
+        else:  # Gaussian, Dual-Dirac, DjRj
+            nvals = 2 if param_format == "Gaussian" else 3
+            if len(vals) != nvals:
+                raise AMIParamError(f"{param_format} needs {nvals} values; got {len(vals)}.\n")
+            self._value = [_read_value(param_type, v) for v in vals]
 
         self._name = name
+
+    def _init_range(self, param_format: str, param_type: str, vals: list) -> None:
+        """Complete a Range, Increment or Steps parameter.
+
+        Increment ``<typ> <min> <max> <delta>`` allows ``typ + N*delta`` within ``[min, max]``; Steps
+        ``<typ> <min> <max> <# steps>`` is Increment with ``delta = (max - min) / steps`` (IBIS 8.0 p.241).
+        """
+        nvals = 3 if param_format == "Range" else 4
+        if len(vals) < nvals:
+            raise AMIParamError(f"Insufficient number of values, {len(vals)}, provided for {param_format}.\n")
+        typ, pmin, pmax = (_read_value(param_type, v) for v in vals[:3])
+        if not pmin <= typ <= pmax:
+            self._msg += f"{param_format} values must be min <= typ <= max; got {vals[:3]}.\n"
+        self._value, self._min, self._max = typ, pmin, pmax
+        if param_format != "Range":
+            step = _read_value("Float", vals[3])
+            delta = step if param_format == "Increment" else (pmax - pmin) / step if step else 0.0
+            if delta <= 0:
+                raise AMIParamError(f"{param_format} needs a positive step; got {vals[3]}.\n")
+            if (pmax - pmin) / delta > MAX_DISCRETE_VALUES:
+                raise AMIParamError(f"{param_format} has more than {MAX_DISCRETE_VALUES} values.\n")
+            n_lo, n_hi = math.ceil((pmin - typ) / delta - 1e-9), math.floor((pmax - typ) / delta + 1e-9)
+            values = [typ + n * delta for n in range(n_lo, n_hi + 1)]
+            self._values = ([round(v) for v in values] if param_type == "Integer"
+                            else [float(f"{v:.12g}") for v in values])  # Drop float noise (0.30000000000000004).
+        default = self._typed_default(param_type)
+        if default is None:
+            return
+        if self._values is not None and default not in self._values:
+            self._msg += f"Default {default} is not one of the {param_format} values {self._values}; using {typ}.\n"
+        elif not pmin <= default <= pmax:
+            self._msg += f"Default {default} is outside the {param_format} [{pmin}, {pmax}]; using {typ}.\n"
+        else:
+            self._value = default
+
+    def _init_table(self, items: list) -> None:
+        """Complete a Table parameter: optional ``Labels``, then one or more rows of equal length (IBIS 8.0 p.242)."""
+        if items and isinstance(items[0], tuple) and items[0][0] == "Labels":
+            self._labels = [label.strip('"') for label in items[0][1]]
+            items = items[1:]
+        if not items or not all(isinstance(row, list) for row in items):
+            raise AMIParamError(f"A Table needs one or more rows of values; got {items}.\n")
+        ncols = len(items[0])
+        if any(len(row) != ncols for row in items):
+            raise AMIParamError("All Table rows must have the same number of entries.\n")
+        types = self._types if len(self._types) > 1 else self._types * ncols
+        if len(types) != ncols:
+            raise AMIParamError(f"Table has {ncols} columns but {len(types)} Types.\n")
+        self._value = [[_read_value(t, v) for t, v in zip(types, row)] for row in items]
 
     def _typed_default(self, param_type: str):
         """``Default``, read as ``param_type``; ``None`` if absent or unreadable (with a warning in ``msg``).
@@ -348,6 +432,8 @@ def _read_value(param_type: str, value_str: str):
     Raises:
         AMIParamError: ``value_str`` isn't a value of that type.
     """
+    if not isinstance(value_str, str):
+        raise AMIParamError(f"Expected a single {param_type} value; got {value_str}.\n")
     value_str = value_str.strip()
     if param_type in ("Float", "UI", "Tap"):
         try:

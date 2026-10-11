@@ -126,6 +126,32 @@ def interpFile(filename: str, sample_per: float) -> Rvec:
 _DEFAULT_ROW_SIZE = 128
 
 
+def ami_params_string(ami_params: dict[str, Any]) -> str:
+    """The ``AMI_parameters_in`` string for a parameter dictionary (IBIS 8.0 Section 10.3.6, p.246).
+
+    Args:
+        ami_params: ``root_name`` plus the parameter values (e.g. ``AMIParamConfigurator.input_ami_params``);
+            a dictionary value is a branch of subparameters.
+
+    Returns:
+        ``(root (name value)...)``. Strings are quoted; a list (a Table's flattened rows, a Gaussian's numbers, ...)
+        gives its values in order: ``(fwd 1 -0.169)``.
+    """
+
+    def atom(val: Any) -> str:
+        return f'"{val}"' if isinstance(val, str) else str(val)
+
+    def sexpr(pname: str, pval: Any) -> str:
+        if isinstance(pval, dict):
+            return f"({pname} {' '.join(sexpr(sname, sval) for sname, sval in pval.items())})"
+        if isinstance(pval, list):
+            return f"({pname} {' '.join(map(atom, pval))})"
+        return f"({pname} {atom(pval)})"
+
+    params = "".join(sexpr(pname, pval) for pname, pval in ami_params.items() if pname != "root_name")
+    return f"({ami_params['root_name']} {params})"
+
+
 class _InitData(TypedDict):
     channel_response: Any  # ctypes array: c_double * N
     row_size: int
@@ -377,35 +403,9 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
             )
 
         # Construct the AMI parameters string.
-        def sexpr(pname: str, pval: Any) -> str:
-            """
-            Create an S-expression from a parameter name/value pair, calling
-            recursively as needed to elaborate sub-parameter dictionaries.
-
-            Args:
-                pname: Parameter name.
-                pval: Parameter value.
-
-            Returns:
-                A string containing the S-expression constructed.
-            """
-            if isinstance(pval, str):
-                return f'({pname} "{pval}")'
-            if isinstance(pval, dict):
-                subs = []
-                for sname in pval:
-                    subs.append(sexpr(sname, pval[sname]))
-                return f"({pname} {' '.join(subs)})"
-            return f"({pname} {pval})"
-
-        root_name = init_object.ami_params['root_name']
-        self._root_name = root_name  # pylint: disable=attribute-defined-outside-init
-        ami_params_in = f"({root_name} "
-        for item in list(init_object.ami_params.items()):
-            if item[0] != "root_name":
-                ami_params_in += sexpr(item[0], item[1])
-        ami_params_in += ")"
-        self._ami_params_in = ami_params_in.encode("utf-8")  # pylint: disable=attribute-defined-outside-init
+        self._root_name = init_object.ami_params['root_name']  # pylint: disable=attribute-defined-outside-init
+        self._ami_params_in = ami_params_string(  # pylint: disable=attribute-defined-outside-init
+            init_object.ami_params).encode("utf-8")
 
         # Set handle types.
         self._ami_params_out = c_char_p(b"")  # pylint: disable=attribute-defined-outside-init
@@ -432,7 +432,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
                 "sample_interval=%s; bit_time=%s; ami_params_in=%s; "
                 "&initOut=%s; &ami_params_out=%s; &ami_mem_handle=%s; &msg=%s",
                 self._amiInit, self._row_size, self._num_aggressors,
-                self._sample_interval, self._bit_time, ami_params_in,
+                self._sample_interval, self._bit_time, self._ami_params_in,
                 byref(self._initOut),  # type: ignore
                 byref(self._ami_params_out),
                 byref(self._ami_mem_handle),  # type: ignore

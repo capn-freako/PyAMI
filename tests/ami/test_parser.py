@@ -1,6 +1,8 @@
 import pytest
 
+import pyibisami.ami.model as ami_model
 import pyibisami.ami.parser as ami_parser
+from traits.api import TraitError
 
 
 @pytest.fixture
@@ -403,9 +405,100 @@ def test_newer_reserved_parameters_are_recognised():
     assert set(names) <= set(ami.info_ami_params)
 
 
+@pytest.fixture
+def formats_ami_config():
+    "One parameter of each format that used to fail the whole file (IBIS 8.0 Section 10.3.4, p.239-244)."
+    return _ami_file(r"""
+         (gain (Usage In) (Type Float) (Increment 1.0 0.0 2.0 0.5))
+         (vga (Usage In) (Type Integer) (Steps 4 0 8 4) (Default 6))
+         (pvt (Usage In) (Type Float) (Corner 1.0 0.5 2.0))
+         (poles (Usage InOut) (Type Integer Float Float)
+             (Table (Labels "flag" "re" "im") (1 -5e8 0) (2 -9.4e8 8.3e8)))
+         (fwd (Usage In) (Type Float) (Format Table ( -0.169324 1.40308 0.330246)))
+         (rj (Usage In) (Type UI) (Gaussian 0 0.01))
+         (dd (Usage In) (Type UI) (Dual-Dirac -0.1 0.1 0.01))
+         (djrj (Usage In) (Type UI) (DjRj -0.1 0.1 0.01))
+         (taps (Usage In) (Type Tap) (List 0.1 0.2))
+         (big (Usage In) (Type Integer) (Range 1e3 0 2e3))
+         (resolved (Usage Dep) (Type Float) (Value 1.0))""")
+
+
+class TestFormats:
+    """Each of these used to fail the whole ``.ami`` file."""
+
+    def test_values_sent_to_model(self, formats_ami_config):
+        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        assert not ami.ami_parsing_errors
+        params = ami.input_ami_params
+        assert params == {
+            "root_name": "my_model",
+            "gain": 1.0, "vga": 6, "pvt": 1.0,
+            "poles": [1, -5e8, 0.0, 2, -9.4e8, 8.3e8],  # Rows flattened; Labels not sent (p.242-243).
+            "fwd": [-0.169324, 1.40308, 0.330246],
+            "rj": [0.0, 0.01], "dd": [-0.1, 0.1, 0.01], "djrj": [-0.1, 0.1, 0.01],
+            "taps": 0.1, "big": 1000,
+        }  # Dep is never sent (p.240).
+        assert ami_model.ami_params_string({"root_name": "m", "poles": params["poles"], "s": "a b"}) == (
+            '(m (poles 1 -500000000.0 0.0 2 -940000000.0 830000000.0)(s "a b"))')
+
+    def test_increment_and_steps_allow_only_their_values(self, formats_ami_config):
+        """``typ + N*delta`` within ``[min, max]`` (p.241); Steps' delta is ``(max - min) / steps``."""
+        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        defs = ami.ami_param_defs["Model_Specific"]
+        assert defs["gain"].pvalues == [0.0, 0.5, 1.0, 1.5, 2.0]
+        assert defs["vga"].pvalues == [0, 2, 4, 6, 8]
+        ami.gain = 1.5  # As the GUI sets it.
+        assert ami.input_ami_params["gain"] == 1.5
+        with pytest.raises(TraitError):
+            ami.gain = 1.2
+
+    @pytest.mark.parametrize("corner, expected", [("typ", 1.0), ("min", 0.5), ("max", 2.0)])
+    def test_corner_follows_sim_corner(self, formats_ami_config, corner, expected):
+        """The EDA tool picks typ/slow/fast by its simulation corner, not the user (p.246)."""
+        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        ami.sim_corner = corner
+        assert ami.input_ami_params["pvt"] == expected
+        assert ami.fetch_param_val(["Model_Specific", "pvt"]) == expected
+        assert "pvt" not in ami._param_trait_names
+        assert all(path[-1] != "pvt" for path, _ in ami.tunable_params)
+
+    def test_table_labels_and_column_types(self, formats_ami_config):
+        poles = ami_parser.AMIParamConfigurator(formats_ami_config).ami_param_defs["Model_Specific"]["poles"]
+        assert poles.plabels == ["flag", "re", "im"]
+        assert poles.pvalue == [[1, -5e8, 0.0], [2, -9.4e8, 8.3e8]]
+        assert [type(v) for v in poles.pvalue[0]] == [int, float, float]
+
+    @pytest.mark.parametrize("param, reason", [
+        ("(Usage In) (Type Tap) (Table (1 2))", "Illegal type, 'Tap', for use with Table"),  # p.242.
+        ("(Usage In) (Type Integer) (Gaussian 0 1)", "Illegal type, 'Integer', for use with Gaussian"),  # p.245.
+        ("(Usage In) (Type Float) (Table (1 2) (3))", "same number of entries"),
+        ("(Usage Out) (Type Float) (Corner 1 2 3)", "Corner is not allowed with Usage Out"),
+        ("(usage in) (Type Float) (Range 0.5 0 1)", "Missing 'Usage' tag"),  # Case sensitive (p.236).
+    ])
+    def test_bad_parameter_is_skipped(self, param, reason):
+        """Only the bad parameter is dropped, with a warning naming it; the rest of the file loads."""
+        ami = ami_parser.AMIParamConfigurator(_ami_file(f"(grp (bad {param})) (good (Usage In) (Type Integer) (Value 1))"))
+        assert ami.input_ami_params == {"root_name": "my_model", "grp": {}, "good": 1}
+        assert len(ami.ami_parsing_errors) == 1
+        assert ami.ami_parsing_errors[0].startswith("Skipped parameter Model_Specific.grp.bad: ")
+        assert reason in ami.ami_parsing_errors[0]
+
+    def test_skipped_required_parameter_still_fails(self):
+        """A required Reserved Parameter that can't be read is reported missing, as before."""
+        with pytest.raises(RuntimeError, match="'GetWave_Exists', not found"):
+            ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))").replace(
+                "(GetWave_Exists (Usage Info) (Type Boolean) (Value False))",
+                "(GetWave_Exists (Usage Info) (Type Boolean) (Value Maybe))"))
+
+    def test_table_default_is_ignored_with_a_warning(self):
+        ami = ami_parser.AMIParamConfigurator(_ami_file("(t (Usage In) (Type Float) (Table (1 2)) (Default 1))"))
+        assert ami.input_ami_params["t"] == [1.0, 2.0]
+        assert ami.ami_parsing_errors == ["Model_Specific.t: Default is not allowed with Table; ignoring it."]
+
+
 @pytest.mark.parametrize(
     "config", ["test_ami_config", "nested_ami_config", "described_group_ami_config", "grouped_ami_config",
-               "tap_ami_config"])
+               "tap_ami_config", "formats_ami_config"])
 def test_gui_view_items_match_traits(config, request):
     """Every editable ``Item`` in the GUI view must name a registered parameter Trait."""
     pytest.importorskip("traitsui")

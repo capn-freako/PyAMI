@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
-from ..ami.parameter import AMIParameter
+from ..ami.parameter import FIXED_FORMATS, AMIParameter
 from ..ami.parser import trait_name_part
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ def make_gui_items(pname: str, param: AMIParameter | Parameters) -> list[Item | 
     """
 
     if isinstance(param, AMIParameter):
-        if param.pusage not in ("In", "InOut"):
+        if param.pusage not in ("In", "InOut") or param.pformat in FIXED_FORMATS:  # No trait to show.
             return []
         if param.ptype == "Boolean":
             return [Item(pname, tooltip=param.pdescription)]

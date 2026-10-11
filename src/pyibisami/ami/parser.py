@@ -21,7 +21,7 @@ from parsec import ParseError, generate, many, regex, string
 from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 
 from .model                     import AMIModelInitializer
-from .parameter                 import AmiParamTuner, AMIParamError, AMIParameter
+from .parameter                 import FIXED_FORMATS, AmiParamTuner, AMIParamError, AMIParameter
 from .reserved_parameter_names  import AmiReservedParameterName, RESERVED_PARAM_NAMES
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,13 @@ class AMIParamConfigurator(HasTraits):
 
     Any errors or warnings encountered while parsing are available, in
     the ``ami_parsing_errors`` property.
+
+    Parameters of Format Corner aren't user-selectable: their value follows ``sim_corner``
+    (``"typ"``, ``"min"`` (slow) or ``"max"`` (fast); IBIS 8.0 Section 10.3.5, p.246), the same
+    corner the application uses for the IBIS model data.
     """
+
+    sim_corner = Enum("typ", "min", "max")  # Simulation corner; selects each Corner parameter's value.
 
     def __init__(self, ami_file_contents_str: str) -> None:
         """
@@ -193,8 +199,17 @@ class AMIParamConfigurator(HasTraits):
         """
         _param = self.fetch_param(branch_names)
         if _param:
-            return _param.pvalue
+            return self._fixed_value(_param) if _param.pformat == "Corner" else _param.pvalue
         return None
+
+    def _fixed_value(self, param: AMIParameter) -> Any:
+        """The value sent for a parameter of one of the ``FIXED_FORMATS``: a Corner's value for ``sim_corner``,
+        a Table's rows flattened (IBIS 8.0 p.242), or a Gaussian/Dual-Dirac/DjRj's numbers."""
+        if param.pformat == "Corner":
+            return param.pcorners[self.sim_corner]  # type: ignore[index]
+        if param.pformat == "Table":
+            return [value for row in param.pvalue for value in row]
+        return param.pvalue
 
     def set_param_val(
         self: AMIParamConfigurator,
@@ -230,6 +245,11 @@ class AMIParamConfigurator(HasTraits):
                     f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"
                 )
         if isinstance(param_dict, AMIParameter):
+            if param_dict.pformat == "Corner":
+                raise ValueError(f"A Corner parameter's value follows `sim_corner`; it can't be set: {branch_names}")
+            if param_dict.pformat in FIXED_FORMATS:  # Table, Gaussian, ...: stored as given, no trait.
+                param_dict.pvalue = new_val
+                return
             # Coerce to the parameter's declared type. Notably: a `Bool` trait rejects a
             # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
             # Integer-typed value (e.g. a List-format mode selector) is expected.
@@ -388,6 +408,8 @@ class AMIParamConfigurator(HasTraits):
                 # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
                 except Exception:  # pylint: disable=broad-exception-caught
                     res[pname] = self.trait_get(tname)[tname]
+            elif param.pusage in ("In", "InOut") and param.pformat in FIXED_FORMATS:  # Sent, but has no trait.
+                res[pname] = self._fixed_value(param)
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs: ParamValues = {}
             for sname in param:
@@ -541,15 +563,24 @@ ami_string = lexeme(regex(r'"[^"]*"'))
 
 atom = number | symbol | ami_string | (true | false)
 node_name = tap_ix ^ symbol  # `tap_ix` is new and gives the tap position; negative positions are allowed.
+number_re = re.compile(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?")
+# First entry of a Table row that isn't also a name: a signed/decimal number (e.g. ``-0.169``) or a quoted string.
+row_head = lexeme(regex(number_re.pattern + r"(?=[\s()|])")) | ami_string
 
 
 @generate("AMI node")
 def node():
-    "Parse AMI node."
+    """Parse AMI node: ``(name values...)`` gives ``(name, values)``.
+
+    A Table row (IBIS 8.0 p.242), i.e. - a number or quoted string followed only by atoms, gives a plain list instead:
+    ``(1 -0.5 2)`` gives ``["1", "-0.5", "2"]``. (A tap, e.g. ``(-1 (Usage In) ...)``, contains nodes.)
+    """
     yield lparen
-    label  = yield node_name
+    label  = yield node_name ^ row_head
     values = yield many(expr)
     yield rparen
+    if (number_re.fullmatch(label) or label.startswith('"')) and all(isinstance(v, str) for v in values):
+        return [label] + values
     return (label, values)
 
 
@@ -568,7 +599,9 @@ ami = ignore >> root
 ami_parse: AmiParser = ami.parse
 
 
-def proc_branch(branch) -> tuple[str, dict[str, Any]]:
+def proc_branch(  # pylint: disable=too-many-return-statements
+    branch, skipped: Optional[list[str]] = None, path: Optional[tuple[str, ...]] = None
+) -> tuple[str, dict[str, Any]]:
     """Process a branch in a AMI parameter definition tree.
 
     That is, build a dictionary from a pair containing:
@@ -584,60 +617,57 @@ def proc_branch(branch) -> tuple[str, dict[str, Any]]:
     tag and the fact that we have no guarantee of any particular
     ordering of subparameter branch items.
 
+    A parameter that can't be built (or a malformed item) is skipped: it's left out of the result, and a
+    ``"Skipped parameter <path>: <reason>"`` message is logged and added to ``skipped``. The rest of the tree loads.
+
     Args:
-        p (str, list): A pair, as described above.
+        branch (str, list): A pair, as described above.
+
+    Keyword Args:
+        skipped: Collects the messages for skipped parameters.
+            Default: None (only logged)
+        path: The names of the enclosing branches, below the root; ``None`` for the root itself.
+            Default: None
 
     Returns:
         (str, dict): A pair containing:
-            err_str: String containing any errors or warnings encountered,
-                while building the parameter dictionary.
+            err_str: Always empty (kept for compatibility); see ``skipped``.
             param_dict: Resultant parameter dictionary.
     """
+    def skip(name: str, reason: str) -> tuple[str, dict[str, Any]]:
+        msg = f"Skipped parameter {'.'.join((path or ()) + (name,))}: {reason.strip()}"
+        logger.warning(msg)
+        if skipped is not None:
+            skipped.append(msg)
+        return ("", {})
+
     results: tuple[str, dict[str, Any]] = ("", {})  # Empty Results
-    if len(branch) != 2:
-        if not branch:
-            err_str = "ERROR: Empty branch provided to proc_branch()!\n"
-        else:
-            err_str = f"ERROR: Malformed item: {branch[0]}\n"
-        results = (err_str, {})
-
-    param_name = branch[0]
-    param_tags = branch[1]
-
+    if not isinstance(branch, tuple) or len(branch) != 2:
+        return skip("<item>", f"Malformed item: {branch}")
+    param_name, param_tags = branch
     if not param_tags:
-        err_str = f"ERROR: No tags/subparameters provided for parameter, '{param_name}'\n"
-        results = (err_str, {})
+        return skip(param_name, "No tags or subparameters.")
+    child_path = () if path is None else path + (param_name,)
 
+    tag_names = AMIParameter._param_def_tag_procs  # pylint: disable=protected-access
     try:
-        if (
-            (len(param_tags) > 1)
-            and (  # noqa: W503
-                param_tags[0][0] in AMIParameter._param_def_tag_procs  # pylint: disable=protected-access  # noqa: W503
-            )
-            and (  # noqa: W503
-                param_tags[1][0] in AMIParameter._param_def_tag_procs  # pylint: disable=protected-access  # noqa: W503
-            )
-        ):
+        # A parameter has at least one tag other than Description (which a branch of subparameters may also have).
+        if any(isinstance(tag, tuple) and tag[0] in tag_names and tag[0] != "Description" for tag in param_tags):
             try:
                 results = ("", {param_name: AMIParameter(param_name, param_tags)})
             except AMIParamError as err:
-                results = (str(err), {})
+                return skip(param_name, str(err))
         elif param_name == "Description":
             results = ("", {"description": param_tags[0].strip('"')})
+        elif not all(isinstance(tag, tuple) for tag in param_tags):
+            return skip(param_name, f"Expected parameter tags or subparameters; got {param_tags}")
         else:
-            err_str = ""
             param_dict: dict[str, Any] = {}
             param_dict[param_name] = {}
             for param_tag in param_tags:
-                temp_str, temp_dict = proc_branch(param_tag)
+                _, temp_dict = proc_branch(param_tag, skipped, child_path)
                 param_dict[param_name].update(temp_dict)
-                if temp_str:
-                    err_str = (
-                        f"Error returned by recursive call, while processing parameter, '{param_name}':\n{temp_str}"
-                    )
-                    results = (err_str, param_dict)
-
-            results = (err_str, param_dict)
+            results = ("", param_dict)
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error processing branch:\n%s", param_tags)
     return results
@@ -702,16 +732,15 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
             f"Expected {pe.expected} at {pe.loc()} in: {pe.text[pe.index: pe.index + 20]}"
         ) from pe
 
-    err_str, param_dict = proc_branch(res)
-    if err_str:
-        return ([err_str], [], AmiRootName(""), "", {}, {})
+    skipped: list[str] = []
+    _, param_dict = proc_branch(res, skipped)
     if len(param_dict.keys()) != 1:
         raise RuntimeError(
             f"Malformed AMI parameter S-exp has top-level keys: {param_dict.keys()}!"
         )
 
     errors: list[str] = []
-    warnings: list[str] = []
+    warnings: list[str] = list(skipped)  # A bad parameter is left out; a required one is then reported missing.
 
     def log_error(msg: str) -> None:
         errors.append(msg)
@@ -821,7 +850,7 @@ def make_param_traits(
     """
 
     if isinstance(param, AMIParameter):  # pylint: disable=no-else-return
-        if param.pusage not in ("In", "InOut"):
+        if param.pusage not in ("In", "InOut") or param.pformat in FIXED_FORMATS:  # Not user-selectable.
             return []
 
         if param.ptype == "Boolean":
@@ -849,8 +878,8 @@ def make_param_traits(
                 else:
                     val = default if default is not None else param.pvalue[0]
                     the_trait = Enum([val] + param.pvalue)
-            case "Corner":
-                the_trait = Trait(param.pvalue[0])  # Using `Typ` value, for now.
+            case "Increment" | "Steps":  # Only the discrete values typ + N*delta are legal (IBIS 8.0 p.241).
+                the_trait = Enum([param.pvalue] + param.pvalues)  # type: ignore[operator]
             case _:
                 raise ValueError(f"Unrecognized AMI parameter format: {pformat}, for parameter `{pname}` of type `{param.ptype}` and usage `{param.pusage}`!")
         if the_trait.metadata:
