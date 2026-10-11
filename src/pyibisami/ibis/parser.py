@@ -422,7 +422,7 @@ def model():
     res = yield many1(node(Model_keywords, IBIS_keywords))
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
-        theModel = Model(dict(res))
+        theModel = Model(dict(res), name=nm)
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {le!s}")
     return {nm: theModel}

@@ -116,6 +116,59 @@ def test_gui_input_model_view_builds():
     assert all(model.trait(name) is not None for name in names), names
 
 
+CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]  # 50 Ohms at Vmeas.
+RAMP = {"rising": [2e9], "falling": [2e9], "load": 50}  # 2 V/ns.
+
+
+def _model(model_type, name="m", **tables):
+    from pyibisami.ibis.model import Model
+
+    return Model({"model_type": model_type, "voltage_range": [1.8, 1.62, 1.98], "vmeas": 0.5, **tables}, name=name)
+
+
+@pytest.mark.parametrize("model_type, tables, zout, slew, zin", [
+    ("I/O", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP, "gnd_clamp": CLAMP_50, "power_clamp": CLAMP_50},
+     50.0, 2.0, 25.0),
+    ("3-state", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, None),
+    ("Open_drain", {"pulldown": PULLDOWN, "ramp": RAMP}, 50.0, 2.0, None),  # One-sided: the pull-down's impedance.
+    ("Open_source", {"pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, None),
+    ("I/O_open_drain", {"pulldown": PULLDOWN, "ramp": RAMP, "gnd_clamp": CLAMP_50}, 50.0, 2.0, 50.0),
+    ("I/O", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, 2e6),  # No clamps: NO_CLAMP_Z.
+    ("Output_ECL", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, None, None, None),  # Task 13.
+    ("Terminator", {"gnd_clamp": CLAMP_50}, None, None, None),
+])
+def test_analog_values_per_model_type(model_type, tables, zout, slew, zin):
+    """``zout``/``slew``/``zin`` are numbers where the Model_type and its data support them, else ``None``."""
+    model = _model(model_type, **tables)
+    for name, expected in (("zout", zout), ("slew", slew), ("zin", zin)):
+        value = getattr(model, name)
+        assert value is None if expected is None else value == pytest.approx(expected), (name, value)
+
+
+def test_missing_driver_data_warns_without_failing(caplog):
+    """A ``3-state`` model without I-V tables or ``[Ramp]`` still loads (as before), with one warning."""
+    with caplog.at_level("WARNING", logger="pyibisami.ibis.model"):
+        model = _model("3-state", name="oe_buf")
+    assert (model.zout, model.slew, model.zin, model.iv_data) == (None, None, None, None)
+    assert len(caplog.records) == 1
+    assert all(s in caplog.text for s in ("oe_buf", "[Pulldown]", "[Pullup]", "[Ramp]"))
+
+
+def test_output_still_requires_driver_data():
+    with pytest.raises(LookupError, match="Ramp"):
+        _model("Output", pulldown=PULLDOWN, pullup=PULLUP)
+    with pytest.raises(LookupError, match="I-V"):
+        _model("I/O", pulldown=PULLDOWN, ramp=RAMP)
+
+
+def test_gui_io_model_view_shows_both_impedances():
+    pytest.importorskip("chaco")
+    model = _model("I/O", pulldown=PULLDOWN, pullup=PULLUP, ramp=RAMP, gnd_clamp=CLAMP_50, power_clamp=CLAMP_50)
+    names = [item.name for item in _items(model.default_traits_view().content) if item.name]
+    assert {"zout", "slew", "zin"} <= set(names)
+    assert all(model.trait(name) is not None for name in names), names
+
+
 def _items(group):
     from traitsui.api import Group
 

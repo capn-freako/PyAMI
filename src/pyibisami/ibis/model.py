@@ -10,12 +10,16 @@ https://ibis.org/
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
+import logging
 import platform
+from collections.abc import Mapping
 from typing import NamedTuple, Optional
 
 from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
 
-from .iv import IVData
+from .iv import IVCurve, IVData, IVKeyword
+
+logger = logging.getLogger(__name__)
 
 NO_CLAMP_Z = 2e6  # Impedance assumed for a missing clamp (Ohms).
 
@@ -37,6 +41,27 @@ class AmiExecutable(NamedTuple):
     bits: str  # "32" or "64".
     dll: str  # Executable model file name, as written in the IBIS file.
     ami: str  # AMI parameter file name, as written in the IBIS file.
+
+
+# Which analog characteristics each ``Model_type`` has, per IBIS 8.0 Section 6.1, Table 1 (lower-cased).
+# ``*_ECL`` (Vcc-relative I-V tables; task 13) and ``*_diff`` types are deliberately absent: no zout/zin/slew.
+_PUSH_PULL_TYPES = {"output", "3-state", "i/o"}
+_PULLDOWN_ONLY_TYPES = {"open_drain", "open_sink", "i/o_open_drain", "i/o_open_sink"}  # Pull-up is external.
+_PULLUP_ONLY_TYPES = {"open_source", "i/o_open_source"}  # Pull-down is external.
+_RECEIVER_TYPES = {"input", "i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_source"}
+_STRICT_DRIVER_TYPES = {"output", "i/o"}  # Missing I-V tables or [Ramp] fail the model, as they always have.
+_KEYWORD_NAMES = {"pulldown": "[Pulldown]", "pullup": "[Pullup]", "ramp": "[Ramp]"}
+
+
+def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]) -> float:
+    "Input impedance of the clamps (in parallel, as both are always active); ``NO_CLAMP_Z`` for a missing one."
+    gc_z = curves["gnd_clamp"].impedance(vmeas) if "gnd_clamp" in curves else NO_CLAMP_Z
+    pc_z = curves["power_clamp"].impedance(vmeas) if "power_clamp" in curves else NO_CLAMP_Z
+    if "gnd_clamp" in curves and "power_clamp" in curves:
+        return (gc_z * pc_z) / (gc_z + pc_z)
+    if "gnd_clamp" in curves:
+        return gc_z
+    return pc_z
 
 
 class Component(HasTraits):
@@ -115,10 +140,17 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
     # Chaco plot of ``iv_data``, built on first access; requires the ``gui`` extra.
     plot_iv = Property(Any)
 
-    def __init__(self, subDict):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+    def __init__(self, subDict, name: str = ""):  # pylint: disable=too-many-locals,too-many-statements
         """
         Args:
             subDict (dict): Dictionary of sub-keywords/params.
+
+        Keyword Args:
+            name: The ``[Model]`` name, for log messages.
+                Default: "" (unnamed)
+
+        Raises:
+            LookupError: A required keyword is missing.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -149,31 +181,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             raise LookupError("Missing [Voltage Range]!")
 
         # Infer impedance and/or rise/fall time, as per model type.
-        self._iv_data = None
-        mtype = self._mtype.lower()
-        if mtype in ("output", "i/o"):
-            if "pulldown" not in subDict or "pullup" not in subDict:
-                raise LookupError("Missing I-V curves!")
-            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=("pulldown", "pullup"))
-            curves = self._iv_data.curves
-            self._zout = (curves["pulldown"].impedance(self._vmeas) + curves["pullup"].impedance(self._vmeas)) / 2
-
-            if not self._ramp:
-                raise LookupError("Missing [Ramp]!")
-            ramp = subDict["ramp"]
-            self._slew = (ramp["rising"][0] + ramp["falling"][0]) / 2e9  # (V/ns)
-        elif mtype == "input":
-            self._iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=("gnd_clamp", "power_clamp"))
-            curves = self._iv_data.curves
-            gc_z = curves["gnd_clamp"].impedance(self._vmeas) if "gnd_clamp" in curves else NO_CLAMP_Z
-            pc_z = curves["power_clamp"].impedance(self._vmeas) if "power_clamp" in curves else NO_CLAMP_Z
-            if "gnd_clamp" in curves and "power_clamp" in curves:
-                # Parallel combination, as both clamps are always active.
-                self._zin = (gc_z * pc_z) / (gc_z + pc_z)
-            elif "gnd_clamp" in curves:
-                self._zin = gc_z
-            else:
-                self._zin = pc_z
+        self._iv_data: Optional[IVData] = None
+        self._zout: Optional[float] = None
+        self._slew: Optional[float] = None
+        self._zin: Optional[float] = None
+        self._infer_analog(subDict, name)
 
         # Separate AMI executables by OS.
         def is64(x: AmiExecutable) -> bool:
@@ -218,14 +230,53 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             "c_comp": self._ccomp, "cref": self._cref, "vref": self._vref, "vmeas": self._vmeas,
             "rref": self._rref, "trange": self._trange, "vrange": self._vrange,
         }
-        for name in raw_values:
-            self.add_trait(name, Any())  # Values set below, not as (instance-shared) defaults.
+        for trait_name in raw_values:
+            self.add_trait(trait_name, Any())  # Values set below, not as (instance-shared) defaults.
         self.trait_set(**raw_values)
-        if mtype in ("output", "i/o"):
-            self.add_trait("zout", Float(self._zout))
-            self.add_trait("slew", Float(self._slew))
-        elif mtype == "input":
-            self.add_trait("zin", Float(self._zin))
+        for trait_name, value in (("zout", self._zout), ("slew", self._slew), ("zin", self._zin)):
+            if value is not None:
+                self.add_trait(trait_name, Float(value))
+
+    def _infer_analog(self, subDict: dict, name: str) -> None:
+        "Set ``_iv_data``, ``_zout``, ``_slew`` and ``_zin``, as far as the ``Model_type`` and its data allow."
+        mtype = self._mtype.lower()
+        sides: tuple[IVKeyword, ...] = ()
+        if mtype in _PUSH_PULL_TYPES:
+            sides = ("pulldown", "pullup")
+        elif mtype in _PULLDOWN_ONLY_TYPES:
+            sides = ("pulldown",)
+        elif mtype in _PULLUP_ONLY_TYPES:
+            sides = ("pullup",)
+        if not sides and mtype not in _RECEIVER_TYPES:
+            return
+        strict = mtype in _STRICT_DRIVER_TYPES
+        if strict and any(kw not in subDict for kw in sides):
+            raise LookupError("Missing I-V curves!")
+        if strict and not self._ramp:
+            raise LookupError("Missing [Ramp]!")
+
+        # ``Input`` and the strict drivers fail on an unusable table, as they always have; others skip it (with a warning).
+        required: tuple[IVKeyword, ...] = ()
+        if mtype == "input":
+            required = ("gnd_clamp", "power_clamp")
+        elif strict:
+            required = sides
+        iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=required)
+        curves = iv_data.curves
+        self._iv_data = iv_data if curves else None
+        if sides:
+            missing = [_KEYWORD_NAMES[kw] for kw in sides if kw not in curves]
+            if not self._ramp:
+                missing.append(_KEYWORD_NAMES["ramp"])
+            if missing:
+                logger.warning("[Model] %s (%s) lacks usable %s; its output impedance and/or slew rate are unknown.",
+                               name or "<unnamed>", self._mtype, ", ".join(missing))
+            if all(kw in curves for kw in sides):
+                self._zout = sum(curves[kw].impedance(self._vmeas) for kw in sides) / len(sides)
+            if self._ramp:
+                self._slew = (self._ramp["rising"][0] + self._ramp["falling"][0]) / 2e9  # (V/ns)
+        if mtype in _RECEIVER_TYPES:
+            self._zin = _clamp_impedance(curves, self._vmeas)
 
     def __str__(self):
         res = "Model Type:\t" + self._mtype + "\n"
@@ -269,18 +320,33 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return self._iv_data
 
     @property
-    def zout(self):
-        "The driver impedance."
+    def zout(self) -> Optional[float]:
+        """The driver impedance (Ohms), from the slope of the pull-down/up I-V curves at ``Vmeas``.
+
+        Push-pull types (``Output``, ``3-state``, ``I/O``) average both sides. ``Open_*``/``I/O_open_*``
+        types have one side only (the other is external), so this is that side's impedance.
+
+        ``None`` when the ``Model_type`` has no driver, its I-V data is missing, or it isn't supported yet
+        (``*_ECL``, ``*_diff``).
+        """
         return self._zout
 
     @property
-    def slew(self):
-        "The driver slew rate."
+    def slew(self) -> Optional[float]:
+        """The driver slew rate (V/ns), from ``[Ramp]``.
+
+        ``None`` when the ``Model_type`` has no driver, ``[Ramp]`` is missing, or it isn't supported yet
+        (``*_ECL``, ``*_diff``).
+        """
         return self._slew
 
     @property
-    def zin(self):
-        "The input impedance."
+    def zin(self) -> Optional[float]:
+        """The receiver input impedance (Ohms), from the ``[GND Clamp]``/``[POWER Clamp]`` curves at ``Vmeas``.
+
+        Both clamps act in parallel; a missing one counts as ``NO_CLAMP_Z``. Set for ``Input`` and the
+        ``I/O`` types; ``None`` for other ``Model_type`` s, or ones not supported yet (``*_ECL``, ``*_diff``).
+        """
         return self._zin
 
     @property
