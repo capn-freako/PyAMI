@@ -250,7 +250,15 @@ def test_no_usable_component(tmp_path):
         IBISModel(str(ibis_file))
 
 
-RX_ONLY_COMPONENT = BROKEN_COMPONENT.replace("Broken", "RxOnly").replace("Mystery            no_such_model",
+def test_parse_failure_reports_the_reason(tmp_path):
+    """A file that fails to parse says where, not "no components"."""
+    ibis_file = tmp_path / "broken.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output", "Model_type   Outputt"), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"Couldn't parse IBIS file .*broken\.ibs: .* at line \d+, column \d+"):
+        IBISModel(str(ibis_file))
+
+
+RX_ONLY_COMPONENT =BROKEN_COMPONENT.replace("Broken", "RxOnly").replace("Mystery            no_such_model",
                                                                           "Rx_Q               example_rx")
 
 

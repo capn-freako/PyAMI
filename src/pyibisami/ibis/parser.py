@@ -15,10 +15,11 @@ import re
 
 from functools import reduce
 from typing import Any, Optional, TypeAlias, TypeVar
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Sequence
 
 from parsec import (
     ParseError,
+    Value,
     Parser,
     count,
     eof,
@@ -97,11 +98,24 @@ def word(p: Parser) -> Parser:
     return p << regex(r"\s+")
 
 
+@Parser
+def _line_text(text: Sequence[Any], index: int) -> Value:
+    """The rest of the current line; nothing at the start of a keyword line.
+
+    A ``[`` later in a line is text: keywords start in column 1 (IBIS 8.0 Section 3.2, rule 6).
+    """
+    if (index == 0 or text[index - 1] in "\n\r") and index < len(text) and text[index] == "[":
+        return Value.success(index, "")
+    end = index
+    while end < len(text) and text[end] not in "\n\r":
+        end += 1
+    return Value.success(end, text[index:end])
+
+
 @generate("remainder of line")
 def rest_line() -> GenParser[str]:  # type: ignore
     "Parse remainder of line."
-    chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
-    rslt = "".join(chars)
+    rslt = yield _line_text << ignore  # So that we still function as a lexeme.
     return rslt
 
 
@@ -111,8 +125,8 @@ name: Parser = word(name_only)
 # Pin, signal and model names: any non-blank run (e.g. - ``TX+``, ``DQ<0>``), except a keyword (``[``) or comment (``|``).
 token_only: Parser = regex(r"[^\s\[|][^\s|]*")  # A ``|`` also ends it: a comment may follow at once.
 token: Parser = token_only << regex(r"\s+|(?=\|)")  # Like ``word()``, but a comment may also follow at once.
-# Parameters must begin with a letter in column 1.
-param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
+# Parameters must begin with a letter in column 1; ``=`` may follow without a space (e.g. - ``Vinl=0.4``).
+param_name: Parser = regex(r"^[a-zA-Z]\w*", re.MULTILINE) << regex(r"\s+|(?==)")
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true: Parser = lexeme(string("True")).result(True)
 false: Parser = lexeme(string("False")).result(False)
@@ -336,7 +350,7 @@ def param() -> GenParser[tuple[str, Any]]:
         case "Model_type":
             res = yield model_type
         case _:
-            res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
+            res = yield (((string("=") << regex(r"[ \t]*")) >> (number | rest_line)) | typminmax | name | rest_line)
     logger.debug("%s", res)
     yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
@@ -449,7 +463,8 @@ def model():
 
 
 # [Component]
-rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
+# ``[Pin]`` sub-parameter names are reserved words, so any case (IBIS 8.0 Section 3.2, rule 1).
+rlc = lexeme(regex(r"(?i)[RLC]_pin\b")).parsecmap(lambda s: s[0].upper() + "_pin")
 
 
 @generate("[Manufacturer]")
@@ -479,7 +494,7 @@ def pin(rlcs):
         [nm, sig] = yield count(token, 2)
         mod = yield token_only
         rem_line = yield rest_line
-        rlc_vals = optional(count(number, 3), []).parse(rem_line)
+        rlc_vals = optional(count(number, 3), []).parse(rem_line.strip())  # (Leading space used to hide them.)
         rlc_dict = {}
         if rlcs:
             rlc_dict.update(dict(zip(rlcs, rlc_vals)))
@@ -498,7 +513,7 @@ def pins():
         return m not in ("POWER", "GND", "NC", "CIRCUITCALL")
 
     # Parse the section header.
-    yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
+    yield (lexeme(regex(r"(?i)signal_name\b")) << lexeme(regex(r"(?i)model_name\b")))
     rlcs = yield optional(count(rlc, 3), [])
     prs = yield many1(pin(rlcs))
     prs_filt = list(filter(filt, prs))
@@ -583,6 +598,67 @@ def ibis_file() -> GenParser[Any]:
     return res
 
 
+# Characters ``[Comment Char]`` may select (IBIS 8.0 Section 4, p.32).
+_COMMENT_CHARS = frozenset("!\"#$%&'()*,:;<>?@\\^`{|}~")
+_COMMENT_CHAR_LINE = re.compile(r"\[comment[ _]char\][ \t]*(?:(\S)_char\b)?", re.IGNORECASE)
+_END_LINE = re.compile(r"\[end\]", re.IGNORECASE)
+
+
+def _comment_start(line: str, char: str) -> Optional[int]:
+    "Index of the first ``char`` in ``line`` outside a ``\"...\"`` string; ``None`` if none."
+    in_quote = False
+    for ix, c in enumerate(line):
+        if c == '"' and char != '"':
+            in_quote = not in_quote
+        elif c == char and not in_quote:
+            return ix
+    return None
+
+
+def _preprocess(text: str) -> tuple[str, list[str]]:
+    """
+    Apply what the grammar doesn't: ``[Comment Char]`` changes, and text after ``[End]``.
+
+    Args:
+        text: The IBIS file contents.
+
+    Returns:
+        The text to parse (line and column positions unchanged), and any warnings.
+
+    Notes:
+        1. ``[Comment Char]`` (IBIS 8.0 Section 3.2, rule 5, p.19; Section 4, p.32): from the line after it,
+            its character starts a comment; it may change several times. Such comments are cut off here
+            (outside ``"..."`` strings). Known limit: after a change, the grammar still reads ``|`` as a comment.
+        2. Anything after the last ``[End]`` line is dropped, with a warning (a design decision: the spec says
+            ``[End]`` ends the file, Section 4, p.34).
+    """
+    warnings: list[str] = []
+    lines = text.splitlines(keepends=True)
+    if any(_COMMENT_CHAR_LINE.match(line) for line in lines):  # Else, the fast path.
+        char = "|"
+        for n, line in enumerate(lines):
+            body = line.rstrip("\r\n")
+            if char != "|":
+                cut = _comment_start(body, char)
+                if cut is not None:
+                    lines[n] = body[:cut] + line[len(body):]
+            match = _COMMENT_CHAR_LINE.match(line)
+            if match:
+                if match.group(1) in _COMMENT_CHARS:
+                    char = match.group(1)
+                else:
+                    warnings.append(
+                        f"Line {n + 1}: [Comment Char] needs one of {''.join(sorted(_COMMENT_CHARS))} followed by "
+                        f"'_char'; got '{body.strip()}'; keeping '{char}' (IBIS 8.0 Section 4, p.32).")
+    ends = [n for n, line in enumerate(lines) if _END_LINE.match(line)]
+    if ends:
+        tail = [n for n in range(ends[-1] + 1, len(lines)) if re.sub(r"\|.*", "", lines[n]).strip()]
+        if tail:
+            warnings.append(f"Line {tail[0] + 1}: text after [End] ignored (IBIS 8.0 Section 4, p.34).")
+            lines = lines[:ends[-1] + 1]
+    return "".join(lines), warnings
+
+
 def parse_ibis_file(
     ibis_file_contents_str: str,
 ) -> tuple[str, dict[str, Any]]:
@@ -602,23 +678,27 @@ def parse_ibis_file(
     Returns:
         A pair containing
 
-        - A message describing the nature of any parse failure that occured (``"Success!"`` otherwise).
+        - A message describing the nature of any parse failure that occured, with a 1-based line and column
+          (``"Success!"`` otherwise).
         - A dictionary containing keyword definitions (empty upon failure). Its ``"warnings"`` entry lists the
-          IBIS spec rules broken that didn't stop the file loading (see ``Model.spec_warnings``); each is also
-          logged at ``WARNING``.
+          IBIS spec rules broken that didn't stop the file loading (see ``Model.spec_warnings`` and ``_preprocess()``);
+          each is also logged at ``WARNING``.
     """
 
+    text, warnings = _preprocess(ibis_file_contents_str)
     try:
-        nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
+        nodes = ibis_file.parse_strict(text)  # Parse must consume the entire file.
         logger.debug("Parsed nodes:\n%s", nodes)
     except ParseError as pe:
-        return str(pe), {}
+        for warning in warnings:
+            logger.warning("%s", warning)
+        line, col = ParseError.loc_info(pe.text, pe.index)
+        return f"expected: {pe.expected} at line {line + 1}, column {col + 1}", {}
 
     kw_dict = {}
     components = {}
     models = {}
     model_selectors = {}
-    warnings = []
     for kw, val in nodes:
         if kw == "model":
             models.update(val)

@@ -283,10 +283,9 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
         self._file_rev: str = model_dict.get("file_rev", "(n/a)")
         self._date: str = model_dict.get("date", "(n/a)")
-        if err_str == "Success!":
-            logger.debug("IBIS parsing: %s", err_str)
-        else:
-            logger.warning("IBIS parsing errors/warnings in %s:\n%s", ibis_file_name, err_str)
+        if err_str != "Success!":
+            raise ValueError(f"Couldn't parse IBIS file {ibis_file_name}: {err_str}")
+        logger.debug("IBIS parsing: %s", err_str)
         if "components" not in model_dict or not model_dict["components"]:
             logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
             raise ValueError("This IBIS model has no components!")
