@@ -13,8 +13,6 @@ from typing             import Any, TypeAlias, TypeVar
 import numpy        as np
 import numpy.typing as npt  # type: ignore
 
-from scipy.linalg       import convolution_matrix, lstsq
-
 Real = TypeVar("Real", float, float)
 Comp = TypeVar("Comp", complex, complex)
 Rvec: TypeAlias = npt.NDArray["Real"]
@@ -42,8 +40,15 @@ def deconv_same(y: Rvec, x: Rvec) -> Rvec:
     Returns:
         h: filter impulse response.
     """
-    A = convolution_matrix(x, len(y), "same")
-    h, _, _, _ = lstsq(A, y)
+    # Build the "same"-mode convolution matrix (equivalent to `scipy.linalg.convolution_matrix(x, n, "same")`):
+    # the central `max(m, n)` rows of the full `(m + n - 1) x n` Toeplitz matrix, whose `[i, j]` element is `x[i - j]`.
+    x = np.asarray(x)
+    m = len(x)
+    n = len(y)
+    tb = (min(m, n) - 1) // 2
+    k = np.arange(tb, tb + max(m, n))[:, None] - np.arange(n)[None, :]
+    A = np.where((k >= 0) & (k < m), x[np.clip(k, 0, m - 1)], 0)
+    h, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
     return h
 
 
