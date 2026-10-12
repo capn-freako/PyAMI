@@ -306,11 +306,17 @@ def test_model_types_changed_after_loading(tmp_path):
     ibis.model_types = RX_MODEL_TYPES  # I/O pin still offered: keep it.
     assert ibis.comps == ["RxOnly", "Mixed"] and ibis.comp == "Mixed" and ibis.pin == "6(IO_P)"
 
-    ibis.model_types = {"Series"}  # Nothing to offer: keep the selection, and say so.
+    ibis.model_types = {"Series"}  # Nothing to offer: undo the change, keep the selection, and say so.
     assert ibis.comps == ["RxOnly", "Mixed"] and ibis.pin == "6(IO_P)" and ibis.mod == "example_io"
     assert "No component" in fired[-1]
+    assert ibis.model_types == RX_MODEL_TYPES
+    ibis.pin = "5(Rx_P)"  # Later selections still work (they used to hit the empty filter).
+    assert ibis.mod == "example_rx"
+    ibis.comp = "RxOnly"
+    assert ibis.pins == ["1(Rx_Q)"] and ibis.mod == "example_rx"
 
     ibis.model_types = None
+    ibis.comp = "Mixed"
     assert ibis.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
 
 

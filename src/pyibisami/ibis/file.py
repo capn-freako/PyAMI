@@ -474,11 +474,13 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self.models = self._selectable_model_names(mname)
         self.mod = self.models[0]
 
-    def _model_types_changed(self):
-        "Re-filter the selections, keeping each one that's still offered."
+    def _model_types_changed(self, old, new):  # pylint: disable=unused-argument
+        "Re-filter the selections, keeping each one that's still offered; undo a change that leaves nothing."
         comps = self._selectable_components()
         if not comps:
-            self._notify(f"{self._no_selectable_component()} Keeping the previous selection.")
+            msg = self._no_selectable_component()
+            self.trait_setq(model_types=old)  # Quietly: the lists and selection still match ``old``.
+            self._notify(f"{msg} Keeping the previous model_types and selection.")
             return
         (comp, pin, mod) = (self.comp, self.pin, self.mod)  # type: ignore
         self.comps = comps
