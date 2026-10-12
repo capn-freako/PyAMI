@@ -35,6 +35,14 @@ def test_impedance():
     assert IVCurve.from_table("gnd_clamp", CLAMP).impedance(0.5) == OPEN_CIRCUIT_Z
 
 
+def test_impedance_at_table_edges():
+    """The first table voltage uses the first segment (it used to wrap to the last); off the table is an error."""
+    curve = IVCurve.from_table("pulldown", PULLDOWN)
+    assert curve.impedance(-1.8) == pytest.approx(0.18)  # 1.8 V / 10 A.
+    with pytest.raises(ValueError, match="outside the table"):
+        curve.impedance(4.0)
+
+
 def test_ground_referenced():
     pullup = IVCurve.from_table("pullup", PULLUP).ground_referenced(1.8)
     np.testing.assert_allclose(pullup.v, [3.6, 1.8, 0.0, -1.8])
@@ -152,6 +160,23 @@ def test_missing_driver_data_warns_without_failing(caplog):
     assert (model.zout, model.slew, model.zin, model.iv_data) == (None, None, None, None)
     assert len(caplog.records) == 1
     assert all(s in caplog.text for s in ("oe_buf", "[Pulldown]", "[Pullup]", "[Ramp]"))
+
+
+def test_tables_that_dont_reach_vmeas(caplog):
+    """A table not covering Vmeas loads: an off clamp counts as absent; an unknown ``zout`` is ``None`` (warning).
+
+    E.g. - a ``[POWER Clamp]`` given only for -Vcc to 0 V (where it conducts), with Vmeas = 0.5 V.
+    """
+    from pyibisami.ibis.model import NO_CLAMP_Z
+
+    power_clamp_on_only = [(-1.8, [0.1, 0.1, 0.1]), (0.0, [0.0, 0.0, 0.0])]
+    model = _model("I/O", pulldown=PULLDOWN, pullup=PULLUP, ramp=RAMP, gnd_clamp=CLAMP_50,
+                   power_clamp=power_clamp_on_only)
+    assert model.zin == pytest.approx(50.0 * NO_CLAMP_Z / (50.0 + NO_CLAMP_Z))
+    with caplog.at_level("WARNING", logger="pyibisami.ibis.model"):
+        model = _model("Open_drain", name="short_pd", pulldown=PULLDOWN[:2], ramp=RAMP)  # Table ends at 0 V.
+    assert model.zout is None and model.slew == pytest.approx(2.0)
+    assert "short_pd" in caplog.text and "outside the table" in caplog.text
 
 
 def test_output_still_requires_driver_data():

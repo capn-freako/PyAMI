@@ -60,9 +60,19 @@ _VINL_VINH_TYPES = {  # IBIS 8.0 Section 6.1, Table 1, p.62.
 
 
 def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]) -> float:
-    "Input impedance of the clamps (in parallel, as both are always active); ``NO_CLAMP_Z`` for a missing one."
-    gc_z = curves["gnd_clamp"].impedance(vmeas) if "gnd_clamp" in curves else NO_CLAMP_Z
-    pc_z = curves["power_clamp"].impedance(vmeas) if "power_clamp" in curves else NO_CLAMP_Z
+    """Input impedance of the clamps (in parallel, as both are always active).
+
+    ``NO_CLAMP_Z`` for a missing clamp, or one whose table doesn't reach ``vmeas``: clamp tables often cover only the
+    region where the clamp conducts (e.g. - a ``[POWER Clamp]`` from -Vcc to 0 V), so it's off there.
+    """
+    def clamp_z(kw: IVKeyword) -> float:
+        try:
+            return curves[kw].impedance(vmeas) if kw in curves else NO_CLAMP_Z
+        except ValueError:
+            return NO_CLAMP_Z
+
+    gc_z = clamp_z("gnd_clamp")
+    pc_z = clamp_z("power_clamp")
     if "gnd_clamp" in curves and "power_clamp" in curves:
         return (gc_z * pc_z) / (gc_z + pc_z)
     if "gnd_clamp" in curves:
@@ -282,7 +292,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 logger.warning("[Model] %s (%s) lacks usable %s; its output impedance and/or slew rate are unknown.",
                                name or "<unnamed>", self._mtype, ", ".join(missing))
             if all(kw in curves for kw in sides):
-                self._zout = sum(curves[kw].impedance(self._vmeas) for kw in sides) / len(sides)
+                try:
+                    self._zout = sum(curves[kw].impedance(self._vmeas) for kw in sides) / len(sides)
+                except ValueError as err:  # Vmeas off the table: no data there.
+                    logger.warning("[Model] %s: %s Its output impedance is unknown.", name or "<unnamed>", err)
             if self._ramp:
                 self._slew = (self._ramp["rising"][0] + self._ramp["falling"][0]) / 2e9  # (V/ns)
         if mtype in _RECEIVER_TYPES:

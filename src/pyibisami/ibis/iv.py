@@ -91,12 +91,15 @@ class IVCurve:
 
         Returns:
             Impedance (Ohms); ``OPEN_CIRCUIT_Z`` when the curve is flat there.
+
+        Raises:
+            ValueError: If ``vmeas`` is outside the table's voltages (the table says nothing there).
         """
         vs, ivals = self.v, self.current(corner)
         vthresh = vmeas if vmeas else max(vs) / 2
-        # ToDo: Guard ``ix == 0`` (first table voltage already >= ``vthresh``);
-        #       ``ix - 1`` currently wraps around to the last table row.
-        ix = int(np.where(vs >= vthresh)[0][0])
+        if not min(vs) <= vthresh <= max(vs):
+            raise ValueError(f"[{self.keyword}]: {vthresh:g} V is outside the table ({min(vs):g} to {max(vs):g} V).")
+        ix = max(int(np.where(vs >= vthresh)[0][0]), 1)  # At the first table voltage, use the first segment.
         di = ivals[ix] - ivals[ix - 1]
         if di == 0:
             return OPEN_CIRCUIT_Z
