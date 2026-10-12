@@ -31,7 +31,7 @@ _FORMAT_TYPES = {
 _NO_DEFAULT_FORMATS = ("Table", "Gaussian", "Dual-Dirac", "DjRj")  # IBIS 8.0 p.245.
 # Limit on the values an Increment or Steps parameter may expand to; a larger one is skipped, with a warning.
 # Not a spec rule (the spec sets no limit): a guard against e.g. `(Increment 0 0 1 1e-12)`. 4096 covers a 12-bit
-# code setting; the largest value set in 737 vendor/example .ami files is 255 (an 8-bit Integer Range).
+# code setting, far more than real models use (an 8-bit setting has 256 values).
 MAX_DISCRETE_VALUES = 4096
 
 
