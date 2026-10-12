@@ -114,9 +114,9 @@ def _line_text(text: Sequence[Any], index: int) -> Value:
 
 @generate("remainder of line")
 def rest_line() -> GenParser[str]:  # type: ignore
-    "Parse remainder of line."
+    "Parse remainder of line, without a trailing ``|`` comment or whitespace."
     rslt = yield _line_text << ignore  # So that we still function as a lexeme.
-    return rslt
+    return rslt.split("|", 1)[0].rstrip()
 
 
 skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
@@ -494,10 +494,14 @@ def pin(rlcs):
         [nm, sig] = yield count(token, 2)
         mod = yield token_only
         rem_line = yield rest_line
-        rlc_vals = optional(count(number, 3), []).parse(rem_line.strip())  # (Leading space used to hide them.)
         rlc_dict = {}
         if rlcs:
-            rlc_dict.update(dict(zip(rlcs, rlc_vals)))
+            # Each column is a number or ``NA`` (use the ``[Package]`` default; IBIS 8.0 Section 5, p.36).
+            try:
+                vals = [None if tok.upper() == "NA" else number.parse(tok) for tok in rem_line.split()[:3]]
+            except ParseError:
+                vals = []
+            rlc_dict.update({rlc_name: val for rlc_name, val in zip(rlcs, vals) if val is not None})
         return ((nm + "(" + sig + ")"), (mod, rlc_dict))
 
     return fn
@@ -629,8 +633,8 @@ def _preprocess(text: str) -> tuple[str, list[str]]:
         1. ``[Comment Char]`` (IBIS 8.0 Section 3.2, rule 5, p.19; Section 4, p.32): from the line after it,
             its character starts a comment; it may change several times. Such comments are cut off here
             (outside ``"..."`` strings). Known limit: after a change, the grammar still reads ``|`` as a comment.
-        2. Anything after the last ``[End]`` line is dropped, with a warning (a design decision: the spec says
-            ``[End]`` ends the file, Section 4, p.34).
+        2. Anything after the first ``[End]`` line is dropped, with a warning: the spec says ``[End]`` ends the
+            file (Section 4, p.34).
     """
     warnings: list[str] = []
     lines = text.splitlines(keepends=True)
@@ -652,10 +656,10 @@ def _preprocess(text: str) -> tuple[str, list[str]]:
                         f"'_char'; got '{body.strip()}'; keeping '{char}' (IBIS 8.0 Section 4, p.32).")
     ends = [n for n, line in enumerate(lines) if _END_LINE.match(line)]
     if ends:
-        tail = [n for n in range(ends[-1] + 1, len(lines)) if re.sub(r"\|.*", "", lines[n]).strip()]
+        tail = [n for n in range(ends[0] + 1, len(lines)) if re.sub(r"\|.*", "", lines[n]).strip()]
         if tail:
             warnings.append(f"Line {tail[0] + 1}: text after [End] ignored (IBIS 8.0 Section 4, p.34).")
-            lines = lines[:ends[-1] + 1]
+            lines = lines[:ends[0] + 1]
     return "".join(lines), warnings
 
 

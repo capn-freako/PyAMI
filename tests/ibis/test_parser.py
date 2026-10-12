@@ -176,3 +176,29 @@ def test_parse_failure_position_is_one_based(ibis_test_file):
     status, ibis_dict = _parse_edited(ibis_test_file, ("[File Rev]   v0.1", "[File Rev]   v0.1 @bad"))
     assert ibis_dict == {}
     assert status.endswith(f"at line {line}, column {len('[File Rev]   v0.1 ') + 1}")
+
+
+def test_trailing_comment_not_in_names(ibis_test_file):
+    """A ``|`` comment after a ``[Component]`` name or ``[Date]`` isn't part of the value."""
+    status, ibis_dict = _parse_edited(ibis_test_file,
+                                      ("[Component]    Example_Tx", "[Component]    Example_Tx   | PECL input"),
+                                      ("[Date]       2019-02-10", "[Date]       2019-02-10  | a note"))
+    assert status == "Success!"
+    assert list(ibis_dict["components"]) == ["Example_Tx"]
+    assert ibis_dict["date"] == "2019-02-10"
+
+
+def test_pin_rlc_na_column(ibis_test_file):
+    """``NA`` in one ``R_pin``/``L_pin``/``C_pin`` column (IBIS 8.0 Section 5, p.36) keeps the other values."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("1p     Tx_1_P             example_tx",
+                                                       "1p     Tx_1_P             example_tx   55m  NA  0.2p"))
+    assert status == "Success!"
+    _, rlcs = ibis_dict["components"]["Example_Tx"].pins["1p(Tx_1_P)"]
+    assert rlcs == pytest.approx({"R_pin": 0.055, "C_pin": 0.2e-12})  # ``L_pin`` falls back to ``[Package]``.
+
+
+def test_file_ends_at_first_end(ibis_test_file):
+    """``[End]`` ends the file (IBIS 8.0 Section 4, p.34): text and a second ``[End]`` after it are ignored."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("[END]\n", "[END]\njunk\n[End]\n"))
+    assert status == "Success!"
+    assert len(ibis_dict["warnings"]) == 1 and "after [End]" in ibis_dict["warnings"][0]
