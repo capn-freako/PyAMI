@@ -482,14 +482,23 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             self.trait_setq(model_types=old)  # Quietly: the lists and selection still match ``old``.
             self._notify(f"{msg} Keeping the previous model_types and selection.")
             return
+        # A pin is kept only with its component, and a model only with its pin. (The handlers are called
+        # explicitly: shrinking an ``Enum``'s list can change its value without a change event.)
         (comp, pin, mod) = (self.comp, self.pin, self.mod)  # type: ignore
         self.comps = comps
-        self.comp = comp if comp in comps else comps[0]
+        if comp not in comps:
+            self.comp = comps[0]
+            self._comp_changed(self.comp)  # Its first offered pin and model.
+            return
         self.pins = self._selectable_pins()
-        self.pin = pin if pin in self.pins else self.pins[0]
-        (mname, _) = self.comp_.pins[self.pin]
+        if pin not in self.pins:
+            self.pin = self.pins[0]
+            self._pin_changed(self.pin)  # Its first offered model.
+            return
+        (mname, _) = self.comp_.pins[pin]
         self.models = self._selectable_model_names(mname)
-        self.mod = mod if mod in self.models else self.models[0]
+        if mod not in self.models:
+            self.mod = self.models[0]
 
     def _mod_changed(self, new_value):
         model = self._models[new_value]

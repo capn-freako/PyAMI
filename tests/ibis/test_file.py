@@ -324,6 +324,27 @@ SAME_PIN_COMPONENT = BROKEN_COMPONENT.replace("Broken", "Second").replace("1    
                                                                           "4      Tx_P               example_rx")
 
 
+def test_model_types_change_drops_the_component(tmp_path):
+    """A dropped component moves to the first offered one *and its first pin*, even if a pin of the same name exists."""
+    comp_a = BROKEN_COMPONENT.replace("Broken", "A").replace("1      Mystery            no_such_model",
+                                                             "1      S                  example_rx\n"
+                                                             "2      T                  example_tx")
+    comp_b = BROKEN_COMPONENT.replace("Broken", "B").replace("1      Mystery            no_such_model",
+                                                             "1      S                  example_term\n"
+                                                             "2      T                  example_term")
+    ibis_file = tmp_path / "two_comps.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", comp_a + comp_b + "[Component]    Mixed"),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    ibis.comp = "B"
+    ibis.pin = "2(T)"
+    fired = []
+    ibis.observe(lambda event: fired.append(event.new), "alert")
+    ibis.model_types = {"Input", "Output"}
+    assert (ibis.comp, ibis.pin, ibis.mod) == ("A", "1(S)", "example_rx")
+    assert len(fired) == 1  # One move, one notice.
+
+
 def test_component_change_with_same_pin_name(tmp_path):
     """A new component whose first pin has the current pin's name still gets its own model."""
     ibis_file = tmp_path / "same_pin.ibs"
