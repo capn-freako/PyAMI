@@ -15,7 +15,6 @@ dependencies = [
     "empy==4.2.1",
     "numpy>=1.26",
     "parsec==3.17",
-    "scipy>=1.15",
     "traits==7.1.0",
 ]
 keywords=["ibis-ami"]
@@ -44,6 +43,7 @@ gui = [
 report = [
     "matplotlib>=3.6.1",
     "reportlab==5.0.0",
+    "scipy>=1.15",
 ]
 notebook = [
     "pyibis-ami[report]",  # The Tester notebook plots with `pyibisami.report.plot`.

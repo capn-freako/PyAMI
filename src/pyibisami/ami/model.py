@@ -598,6 +598,8 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         ):
             pass
         else:
+            # Deconvolve the real channel, rather than re-running `AMI_Init()` with an ideal one:
+            # some models adapt their filter to the channel, and that matched response is what we want.
             h_model = deconv_same(out_imp, chnl_imp)
             rslt[IMP_RESP_INIT] = np.roll(h_model, -len(h_model) // 2 + 3 * nspui)
 
