@@ -14,7 +14,7 @@ BLOCKER = textwrap.dedent("""
     BLOCKED = {
         "chaco", "enable", "kiwisolver", "pyface", "traitsui",  # gui
         "PyQt5", "PyQt6", "PySide6",                            # Qt bindings
-        "matplotlib", "reportlab",                              # report
+        "matplotlib", "reportlab", "scipy",                     # report
         "jupyter", "nbformat", "papermill",                     # notebook
     }
 
