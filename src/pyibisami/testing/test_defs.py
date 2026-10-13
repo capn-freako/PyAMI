@@ -16,14 +16,15 @@ from typing             import Any, NewType, Optional
 from collections.abc    import Generator
 
 import numpy as np
-from scipy.interpolate  import interp1d
-from scipy.signal       import butter, freqs, lfilter
 
 from ..common           import Rvec, raised_cosine
 from ..ami.parser       import AMIParamConfigurator, ParamName
 from ..ibis.file        import IBISModel
 
 logger = logging.getLogger(__name__)
+
+# `lossy_channel()` & `reflective_channel()` need SciPy, which comes with the `report` extra.
+SCIPY_HINT = "This channel model requires SciPy, from the `report` extra: pip install 'pyibis-ami[report]'"
 
 TestSweeper = NewType('TestSweeper', tuple[Optional[str], list[type["TestSweep"]]])
 
@@ -177,6 +178,11 @@ def lossy_channel(
         The perfect channel response.
     """
 
+    try:
+        from scipy.signal import butter, lfilter  # pylint: disable=import-outside-toplevel
+    except ImportError as err:
+        raise ImportError(SCIPY_HINT) from err
+
     bit_rate = 1 / ts / osf
     b, a = butter(1, bw * bit_rate, fs=1 / ts)
     return lfilter(
@@ -203,6 +209,12 @@ def reflective_channel(
     Returns:
         The perfect channel response.
     """
+
+    try:
+        from scipy.interpolate import interp1d  # pylint: disable=import-outside-toplevel
+        from scipy.signal import butter, freqs  # pylint: disable=import-outside-toplevel
+    except ImportError as err:
+        raise ImportError(SCIPY_HINT) from err
 
     bit_rate = 1 / ts / osf
     t = np.arange(nbits * osf) * ts
