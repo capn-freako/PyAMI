@@ -659,8 +659,9 @@ def proc_branch(  # pylint: disable=too-many-return-statements
         elif not all(isinstance(tag, tuple) for tag in param_tags):
             return skip(param_name, f"Expected parameter tags or subparameters; got {param_tags}")
         elif (items := [tag for tag in param_tags if tag[0] != "Description"]) and all(
-                all(isinstance(v, str) for v in tag[1]) for tag in items):
-            # Every item is tag-like (only values): a parameter missing its ``Usage`` and ``Type`` tags
+                tag[1] and all(isinstance(v, str) for v in tag[1]) for tag in items):
+            # Every item is tag-like (one or more values, no nodes; an empty ``(x )`` is an empty node, skipped
+            # on its own below): a parameter missing its ``Usage`` and ``Type`` tags
             # (e.g. - written in lower case; tags are case sensitive), not a branch of subparameters.
             return skip(param_name, "Missing 'Usage' and 'Type' tags (tag names are case sensitive).")
         else:

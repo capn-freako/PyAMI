@@ -504,6 +504,12 @@ class TestFormats:
         assert ami.ami_parsing_errors == []
         assert ami.input_ami_params == {"root_name": "my_model", "Corner": "TT", "ctle": {"Steps": 3, "gain": 0.5}}
 
+    def test_empty_child_node_is_skipped_alone(self):
+        """An empty node ``(x )`` is skipped on its own; it doesn't make its group look like one bad parameter."""
+        ami = ami_parser.AMIParamConfigurator(_ami_file("(g (x )) (good (Usage In) (Type Integer) (Value 1))"))
+        assert ami.input_ami_params == {"root_name": "my_model", "g": {}, "good": 1}
+        assert ami.ami_parsing_errors == ["Skipped parameter Model_Specific.g.x: No tags or subparameters."]
+
     def test_boolean_table_rows(self):
         """Table rows may start with a Boolean column (Table 18)."""
         ami = ami_parser.AMIParamConfigurator(_ami_file("(t (Usage In) (Type Boolean Integer) (Table (True 1) (False 2)))"))
