@@ -535,3 +535,26 @@ def test_gui_view_items_match_traits(config, request):
     ami = ami_parser.AMIParamConfigurator(request.getfixturevalue(config))
     view = ami.default_traits_view()
     assert sorted(item_names(view.content.content)) == sorted(ami._param_trait_names)
+
+
+def test_boolean_list_without_default_starts_at_first_value():
+    """With no ``Default``, a List starts at its first value (IBIS 8.0 p.241); a Boolean List used to start at False."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file("(bl (Usage In) (Type Boolean) (List True False))"))
+    assert ami.input_ami_params["bl"] is True
+
+
+def test_pdefault_is_typed():
+    """``pdefault`` is the typed Default when it is used, for every Format that takes one; ``None`` when unusable."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file(
+        "(r (Usage In) (Type Float) (Range 0.5 0 1) (Default 0.7)) "
+        "(bad (Usage In) (Type Float) (Range 0.5 0 1) (Default 2)) "
+        "(d (Usage Info) (Type Boolean) (Default False)) "
+        "(l (Usage In) (Type Integer) (List 0 1 2) (Default 2))"))
+    params = ami.ami_param_defs["Model_Specific"]
+    assert params["r"].pdefault == 0.7 and params["bad"].pdefault is None
+    assert params["d"].pdefault is False and params["l"].pdefault == 2
+
+
+def test_description_without_quotes():
+    ami = ami_parser.AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (Value 1) (Description "Tap weight"))'))
+    assert ami.ami_param_defs["Model_Specific"]["x"].pdescription == "Tap weight"

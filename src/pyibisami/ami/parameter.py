@@ -151,7 +151,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
     # pdescription
     def _set_description(self, values):
         """Process *Description* tag."""
-        self._description = values[0]
+        self._description = values[0].strip('"')
 
     def _get_description(self):
         return self._description
@@ -305,8 +305,10 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         elif (param_format == "List") and (param_type == "Boolean"):
             if param_default:
                 self._value = param_default
+            elif self._format_rem:
+                self._value = self._format_rem[0]  # No Default: the first List value (IBIS 8.0 p.241).
             else:
-                self._value = "False"
+                raise AMIParamError("Missing List values.\n")
             param_format = "Value"
             self._format_rem = [self._value]
         self._format = param_format
@@ -328,6 +330,8 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         vals = self._format_rem
         if param_format == "Value":
             self._value = _read_value(param_type, vals[0])
+            if self._default is not None:
+                self._default = self._typed_default(param_type)
         elif param_format in ("Range", "Increment", "Steps"):
             self._init_range(param_format, param_type, vals)
         elif param_format == "List":
@@ -385,6 +389,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             self._values = ([round(v) for v in values] if param_type == "Integer"
                             else [float(f"{v:.12g}") for v in values])  # Drop float noise (0.30000000000000004).
         default = self._typed_default(param_type)
+        self._default = None  # Typed, and kept only when it is used (as for List).
         if default is None:
             return
         if self._values is not None and default not in self._values:
@@ -392,7 +397,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         elif not pmin <= default <= pmax:
             self._msg += f"Default {default} is outside the {param_format} [{pmin}, {pmax}]; using {typ}.\n"
         else:
-            self._value = default
+            self._value = self._default = default
 
     def _init_table(self, items: list) -> None:
         """Complete a Table parameter: optional ``Labels``, then one or more rows of equal length (IBIS 8.0 p.242)."""
