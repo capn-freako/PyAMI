@@ -479,7 +479,7 @@ class TestFormats:
     def test_bad_parameter_is_skipped(self, param, reason):
         """Only the bad parameter is dropped, with a warning naming it; the rest of the file loads."""
         ami = ami_parser.AMIParamConfigurator(_ami_file(f"(grp (bad {param})) (good (Usage In) (Type Integer) (Value 1))"))
-        assert ami.input_ami_params == {"root_name": "my_model", "grp": {}, "good": 1}
+        assert ami.input_ami_params == {"root_name": "my_model", "good": 1}  # The emptied group isn't sent.
         assert len(ami.ami_parsing_errors) == 1
         assert ami.ami_parsing_errors[0].startswith("Skipped parameter Model_Specific.grp.bad: ")
         assert reason in ami.ami_parsing_errors[0]
@@ -507,7 +507,7 @@ class TestFormats:
     def test_empty_child_node_is_skipped_alone(self):
         """An empty node ``(x )`` is skipped on its own; it doesn't make its group look like one bad parameter."""
         ami = ami_parser.AMIParamConfigurator(_ami_file("(g (x )) (good (Usage In) (Type Integer) (Value 1))"))
-        assert ami.input_ami_params == {"root_name": "my_model", "g": {}, "good": 1}
+        assert ami.input_ami_params == {"root_name": "my_model", "good": 1}  # Nor its emptied group.
         assert ami.ami_parsing_errors == ["Skipped parameter Model_Specific.g.x: No tags or subparameters."]
 
     def test_boolean_table_rows(self):
@@ -558,3 +558,15 @@ def test_pdefault_is_typed():
 def test_description_without_quotes():
     ami = ami_parser.AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (Value 1) (Description "Tap weight"))'))
     assert ami.ami_param_defs["Model_Specific"]["x"].pdescription == "Tap weight"
+
+
+def test_empty_groups_not_sent():
+    """Only In/InOut leaves (and the root name) go into ``AMI_parameters_in`` (IBIS 8.0 Section 10.3.6, p.246-247)."""
+    ami = ami_parser.AMIParamConfigurator(_ami_file(
+        '(info_only (Dependency (x (Usage Info) (Type Float) (Value 1)))) '
+        '(outer (inner (y (Usage Out) (Type Float) (Value 2))) (Description "nothing sent")) '
+        "(kept (z (Usage In) (Type Integer) (Value 3)) (w (Usage Info) (Type Integer) (Value 4)))"))
+    assert ami.input_ami_params == {"root_name": "my_model", "kept": {"z": 3}}
+    assert "info_only" not in ami_model.ami_params_string(ami.input_ami_params)
+    assert ami_parser.AMIParamConfigurator(_ami_file("(g (x (Usage Info) (Type Float) (Value 1)))")).input_ami_params \
+        == {"root_name": "my_model"}  # The root name stays, even with nothing else to send.

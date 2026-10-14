@@ -414,7 +414,8 @@ class AMIParamConfigurator(HasTraits):
             subs: ParamValues = {}
             for sname in param:
                 subs.update(self.input_ami_param(param, sname, prefix=tname + "_"))  # type: ignore
-            res[pname] = subs
+            if subs:  # A group with nothing to send is left out (IBIS 8.0 Section 10.3.6, p.246).
+                res[pname] = subs
         return res
 
     @property
