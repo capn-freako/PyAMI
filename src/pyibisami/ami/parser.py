@@ -785,8 +785,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
             description = str(tmp_params)
         else:
             log_warning(f"Unrecognized group with label, '{label}', found in parameter definition string! "
-                        "Only Reserved_Parameters, Model_Specific and Description may be at the top level "
-                        "(IBIS 8.0 Section 10.3.2, p.236).")
+                        "Only Reserved_Parameters, Model_Specific and Description may be at the top level.")
 
     leaves = (_walk_params(cast(Parameters, reserved_params_dict), ["Reserved_Parameters"])
               + _walk_params(model_specific_dict, ["Model_Specific"]))  # noqa: W503
@@ -799,8 +798,7 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
     is_5_1_or_later = version_match is not None and (int(version_match[1]), int(version_match[2])) >= (5, 1)
     labels = list(params.keys())
     if is_5_1_or_later and model_spec_found and labels.index("Model_Specific") < labels.index("Reserved_Parameters"):
-        log_warning("For AMI_Version 5.1 and later, Reserved_Parameters must come before Model_Specific "
-                    "(IBIS 8.0 Section 10.3.2, p.237).")
+        log_warning("For AMI_Version 5.1 and later, Reserved_Parameters must come before Model_Specific.")
 
     if not reserved_found:
         log_error("Reserved parameters section not found! It is required.")
