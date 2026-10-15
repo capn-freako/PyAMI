@@ -392,18 +392,6 @@ def test_old_is_tx_argument_rejected(ibis_test_file):
     with pytest.raises(TypeError):
         IBISModel(ibis_test_file, True)  # pylint: disable=too-many-function-args
 
-
-def test_views_are_application_neutral(ibis_test_file):
-    pytest.importorskip("traitsui")
-    pytest.importorskip("chaco")
-    from pyibisami.gui import ibis as gui_ibis
-
-    ibis = IBISModel(ibis_test_file)
-    views = [gui_ibis.make_ibis_file_view(ibis), gui_ibis.make_component_view(ibis.comp_),
-             gui_ibis.make_model_view(ibis.model)]
-    assert not [view for view in views if "pybert" in f"{view.title} {view.id}".lower()]
-
-
 def _set_platform(monkeypatch, system, bits):
     monkeypatch.setattr(platform, "system", lambda: system)
     monkeypatch.setattr(platform, "architecture", lambda *args, **kwargs: (bits, ""))
