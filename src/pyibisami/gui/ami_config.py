@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING
 from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
-from ..ami.parameter import AMIParameter
+from ..ami.parameter import FIXED_FORMATS, AMIParameter
+from ..ami.parser import trait_name_part
 
 if TYPE_CHECKING:
     from ..ami.parser import AMIParamConfigurator, ModelSpecificDict, Parameters
@@ -74,11 +75,11 @@ def make_gui(params: ModelSpecificDict) -> Group:
         if len(pnames_in_group) > 1:
             _gui_items: list[Item | Group] = []
             for pname in pnames_in_group:
-                _gui_items.extend(make_gui_items(pname, params[pname]))
+                _gui_items.extend(make_gui_items(trait_name_part(pname), params[pname]))
             gui_items.append(VGroup(*_gui_items, label=group_name, show_border=True))
         else:
             pname = pnames_in_group[0]
-            gui_items.extend(make_gui_items(pname, params[pname]))
+            gui_items.extend(make_gui_items(trait_name_part(pname), params[pname]))
 
     # Finally, split into two rows if necessary.
     if len(gui_items) > MAX_ITEMS_PER_ROW:
@@ -106,7 +107,7 @@ def make_gui_items(pname: str, param: AMIParameter | Parameters) -> list[Item | 
     """
 
     if isinstance(param, AMIParameter):
-        if param.pusage not in ("In", "InOut"):
+        if param.pusage not in ("In", "InOut") or param.pformat in FIXED_FORMATS:  # No trait to show.
             return []
         if param.ptype == "Boolean":
             return [Item(pname, tooltip=param.pdescription)]
@@ -119,7 +120,7 @@ def make_gui_items(pname: str, param: AMIParameter | Parameters) -> list[Item | 
         if subparam_name == "description":
             group_desc = param[subparam_name]
         else:
-            gui_items.extend(make_gui_items(pname + "_" + subparam_name, param[subparam_name]))
+            gui_items.extend(make_gui_items(pname + "_" + trait_name_part(subparam_name), param[subparam_name]))
     if group_desc:
         gui_items = [Item(label=group_desc)] + gui_items
     return [VGroup(*gui_items, label=pname.split("_")[-1], show_border=True)]
