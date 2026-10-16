@@ -81,4 +81,13 @@ RESERVED_PARAM_NAMES = [
     "Tx_V",
     "Tx_R",
     "Rx_R",
+    # AMI_Version 7.2 and later (IBIS 8.0 Table 41, p.338-339).
+    "Modulation_Levels",
+    "PAM_Offsets",
+    "PAM_Thresholds",
+    "Tx_Impulse_Input",
+    # AMI_Version 8.0 and later.
+    "Adaptation_Valid",
+    "Rx_Port_Order",
+    "Tx_Port_Order",
 ]

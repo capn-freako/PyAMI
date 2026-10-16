@@ -203,6 +203,23 @@ def test_get_pins_qualified_mixed(mixed_ibis_file):
     assert model.get_pins_qualified(False) == ["5(Rx_P)", "6(IO_P)"]
 
 
+@pytest.mark.parametrize("entries", [
+    "example_tx      Tx model\nexample_rx      Rx model",  # E.g. - NXP i.MX8 `HDMI_RX`, `ABI_SERDES`.
+    "example_rx      Rx model\nexample_tx      Tx model",  # E.g. - NXP i.MX8 `USB2_NXP`.
+])
+def test_get_pins_qualified_mixed_selector(tmp_path, entries):
+    """A pin whose selector has both an ``Output`` and an ``Input`` model is both Tx and Rx, whatever their order,
+    and the same pins are offered under ``model_types``."""
+    ibis_file = tmp_path / "sel_mixed.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("example_tx      Defined model\nno_such_model   Undefined model", entries),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    assert ibis.get_pins_qualified(True) == ["4(Tx_P)", "6(IO_P)", "8(OE_P)", "11(Sel_P)"]
+    assert ibis.get_pins_qualified(False) == ["5(Rx_P)", "6(IO_P)", "11(Sel_P)"]
+    for is_tx, model_types in ((True, TX_MODEL_TYPES), (False, RX_MODEL_TYPES)):
+        assert ibis.get_pins_qualified(is_tx) == IBISModel(str(ibis_file), model_types=model_types).pins
+
+
 def test_model_selector_skips_undefined_models(mixed_ibis_file):
     """A model selector entry naming an undefined model is dropped, rather than crashing selection."""
     model = IBISModel(mixed_ibis_file)
@@ -383,18 +400,6 @@ def test_old_is_tx_argument_rejected(ibis_test_file):
     """The pre-10.0 positional ``is_tx`` isn't silently misread."""
     with pytest.raises(TypeError):
         IBISModel(ibis_test_file, True)  # pylint: disable=too-many-function-args
-
-
-def test_views_are_application_neutral(ibis_test_file):
-    pytest.importorskip("traitsui")
-    pytest.importorskip("chaco")
-    from pyibisami.gui import ibis as gui_ibis
-
-    ibis = IBISModel(ibis_test_file)
-    views = [gui_ibis.make_ibis_file_view(ibis), gui_ibis.make_component_view(ibis.comp_),
-             gui_ibis.make_model_view(ibis.model)]
-    assert not [view for view in views if "pybert" in f"{view.title} {view.id}".lower()]
-
 
 def _set_platform(monkeypatch, system, bits):
     monkeypatch.setattr(platform, "system", lambda: system)

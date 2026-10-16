@@ -216,9 +216,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             ValueError: If ``comp_name`` names no component in this file.
 
         Notes:
-            1. A pin's direction follows its model's ``Model_type`` (IBIS 8.0 Table 47);
+            1. A pin's direction follows its models' ``Model_type`` s (IBIS 8.0 Table 47);
                 see ``TX_MODEL_TYPES`` and ``RX_MODEL_TYPES``. ``I/O`` types are both;
                 ``Terminator``, ``Series`` and ``Series_switch`` are neither.
+                A pin qualifies if any of its models (e.g. - in a ``[Model Selector]``) does,
+                as with the ``model_types`` argument.
             2. Pins naming an undefined model are skipped. (The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.)
         """
         if comp_name is None:
@@ -228,14 +230,11 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         else:
             raise ValueError(f"No component named '{comp_name}'; available: {list(self._components)}")
         pins = comp.pins
+        mtypes = TX_MODEL_TYPES if is_tx else RX_MODEL_TYPES
 
         def pin_ok(pname):
             (mname, _) = pins[pname]
-            mods = self.get_models(mname)
-            if not mods:
-                return False
-            mtype = self._models[mods[0]].mtype.lower()
-            return mtype in (TX_MODEL_TYPES if is_tx else RX_MODEL_TYPES)
+            return any(self._models[name].mtype.lower() in mtypes for name in self.get_model_names(mname))
 
         return list(filter(pin_ok, list(pins)))
 
@@ -417,17 +416,19 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     @property
     def dll_file(self) -> str:
-        """The selected model's executable model file for this platform (``Model.dll_file``).
+        """The currently selected model's executable model file for this platform (``Model.dll_file``).
 
-        Direction-blind (the first listed entry); for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
+        Direction-blind: from the model's first ``Executable`` line for this platform;
+        for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
         """
         return self.model.dll_file
 
     @property
     def ami_file(self) -> str:
-        """The selected model's AMI parameter file for this platform (``Model.ami_file``).
+        """The currently selected model's AMI parameter file for this platform (``Model.ami_file``).
 
-        Direction-blind (the first listed entry); for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
+        Direction-blind: from the model's first ``Executable`` line for this platform;
+        for an ``I/O`` model, use ``model.get_ami_files(is_tx)``.
         """
         return self.model.ami_file
 
