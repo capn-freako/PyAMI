@@ -10,13 +10,33 @@ https://ibis.org/
 Copyright (c) 2019 by David Banas; All rights reserved World wide.
 """
 
-from typing import Optional
+import platform
+from typing import NamedTuple, Optional
 
 from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
 
 from .iv import IVData
 
 NO_CLAMP_Z = 2e6  # Impedance assumed for a missing clamp (Ohms).
+
+# Signal direction of each ``Model_type``, per IBIS 8.0 Table 47 (lower-cased).
+# ``I/O`` types are both; ``Terminator``, ``Series`` and ``Series_switch`` are neither.
+_IO_MODEL_TYPES = {"i/o", "i/o_open_drain", "i/o_open_sink", "i/o_open_source", "i/o_ecl", "i/o_diff"}
+TX_MODEL_TYPES = {
+    "output", "3-state", "open_drain", "open_sink", "open_source",
+    "output_ecl", "3-state_ecl", "output_diff", "3-state_diff",
+} | _IO_MODEL_TYPES
+RX_MODEL_TYPES = {"input", "input_ecl", "input_diff"} | _IO_MODEL_TYPES
+
+
+class AmiExecutable(NamedTuple):
+    "One ``Executable`` line of an ``[Algorithmic Model]``."
+
+    direction: Optional[str]  # "tx" (``Executable_Tx``), "rx" (``Executable_Rx``), or ``None`` (``Executable``).
+    os: str  # "linux" or "windows".
+    bits: str  # "32" or "64".
+    dll: str  # Executable model file name, as written in the IBIS file.
+    ami: str  # AMI parameter file name, as written in the IBIS file.
 
 
 class Component(HasTraits):
@@ -156,13 +176,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 self._zin = pc_z
 
         # Separate AMI executables by OS.
-        def is64(x):
-            ((_, b), _) = x
-            return int(b) == 64
+        def is64(x: AmiExecutable) -> bool:
+            return int(x.bits) == 64
 
-        def isWin(x):
-            ((os, _), _) = x
-            return os.lower() == "windows"
+        def isWin(x: AmiExecutable) -> bool:
+            return x.os.lower() == "windows"
 
         def partition(p, xs):
             ts, fs = [], []
@@ -173,11 +191,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                     fs.append(x)
             return ts, fs
 
-        def getFiles(x):
-            if x:
-                ((_, _), fs) = x[0]
-                return fs
-            return []
+        def getFiles(x: list[AmiExecutable]) -> list[str]:
+            return [x[0].dll, x[0].ami] if x else []
 
         def splitExecs(fs):
             wins, lins = partition(isWin, fs)
@@ -186,12 +201,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._exec32Wins, self._exec32Lins = [], []
         self._exec64Wins, self._exec64Lins = [], []
         self._test_configs = {}
-        self._executables = []
+        self._ami_executables = []
         if "algorithmic_model" in subDict:
             algo_model_data = subDict["algorithmic_model"]
-            execs = algo_model_data.get("executables", [])
             self._test_configs = algo_model_data.get("test_configs", {})
-            self._executables = execs
+            execs = [AmiExecutable(direction, os, bits, dll, ami)
+                     for (direction, ((os, bits), [dll, ami])) in algo_model_data.get("executables", [])]
+            self._ami_executables = execs
             exec64s, exec32s = partition(is64, execs)
             self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
             self._exec64Wins, self._exec64Lins = splitExecs(exec64s)
@@ -221,16 +237,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         res += "Temperature Range:\t" + str(self._trange) + "\n"
         res += "Voltage Range:    \t" + str(self._vrange) + "\n"
         if "algorithmic_model" in self._subDict:
-            res += "Algorithmic Model:\n" + "\t32-bit:\n"
-            if self._exec32Lins:
-                res += "\t\tLinux: " + str(self._exec32Lins) + "\n"
-            if self._exec32Wins:
-                res += "\t\tWindows: " + str(self._exec32Wins) + "\n"
-            res += "\t64-bit:\n"
-            if self._exec64Lins:
-                res += "\t\tLinux: " + str(self._exec64Lins) + "\n"
-            if self._exec64Wins:
-                res += "\t\tWindows: " + str(self._exec64Wins) + "\n"
+            res += "Algorithmic Model:\n"
+            keywords = {"tx": "Executable_Tx", "rx": "Executable_Rx", None: "Executable"}
+            for ex in self._ami_executables:
+                res += f"\t{keywords[ex.direction]:<14}{ex.os} {ex.bits}-bit: {ex.dll}, {ex.ami}\n"
         return res
 
     def __call__(self):
@@ -289,6 +299,69 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return ("algorithmic_model" in self._subDict)
 
     @property
+    def is_io(self) -> bool:
+        "``I/O`` model type flag (both Tx and Rx; IBIS 8.0 Table 47)."
+        return self._mtype.lower() in _IO_MODEL_TYPES
+
+    def _platform_executables(self) -> list[AmiExecutable]:
+        "The ``Executable`` entries for the running platform, in file order."
+        bits = "64" if platform.architecture()[0] == "64bit" else "32"  # The interpreter's; the executable must match.
+        os = "windows" if platform.system().lower() == "windows" else "linux"
+        return [ex for ex in self._ami_executables if ex.os.lower() == os and ex.bits == bits]
+
+    def get_ami_files(self, is_tx: Optional[bool] = None) -> tuple[str, str]:
+        """The ``(dll, ami)`` files for the running platform and the given direction.
+
+        Args:
+            is_tx: ``True`` for Tx, ``False`` for Rx, ``None`` to follow the ``Model_type``.
+
+        Returns:
+            The files of the first matching ``Executable`` entry, or ``("", "")`` if none matches.
+
+        Raises:
+            ValueError: ``is_tx`` is ``None`` for an ``I/O`` model that has both
+                ``Executable_Tx`` and ``Executable_Rx`` for this platform.
+
+        Notes:
+            1. ``I/O`` types name their files per direction (``Executable_Tx``/``Executable_Rx``) and the
+            application picks the direction (IBIS 8.0 Section 10.1, p.214). A plain ``Executable``
+            (illegal for them) is accepted for either direction.
+            2. Other types use ``Executable``, whose direction follows the ``Model_type``. Asking for
+            the other direction (or for any direction, for ``Terminator`` etc.) gives ``("", "")``.
+        """
+        execs = self._platform_executables()
+        if self.is_io:
+            if is_tx is None:
+                if {"tx", "rx"} <= {ex.direction for ex in execs}:
+                    raise ValueError(
+                        f"I/O model has both Executable_Tx and Executable_Rx for this platform; "
+                        f"use get_ami_files(is_tx) to choose one: {execs}")
+            else:
+                wanted = "tx" if is_tx else "rx"
+                execs = [ex for ex in execs if ex.direction in (wanted, None)]
+        elif is_tx is not None and self._mtype.lower() not in (TX_MODEL_TYPES if is_tx else RX_MODEL_TYPES):
+            return ("", "")
+        return (execs[0].dll, execs[0].ami) if execs else ("", "")
+
+    @property
+    def dll_file(self) -> str:
+        """The executable model file of the first ``Executable`` entry for the running platform; empty if none.
+
+        Direction-blind; for an ``I/O`` model with both directions, use ``get_ami_files(is_tx)``.
+        """
+        execs = self._platform_executables()
+        return execs[0].dll if execs else ""
+
+    @property
+    def ami_file(self) -> str:
+        """The AMI parameter file of the first ``Executable`` entry for the running platform; empty if none.
+
+        Direction-blind; for an ``I/O`` model with both directions, use ``get_ami_files(is_tx)``.
+        """
+        execs = self._platform_executables()
+        return execs[0].ami if execs else ""
+
+    @property
     def ami_files(self):
         return {
             "32-bit": {"lin": self._exec32Lins, "win": self._exec32Wins},
@@ -301,6 +374,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return self._test_configs
 
     @property
+    def ami_executables(self) -> list[AmiExecutable]:
+        "The ``Executable`` entries of the ``[Algorithmic Model]``, in file order, with their direction."
+        return self._ami_executables
+
+    @property
     def executables(self) -> list:
-        "Raw ordered list of Executable entries from [Algorithmic Model], for executable_index lookup."
-        return self._executables
+        "Ordered ``((os, bits), [dll, ami])`` Executable entries from [Algorithmic Model], for executable_index lookup."
+        return [((ex.os, ex.bits), [ex.dll, ex.ami]) for ex in self._ami_executables]

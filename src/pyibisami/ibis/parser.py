@@ -174,19 +174,26 @@ def ratio() -> GenParser[Optional[float]]:
     return None
 
 
+# ``(direction, ((os, bits), [dll, ami]))``; ``direction`` is ``"tx"``, ``"rx"``, or ``None`` for plain ``Executable``.
 ex_line: Parser = (
-    word(string("Executable_Tx") ^ string("Executable_Rx") ^ string("Executable"))
-    >> (  # noqa: W503
-        (
-            ((string("L") | string("l")) >> string("inux")).result("linux")
-            | ((string("W") | string("w")) >> string("indows")).result("windows")  # noqa: W503
-        )
-        << string("_")  # noqa: W503
-        << many(none_of("_"))  # noqa: W503
-        << string("_")  # noqa: W503
+    word(
+        string("Executable_Tx").result("tx")
+        ^ string("Executable_Rx").result("rx")  # noqa: W503
+        ^ string("Executable").result(None)  # noqa: W503
     )
-    + lexeme(string("32") | string("64"))  # noqa: W503
-    + count(name, 2)  # noqa: W503
+    + (  # noqa: W503
+        (
+            (
+                ((string("L") | string("l")) >> string("inux")).result("linux")
+                | ((string("W") | string("w")) >> string("indows")).result("windows")  # noqa: W503
+            )
+            << string("_")  # noqa: W503
+            << many(none_of("_"))  # noqa: W503
+            << string("_")  # noqa: W503
+        )
+        + lexeme(string("32") | string("64"))  # noqa: W503
+        + count(name, 2)  # noqa: W503
+    )
     << ignore  # noqa: W503
 )
 
@@ -209,7 +216,10 @@ def ami_test_config() -> GenParser[tuple[str, dict[str, str]]]:
 
 @generate("[Algorithmic Model]")
 def algo_model() -> GenParser[dict]:
-    "Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks."
+    """Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks.
+
+    Each ``executables`` entry is ``(direction, ((os, bits), [dll, ami]))``; see ``ex_line``.
+    """
     execs = yield many1(ex_line)
     cfg_pairs = yield many(keyword("ami_test_configuration") >> ami_test_config)
     yield keyword("end_algorithmic_model")
@@ -465,7 +475,7 @@ def pins():
     def filt(x):
         (_, (mod, _)) = x
         m = mod.upper()
-        return m not in ("POWER", "GND", "NC")
+        return m not in ("POWER", "GND", "NC", "CIRCUITCALL")
 
     # Parse the section header.
     yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
