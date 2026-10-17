@@ -94,12 +94,13 @@ def make_model_view(model: Model) -> View:
             show_border=True,
         ),
     ]
-    mtype = model.mtype.lower()
-    if mtype in ("output", "i/o"):
-        content.append(Item("zout", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    # Only the values this ``Model_type`` (and its data) has; ``Model`` adds a trait for each of them.
+    if model.zout is not None:
+        content.append(Item("zout", label="Output Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    if model.slew is not None:
         content.append(Item("slew", label="Slew Rate (V/ns)", style="readonly", format_str="%4.1f"))
-    elif mtype == "input":
-        content.append(Item("zin", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    if model.zin is not None:
+        content.append(Item("zin", label="Input Impedance (Ohms)", style="readonly", format_str="%4.1f"))
     if model.iv_data is not None:
         content.append(Item("plot_iv", editor=ComponentEditor(), show_label=False))
     view = View(

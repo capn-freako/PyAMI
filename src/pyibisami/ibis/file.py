@@ -282,10 +282,9 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
         self._file_rev: str = model_dict.get("file_rev", "(n/a)")
         self._date: str = model_dict.get("date", "(n/a)")
-        if err_str == "Success!":
-            logger.debug("IBIS parsing: %s", err_str)
-        else:
-            logger.warning("IBIS parsing errors/warnings in %s:\n%s", ibis_file_name, err_str)
+        if err_str != "Success!":
+            raise ValueError(f"Couldn't parse IBIS file {ibis_file_name}: {err_str}")
+        logger.debug("IBIS parsing: %s", err_str)
         if "components" not in model_dict or not model_dict["components"]:
             logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
             raise ValueError("This IBIS model has no components!")
@@ -333,7 +332,9 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         else:
             self.add_trait("date", String("(n/a)"))
 
-        self._ibis_parsing_errors = err_str
+        self._ibis_parsing_errors = err_str  # Plus any spec warnings (already logged by the parser).
+        if model_dict.get("warnings"):
+            self._ibis_parsing_errors += "\nWarnings:\n" + "\n".join(f"- {w}" for w in model_dict["warnings"])
 
         self._comp_changed(comps[0])  # Wasn't being called automatically.
         # Wasn't being called automatically:

@@ -5,6 +5,7 @@ import pytest
 from traits.api import TraitError
 
 from pyibisami.ibis.file import RX_MODEL_TYPES, TX_MODEL_TYPES, IBISModel
+from pyibisami.testing.ami_test_config import run_ami_test_config
 
 
 def test_ibis_model_construction(ibis_test_file):
@@ -266,7 +267,15 @@ def test_no_usable_component(tmp_path):
         IBISModel(str(ibis_file))
 
 
-RX_ONLY_COMPONENT = BROKEN_COMPONENT.replace("Broken", "RxOnly").replace("Mystery            no_such_model",
+def test_parse_failure_reports_the_reason(tmp_path):
+    """A file that fails to parse says where, not "no components"."""
+    ibis_file = tmp_path / "broken.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output", "Model_type   Outputt"), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"Couldn't parse IBIS file .*broken\.ibs: .* at line \d+, column \d+"):
+        IBISModel(str(ibis_file))
+
+
+RX_ONLY_COMPONENT =BROKEN_COMPONENT.replace("Broken", "RxOnly").replace("Mystery            no_such_model",
                                                                           "Rx_Q               example_rx")
 
 
@@ -526,6 +535,48 @@ def test_ibis_model_ambiguous_io_direction_warns_once(tmp_path, monkeypatch, cap
     assert [rec.levelno for rec in warnings] == [logging.WARNING]
 
 
+OTHER_OS_ALGO_MODEL = """Model_type   Output
+[Algorithmic Model]
+Executable Solaris5.10_gcc4.1.1_64          tx_sol.so   tx.ami
+Executable HP-UX_accA.03.52_32              tx_hp.sl    tx.ami
+Executable Windows_VisualStudio_64          tx.dll      tx.ami
+[AMI Test Configuration] Bad_index
+Type Statistical
+Executable_index 4
+[End Algorithmic Model]
+"""
+
+
+def test_executables_for_other_oses_are_kept_but_not_selected(tmp_path, monkeypatch):
+    """``Executable`` lines for OSes other than Linux/Windows used to fail the whole file."""
+    ibis_file = tmp_path / "other_os.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", OTHER_OS_ALGO_MODEL, 1), encoding="utf-8")
+    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    assert [os_name for ((os_name, _), _) in model.executables] == ["solaris5.10", "hp-ux", "windows"]
+    assert model.executables[2] == (("windows", "64"), ["tx.dll", "tx.ami"])  # What ``Executable_index 3`` reads.
+    assert model.ami_files == {"32-bit": {"lin": [], "win": []}, "64-bit": {"lin": [], "win": ["tx.dll", "tx.ami"]}}
+
+    _set_platform(monkeypatch, "Windows", "64bit")
+    assert model.get_ami_files() == (model.dll_file, model.ami_file) == ("tx.dll", "tx.ami")
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.dll_file == ""  # Solaris isn't Linux.
+
+    result = run_ami_test_config(tmp_path, model, "Bad_index")
+    assert not result.passed and "model has 3 Executable line(s)" in result.message
+
+
+def test_executable_os_field_may_carry_a_version(tmp_path, monkeypatch):
+    """The OS field may include a version (IBIS 8.0 Section 10.1, p.213); it used to fail the whole file."""
+    algo_model = ("Model_type   Output\n[Algorithmic Model]\n"
+                  "Executable Linux2.6_gcc4.1.2_64  tx.so  tx.ami\n[End Algorithmic Model]\n")
+    ibis_file = tmp_path / "os_version.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", algo_model, 1), encoding="utf-8")
+    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    _set_platform(monkeypatch, "Linux", "64bit")
+    assert model.executables == [(("linux", "64"), ["tx.so", "tx.ami"])]
+    assert model.dll_file == "tx.so"
+
+
 def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):
     """Files named in the IBIS file resolve against its directory, not the working directory."""
     monkeypatch.chdir(tmp_path.parent)
@@ -533,3 +584,124 @@ def test_files_resolve_against_ibis_dir(ibis_test_file, tmp_path, monkeypatch):
     assert ibis.ibis_dir == tmp_path
     assert ibis.resolve_file("sub/model.ami") == tmp_path / "sub" / "model.ami"
     assert ibis.resolve_file("") is None
+
+
+def _algo(model_type, *lines):
+    "A ``Model_type`` line followed by an ``[Algorithmic Model]`` holding ``lines``."
+    return f"Model_type   {model_type}\n[Algorithmic Model]\n" + "".join(f"{ln}\n" for ln in lines) + \
+        "[End Algorithmic Model]\n"
+
+
+SUBMODEL = """[Submodel]   sub_clamp
+Submodel_type   Dynamic_clamp
+[Algorithmic Model]
+Executable linux_gcc4.1.2_64  sub.so  sub.ami
+[End Algorithmic Model]
+
+[END]
+"""
+
+
+@pytest.mark.parametrize("old, new, expected", [
+    ("Model_type   Terminator\n", _algo("Terminator", "Executable linux_gcc_64  t.so  t.ami"),
+     "example_term: [Algorithmic Model] is not permitted for Model_type Terminator"),
+    ("[END]\n", SUBMODEL, "[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel])"),
+    ("Model_type   I/O\n", _algo("I/O", "Executable linux_gcc_64  io.so  io.ami"),
+     "example_io: Executable is prohibited for Model_type I/O; use Executable_Tx/Executable_Rx "
+     "(at least one is required)"),
+    ("Model_type   I/O\n", _algo("I/O", "Executable_Tx linux_gcc_64  io.so  io.ami",
+                                 "Executable_Rx linux_gcc_64  io.so  io.ami"),
+     "example_io: Executable_Tx and Executable_Rx must name different .ami files; both use io.ami"),
+    ("Model_type   Output\n", _algo("Output", "Executable_Tx linux_gcc_64  tx.so  tx.ami"),
+     "example_tx: Executable_Tx/Executable_Rx are not permitted for Model_type Output"),
+    ("Model_type   Output\n", _algo("Output", "Executable linux_gcc_64  tx.so  tx_params.txt"),
+     "example_tx: AMI parameter files must have the extension .ami: tx_params.txt"),
+    ("", "", "example_rx: Vinl and Vinh must be defined for Model_type Input"),  # ``MIXED_IBIS`` as is.
+])
+def test_spec_violations_warn_but_load(tmp_path, caplog, old, new, expected):
+    """IBIS rules on ``[Algorithmic Model]`` use and receiver thresholds are reported, but don't stop loading."""
+    ibis_file = tmp_path / "violation.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace(old, new, 1) if old else MIXED_IBIS, encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.parser"):
+        ibis = IBISModel(str(ibis_file))
+    assert ibis.ibis_parsing_errors.startswith("Success!\nWarnings:\n")
+    assert expected in ibis.ibis_parsing_errors
+    assert any(expected in rec.getMessage() for rec in caplog.records if rec.name == "pyibisami.ibis.parser")
+
+
+def test_spec_conforming_file_has_no_warnings(ibis_test_file):
+    from pyibisami.ibis.parser import parse_ibis_file
+
+    status, ibis_dict = parse_ibis_file(ibis_test_file.read_text(encoding="utf-8"))
+    assert (status, ibis_dict["warnings"]) == ("Success!", [])
+    assert IBISModel(ibis_test_file).ibis_parsing_errors == "Success!"
+
+
+DIFF_IBIS = """[IBIS Ver]   7.0
+[File Name]  diff.ibs
+[File Rev]   v0.1
+
+[Component]    Diff
+[Manufacturer] (n/a)
+
+[Package]
+R_pkg     0.10     0.00     0.50
+L_pkg    10.00n    0.10n   50.00n
+C_pkg     1.00p    0.01p    5.00p
+
+[Pin]  signal_name        model_name
+1      D_P                diff_buf
+2      D_N                diff_buf
+
+[Diff Pin]  inv_pin  vdiff  tdelay_typ  tdelay_min  tdelay_max
+1           2        0.1V   0ns         NA          NA
+
+[Model]   diff_buf
+Model_type   {model_type}
+[Voltage Range]         1.80     1.62     1.98
+{algo_model}[External Model]
+Language Verilog-AMS
+| Corner  corner_name  file_name      circuit_name
+Corner    Typ          diff_typ.va    diff_buf
+Ports A_signal_pos A_signal_neg my_drive my_enable
+D_to_A D_drive my_drive my_ref 0.0 3.3 Typ
+[End External Model]
+
+[END]
+"""
+
+
+@pytest.mark.parametrize("model_type, is_tx, is_rx", [
+    ("Input_diff", False, True),
+    ("Output_diff", True, False),
+    ("3-state_diff", True, False),
+    ("I/O_diff", True, True),
+])
+def test_true_differential_model_types_load(tmp_path, model_type, is_tx, is_rx):
+    """The ``_diff`` Model_types used to fail the whole file; their ``[External Model]`` is skipped."""
+    ibis_file = tmp_path / "diff.ibs"
+    ibis_file.write_text(DIFF_IBIS.format(model_type=model_type, algo_model=""), encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    model = ibis.model
+    assert model.mtype == model_type
+    assert (model.zout, model.slew, model.zin, model.iv_data) == (None, None, None, None)
+    assert ibis.ibis_parsing_errors == "Success!"  # No Vinl/Vinh rule for ``_diff`` types (Table 1).
+    assert (ibis.get_pins_qualified(True) == ibis.get_pins()) is is_tx
+    assert (ibis.get_pins_qualified(False) == ibis.get_pins()) is is_rx
+
+
+def test_io_diff_model_executable_directions(tmp_path, monkeypatch):
+    """``I/O_diff`` uses ``Executable_Tx``/``Executable_Rx`` (Table 47), like the other I/O types."""
+    algo_model = ("[Algorithmic Model]\n"
+                  "Executable_Tx linux_gcc4.1.2_64  diff.so  diff_tx.ami\n"
+                  "Executable_Rx linux_gcc4.1.2_64  diff.so  diff_rx.ami\n"
+                  "[End Algorithmic Model]\n")
+    ibis_file = tmp_path / "io_diff.ibs"
+    ibis_file.write_text(DIFF_IBIS.format(model_type="I/O_diff", algo_model=algo_model), encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    _set_platform(monkeypatch, "Linux", "64bit")
+    model = ibis.model
+    assert model.is_io
+    assert model.get_ami_files(is_tx=True) == ("diff.so", "diff_tx.ami")
+    assert model.get_ami_files(is_tx=False) == ("diff.so", "diff_rx.ami")
+    assert ibis.ibis_parsing_errors == "Success!"

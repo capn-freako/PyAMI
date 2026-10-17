@@ -35,6 +35,14 @@ def test_impedance():
     assert IVCurve.from_table("gnd_clamp", CLAMP).impedance(0.5) == OPEN_CIRCUIT_Z
 
 
+def test_impedance_at_table_edges():
+    """The first table voltage uses the first segment (it used to wrap to the last); off the table is an error."""
+    curve = IVCurve.from_table("pulldown", PULLDOWN)
+    assert curve.impedance(-1.8) == pytest.approx(0.18)  # 1.8 V / 10 A.
+    with pytest.raises(ValueError, match="outside the table"):
+        curve.impedance(4.0)
+
+
 def test_ground_referenced():
     pullup = IVCurve.from_table("pullup", PULLUP).ground_referenced(1.8)
     np.testing.assert_allclose(pullup.v, [3.6, 1.8, 0.0, -1.8])
@@ -113,6 +121,76 @@ def test_gui_input_model_view_builds():
     assert sorted(model.plot_iv.plots) == sorted(s.label for s in model.iv_data.series())
     names = [item.name for item in _items(model.default_traits_view().content) if item.name]
     assert "zin" in names and "zout" not in names
+    assert all(model.trait(name) is not None for name in names), names
+
+
+CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]  # 50 Ohms at Vmeas.
+RAMP = {"rising": [2e9], "falling": [2e9], "load": 50}  # 2 V/ns.
+
+
+def _model(model_type, name="m", **tables):
+    from pyibisami.ibis.model import Model
+
+    return Model({"model_type": model_type, "voltage_range": [1.8, 1.62, 1.98], "vmeas": 0.5, **tables}, name=name)
+
+
+@pytest.mark.parametrize("model_type, tables, zout, slew, zin", [
+    ("I/O", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP, "gnd_clamp": CLAMP_50, "power_clamp": CLAMP_50},
+     50.0, 2.0, 25.0),
+    ("3-state", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, None),
+    ("Open_drain", {"pulldown": PULLDOWN, "ramp": RAMP}, 50.0, 2.0, None),  # One-sided: the pull-down's impedance.
+    ("Open_source", {"pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, None),
+    ("I/O_open_drain", {"pulldown": PULLDOWN, "ramp": RAMP, "gnd_clamp": CLAMP_50}, 50.0, 2.0, 50.0),
+    ("I/O", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, 50.0, 2.0, 2e6),  # No clamps: NO_CLAMP_Z.
+    ("Output_ECL", {"pulldown": PULLDOWN, "pullup": PULLUP, "ramp": RAMP}, None, None, None),  # Not supported yet.
+    ("Terminator", {"gnd_clamp": CLAMP_50}, None, None, None),
+])
+def test_analog_values_per_model_type(model_type, tables, zout, slew, zin):
+    """``zout``/``slew``/``zin`` are numbers where the Model_type and its data support them, else ``None``."""
+    model = _model(model_type, **tables)
+    for name, expected in (("zout", zout), ("slew", slew), ("zin", zin)):
+        value = getattr(model, name)
+        assert value is None if expected is None else value == pytest.approx(expected), (name, value)
+
+
+def test_missing_driver_data_warns_without_failing(caplog):
+    """A ``3-state`` model without I-V tables or ``[Ramp]`` still loads (as before), with one warning."""
+    with caplog.at_level("WARNING", logger="pyibisami.ibis.model"):
+        model = _model("3-state", name="oe_buf")
+    assert (model.zout, model.slew, model.zin, model.iv_data) == (None, None, None, None)
+    assert len(caplog.records) == 1
+    assert all(s in caplog.text for s in ("oe_buf", "[Pulldown]", "[Pullup]", "[Ramp]"))
+
+
+def test_tables_that_dont_reach_vmeas(caplog):
+    """A table not covering Vmeas loads: an off clamp counts as absent; an unknown ``zout`` is ``None`` (warning).
+
+    E.g. - a ``[POWER Clamp]`` given only for -Vcc to 0 V (where it conducts), with Vmeas = 0.5 V.
+    """
+    from pyibisami.ibis.model import NO_CLAMP_Z
+
+    power_clamp_on_only = [(-1.8, [0.1, 0.1, 0.1]), (0.0, [0.0, 0.0, 0.0])]
+    model = _model("I/O", pulldown=PULLDOWN, pullup=PULLUP, ramp=RAMP, gnd_clamp=CLAMP_50,
+                   power_clamp=power_clamp_on_only)
+    assert model.zin == pytest.approx(50.0 * NO_CLAMP_Z / (50.0 + NO_CLAMP_Z))
+    with caplog.at_level("WARNING", logger="pyibisami.ibis.model"):
+        model = _model("Open_drain", name="short_pd", pulldown=PULLDOWN[:2], ramp=RAMP)  # Table ends at 0 V.
+    assert model.zout is None and model.slew == pytest.approx(2.0)
+    assert "short_pd" in caplog.text and "outside the table" in caplog.text
+
+
+def test_output_still_requires_driver_data():
+    with pytest.raises(LookupError, match="Ramp"):
+        _model("Output", pulldown=PULLDOWN, pullup=PULLUP)
+    with pytest.raises(LookupError, match="I-V"):
+        _model("I/O", pulldown=PULLDOWN, ramp=RAMP)
+
+
+def test_gui_io_model_view_shows_both_impedances():
+    pytest.importorskip("chaco")
+    model = _model("I/O", pulldown=PULLDOWN, pullup=PULLUP, ramp=RAMP, gnd_clamp=CLAMP_50, power_clamp=CLAMP_50)
+    names = [item.name for item in _items(model.default_traits_view().content) if item.name]
+    assert {"zout", "slew", "zin"} <= set(names)
     assert all(model.trait(name) is not None for name in names), names
 
 
