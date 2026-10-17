@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import shlex
-from tempfile   import NamedTemporaryFile
+from tempfile   import TemporaryDirectory
 from time       import time
 from typing     import Any, Optional
 
@@ -146,12 +146,11 @@ def run_notebook(
     extra_args = [tok for item in notebook_params.items()
                       for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
 
-    with NamedTemporaryFile(suffix='.ipynb',
-                            prefix=(notebook.stem + "_papermill"),
-                            delete_on_close=False) as tmp_notebook:
-        subprocess.run(['papermill', str(notebook), tmp_notebook.name] + extra_args, check=True)
+    with TemporaryDirectory() as tmp_dir:
+        tmp_notebook = str(Path(tmp_dir) / f"{notebook.stem}_papermill.ipynb")
+        subprocess.run(['papermill', str(notebook), tmp_notebook] + extra_args, check=True)
         subprocess.run(
-            ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook.name],
+            ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
             check=True)
 
     run_time = int(time() - start_time)  # integer seconds

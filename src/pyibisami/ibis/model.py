@@ -205,44 +205,16 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._zin: Optional[float] = None
         self._infer_analog(subDict, name)
 
-        # Separate AMI executables by OS.
-        def is64(x: AmiExecutable) -> bool:
-            "True for a 64-bit executable."
-            return int(x.bits) == 64
-
-        def partition(p, xs):
-            "Split ``xs`` into ``(those satisfying p, the rest)``, each in its original order."
-            ts, fs = [], []
-            for x in xs:
-                if p(x):
-                    ts.append(x)
-                else:
-                    fs.append(x)
-            return ts, fs
-
-        def getFiles(x: list[AmiExecutable]) -> list[str]:
-            "``[dll, ami]`` of the first executable in ``x`` (direction-blind); ``[]`` if ``x`` is empty."
-            return [x[0].dll, x[0].ami] if x else []
-
-        def splitExecs(fs):
-            """``(Windows files, Linux files)``: ``getFiles()`` of the ``fs`` entries whose OS is exactly ``"windows"``,
-            and of those whose OS is exactly ``"linux"``. Other OSes (e.g. ``"solaris5.10"``) are in neither.
-            """
-            return (getFiles([x for x in fs if x.os == "windows"]), getFiles([x for x in fs if x.os == "linux"]))
-
-        self._exec32Wins, self._exec32Lins = [], []
-        self._exec64Wins, self._exec64Lins = [], []
+        # AMI executables.
         self._test_configs = {}
         self._ami_executables = []
         if "algorithmic_model" in subDict:
             algo_model_data = subDict["algorithmic_model"]
             self._test_configs = algo_model_data.get("test_configs", {})
-            execs = [AmiExecutable(direction, os, bits, dll, ami)
-                     for (direction, ((os, bits), [dll, ami])) in algo_model_data.get("executables", [])]
-            self._ami_executables = execs  # All of them, in file order, for ``Executable_index``.
-            exec64s, exec32s = partition(is64, execs)
-            self._exec32Wins, self._exec32Lins = splitExecs(exec32s)
-            self._exec64Wins, self._exec64Lins = splitExecs(exec64s)
+            # All of them, in file order, for ``Executable_index``.
+            self._ami_executables = [AmiExecutable(direction, os, bits, dll, ami)
+                                     for (direction, ((os, bits), [dll, ami]))
+                                     in algo_model_data.get("executables", [])]
 
         # Expose as traits, for viewing.
         self.add_trait("model_type", String(self._mtype))
@@ -463,9 +435,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         if self.is_io:
             if is_tx is None:
                 if {"tx", "rx"} <= {ex.direction for ex in execs}:
+                    choices = ", ".join(f"{ex.direction or 'any'}: {ex.ami}" for ex in execs)
                     raise ValueError(
-                        f"I/O model has both Executable_Tx and Executable_Rx for this platform; "
-                        f"use get_ami_files(is_tx) to choose one: {execs}")
+                        "I/O model has both Executable_Tx and Executable_Rx for this platform; "
+                        f"use get_ami_files(is_tx) to choose one: {choices}")
             else:
                 wanted = "tx" if is_tx else "rx"
                 execs = [ex for ex in execs if ex.direction in (wanted, None)]
@@ -492,11 +465,16 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return execs[0].ami if execs else ""
 
     @property
-    def ami_files(self):
-        return {
-            "32-bit": {"lin": self._exec32Lins, "win": self._exec32Wins},
-            "64-bit": {"lin": self._exec64Lins, "win": self._exec64Wins}
-        }
+    def ami_files(self) -> dict[str, dict[str, list[str]]]:
+        """``[dll, ami]`` of the first ``Executable`` entry per bitness and OS; ``[]`` if none (direction-blind).
+
+        Only OSes exactly ``"linux"``/``"windows"`` are listed (e.g. ``"solaris5.10"`` is in neither).
+        """
+        def first(bits: str, os: str) -> list[str]:
+            ex = next((ex for ex in self._ami_executables if ex.bits == bits and ex.os == os), None)
+            return [ex.dll, ex.ami] if ex else []
+
+        return {f"{bits}-bit": {"lin": first(bits, "linux"), "win": first(bits, "windows")} for bits in ("32", "64")}
 
     @property
     def test_configs(self) -> dict:
@@ -509,6 +487,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return self._ami_executables
 
     @property
-    def executables(self) -> list:
+    def executables(self) -> list[tuple[tuple[str, str], list[str]]]:
         "Ordered ``((os, bits), [dll, ami])`` Executable entries from [Algorithmic Model], for executable_index lookup."
         return [((ex.os, ex.bits), [ex.dll, ex.ami]) for ex in self._ami_executables]

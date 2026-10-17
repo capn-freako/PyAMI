@@ -527,27 +527,17 @@ def lexeme(p):
     return p << ignore  # skip all ignored characters.
 
 
-def int2tap(x):
-    """Convert integer to tap position."""
-    x = x.strip()
-    match x[0]:
-        case "-":
-            res = "pre" + x[1:]
-        case "+":
-            res = "post" + x[1:]
-        case _:
-            res = "post" + x
-    return res
-
-
 def trait_name_part(name: str) -> str:
     """The trait/display form of one AMI parameter name.
 
     Tap weights are named by tap number (``-1``, ``0``, ``1``; IBIS 8.0 Section 10.3.4, p.240), which isn't a valid
-    trait name, so they're shown as ``pre1``, ``post0``, ``post1`` (see ``int2tap()``). Everything sent to the
+    trait name, so they're shown as ``pre1``, ``post0``, ``post1``. Everything sent to the
     model (``input_ami_params``, ``fetch_param_val()``/``set_param_val()`` paths) keeps the ``.ami`` names.
     """
-    return int2tap(name) if re.fullmatch(r"[-+]?[0-9]+", name) else name
+    m = re.fullmatch(r"([-+]?)([0-9]+)", name)
+    if not m:
+        return name
+    return ("pre" if m[1] == "-" else "post") + m[2]
 
 
 lparen = lexeme(string("("))
