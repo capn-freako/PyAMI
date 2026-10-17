@@ -207,8 +207,8 @@ class AMIParamConfigurator(HasTraits):
         Notes:
             1. ``branch_names`` should *not* begin with <root_name>.
             2. A *Model Specific* parameter with a trait (Usage In/InOut) is set on its trait, which checks the
-            value; ``pvalue`` keeps the ``.ami`` file's value. Other parameters (e.g. - Reserved ones) set
-            ``pvalue``, unchecked.
+               value; ``pvalue`` keeps the ``.ami`` file's value. Other parameters (e.g. - Reserved ones) set
+               ``pvalue``, unchecked.
         """
 
         param_dict = self.ami_param_defs

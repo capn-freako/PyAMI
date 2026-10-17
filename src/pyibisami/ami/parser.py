@@ -255,17 +255,17 @@ def parse_ami_file_contents(  # pylint: disable=too-many-locals,too-many-branche
             5. *Reserved Parameters* dictionary. (empty on failure)
 
                 - The keys of the *Reserved Parameters* dictionary are
-                limited to those called out in the IBIS-AMI specification.
+                  limited to those called out in the IBIS-AMI specification.
 
                 - The values of the *Reserved Parameters* dictionary
-                must be instances of class ``AMIParameter``.
+                  must be instances of class ``AMIParameter``.
 
             6. *Model Specific Parameters* dictionary. (optional)
 
                 - The keys of the *Model Specific Parameters* dictionary can be anything.
 
                 - The values of the *Model Specific Parameters* dictionary
-                may be either: an instance of class ``AMIParameter``, or a nested sub-dictionary.
+                  may be either: an instance of class ``AMIParameter``, or a nested sub-dictionary.
 
     Raises:
         RuntimeError: If ``ami_parse()`` function fails or returns a malformed S-expression.

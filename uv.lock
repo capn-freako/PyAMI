@@ -2708,7 +2708,7 @@ wheels = [
 
 [[package]]
 name = "pyibis-ami"
-version = "10.0.0.dev0"
+version = "10.0.0rc0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

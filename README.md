@@ -8,6 +8,7 @@ functions from Python, and provides several command line applications.
 This library is used in [PyBERT](https://github.com/capn-freako/PyBERT).
 
 [View API/Developer's Documentation.](https://pyibis-ami.readthedocs.io/en/latest/)
+[View the changelog.](https://github.com/capn-freako/PyAMI/blob/master/CHANGELOG.md)
 
 ## Installation
 
