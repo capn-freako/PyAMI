@@ -8,6 +8,7 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 """
 
 import math
+from collections.abc import Callable
 from typing import Any, ClassVar, Optional
 
 from traits.api import Bool, Float, HasTraits, List, Str
@@ -225,7 +226,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
     # The idea is to allow this class to grow along with the IBIS
     # standard, without having to change any of its boilerplate.
 
-    _param_def_tag_procs: ClassVar = {
+    _param_def_tag_procs: ClassVar[dict[str, Callable[..., Any]]] = {
         "Usage": _set_usage,
         "Type": _set_type,
         "Format": _set_format,

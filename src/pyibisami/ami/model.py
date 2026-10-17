@@ -536,7 +536,7 @@ class AMIModel:  # pylint: disable=too-many-instance-attributes
         Keyword Args:
             bits_per_call: Number of bits to include in the input to each `GetWave()` call.
                 Default: 0 (Means "use model's existing value".)
-            max_run_length: Max. number of consecutive ``0``s / ``1``s allowed in `GetWave()` input,
+            max_run_length: Max. number of consecutive equal bits (``0`` or ``1``) allowed in `GetWave()` input,
                 to protect from de-adaptation when probing step response.
                 Default: 10
             nbits: Total number of bits to run through `GetWave()`.
