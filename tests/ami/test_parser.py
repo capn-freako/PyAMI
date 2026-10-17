@@ -306,6 +306,42 @@ class TestSetAndFetchParamVal:
         assert ami.input_ami_params["odd_steps"] == 6
 
 
+def _tuner_value(ami, name):
+    return next(t for t in ami.mk_tap_tuners() if t.name == name).value
+
+
+class TestTapTunerValues:
+    """``mk_tap_tuners()`` reports each parameter's current value, not the ``.ami`` file's."""
+
+    def test_range(self, mode_selector_ami_config):
+        """A Range parameter's tuner used to keep reporting its ``pvalue``."""
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami.set_param_val(["Model_Specific", "eq_mag"], 6.0)
+        assert _tuner_value(ami, "eq_mag") == 6.0
+
+    def test_boolean(self, described_group_ami_config):
+        """As did a Boolean parameter's."""
+        ami = ami_parser.AMIParamConfigurator(described_group_ami_config)
+        ami.set_param_val(["Model_Specific", "debug", "dbg_enable"], True)
+        assert _tuner_value(ami, "debug_dbg_enable") == 1.0
+
+    @pytest.mark.parametrize("config, name", [
+        ("mode_selector_ami_config", "eq_mode"),  # List_Tip: a mapped trait.
+        ("grouped_ami_config", "ctle_mode"),
+    ])
+    def test_list_mode_selector(self, config, name, request):
+        ami = ami_parser.AMIParamConfigurator(request.getfixturevalue(config))
+        ami.set_param_val(["Model_Specific", name], 1)
+        assert _tuner_value(ami, name) == 1.0
+
+    def test_trait_set_directly(self, mode_selector_ami_config):
+        "As the GUI does."
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami.trait_set(eq_mag=3.0, eq_mode="Manual")
+        assert _tuner_value(ami, "eq_mag") == 3.0
+        assert _tuner_value(ami, "eq_mode") == 1.0
+
+
 @pytest.fixture
 def grouped_ami_config():
     """Prefix-grouped parameters (``ctle_*``), a non-configurable ``Out`` parameter

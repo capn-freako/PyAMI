@@ -328,7 +328,9 @@ class AMIParamConfigurator(HasTraits):
         """Build a fresh list of `AmiParamTuner`s from this AMI model's tunable
         Model_Specific parameters (see `tunable_params` for exactly which ones
         qualify: Range-format, Boolean, and contiguous Integer/List "mode
-        selector" parameters)."""
+        selector" parameters).
+
+        Each tuner's ``value`` is the parameter's current value (its trait's), as sent to the model."""
         tuners = []
         for branch_names, param in self.tunable_params:
             tname = "_".join(map(trait_name_part, branch_names[1:]))  # Drop the "Model_Specific" root.
@@ -336,19 +338,14 @@ class AMIParamConfigurator(HasTraits):
                 pmin, pmax = float(param.pmin), float(param.pmax)
                 step = (pmax - pmin) / 10 or 1.0
                 is_int = param.ptype == "Integer"
-                value = float(param.pvalue)
             elif param.pformat == "Value" and param.ptype == "Boolean":
                 pmin, pmax, step, is_int = 0.0, 1.0, 1.0, True
-                value = float(param.pvalue)
             else:  # List-format Integer "mode selector" (contiguous legal values).
+                # `pvalue`, for 'List' format, is the list of *legal* values, not the current one.
                 vals = [float(v) for v in param.pvalue]
                 pmin, pmax, step, is_int = min(vals), max(vals), 1.0, True
-                # `pvalue`, for 'List' format, is the list of *legal* values, not the
-                # current one -- that lives on the Trait `make_param_traits()` registered.
-                try:
-                    value = float(self.trait_get(tname + "_")[tname + "_"])
-                except Exception:  # pylint: disable=broad-exception-caught
-                    value = float(self.trait_get(tname)[tname])
+            # `pvalue` keeps the `.ami` file's value; the current one lives on the trait.
+            value = float(self._trait_value(tname))
             tuners.append(AmiParamTuner(
                 name=tname,
                 branch_names=branch_names,
