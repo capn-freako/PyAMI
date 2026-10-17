@@ -43,7 +43,7 @@ AMI_CONTENTS = r"""(example_rx
 def test_views_render(ibis_test_file):
     """Every viewer renders (offscreen), for Output and Input models, and the AMI configurator."""
     script = textwrap.dedent(f"""
-        from pyibisami.ami.parser import AMIParamConfigurator
+        from pyibisami.ami.configurator import AMIParamConfigurator
         from pyibisami.ibis.file import IBISModel
         from pyibisami.ibis.model import Model
 

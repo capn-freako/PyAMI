@@ -22,7 +22,7 @@ from reportlab.lib.units    import inch
 from reportlab.platypus     import Flowable, Image, ListFlowable, Paragraph
 
 from ..ami.model        import AMIModel, OUT_RESP_INIT
-from ..ami.parser       import AMIParamConfigurator
+from ..ami.configurator import AMIParamConfigurator
 from ..ibis.model       import Model
 from .plot        import plt
 from .pdf   import (

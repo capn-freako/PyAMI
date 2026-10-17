@@ -8,6 +8,11 @@ config
 
 .. automodule:: pyibisami.ami.config
 
+configurator
+------------
+
+.. automodule:: pyibisami.ami.configurator
+
 model
 -----
 

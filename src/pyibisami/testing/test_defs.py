@@ -18,7 +18,8 @@ from collections.abc    import Generator
 import numpy as np
 
 from ..common           import Rvec, raised_cosine
-from ..ami.parser       import AMIParamConfigurator, ParamName
+from ..ami.configurator import AMIParamConfigurator
+from ..ami.parser       import ParamName
 from ..ibis.file        import IBISModel
 
 logger = logging.getLogger(__name__)

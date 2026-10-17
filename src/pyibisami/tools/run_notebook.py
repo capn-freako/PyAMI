@@ -23,7 +23,8 @@ from typing     import Any, Optional
 
 import click
 
-from ..ami.parser import AMIParamConfigurator, ParamName
+from ..ami.configurator import AMIParamConfigurator
+from ..ami.parser import ParamName
 from ..cli_logging import setup_cli_logging
 from ..ibis.file  import IBISModel
 

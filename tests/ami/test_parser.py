@@ -2,6 +2,7 @@ import pytest
 
 import pyibisami.ami.model as ami_model
 import pyibisami.ami.parser as ami_parser
+from pyibisami.ami.configurator import AMIParamConfigurator
 from traits.api import TraitError
 
 
@@ -88,7 +89,7 @@ class TestAMIParse:
         assert description == "Example Tx model from ibisami package."
 
     def test_AMIParamConfigurator_without_GUI(self, test_ami_config):
-        ami = ami_parser.AMIParamConfigurator(test_ami_config)
+        ami = AMIParamConfigurator(test_ami_config)
         assert ami._root_name == "example_tx"
         assert not ami._ami_parsing_errors
         test_keys = ("tx_tap_units", "tx_tap_np1", "tx_tap_nm1", "tx_tap_nm2", "corner_test")
@@ -97,18 +98,18 @@ class TestAMIParse:
         assert ami.ami_param_defs["Reserved_Parameters"]["AMI_Version"].pvalue == "5.1"
 
     def test_fetch_param_val(self, test_ami_config):
-        ami = ami_parser.AMIParamConfigurator(test_ami_config)
+        ami = AMIParamConfigurator(test_ami_config)
         assert ami.fetch_param_val(["Reserved_Parameters", "Init_Returns_Impulse"])
         assert not ami.fetch_param_val(["Reserved_Parameters", "Bad Name"])
 
     def test_set_param_val_top_level(self, test_ami_config):
-        ami = ami_parser.AMIParamConfigurator(test_ami_config)
+        ami = AMIParamConfigurator(test_ami_config)
         ami.set_param_val(["Model_Specific", "tx_tap_np1"], 5)
         assert ami.fetch_param_val(["Model_Specific", "tx_tap_np1"]) == 5
         assert ami.input_ami_params["tx_tap_np1"] == 5
 
     def test_tunable_params(self, test_ami_config):
-        ami = ami_parser.AMIParamConfigurator(test_ami_config)
+        ami = AMIParamConfigurator(test_ami_config)
         names = {"_".join(path) for path, _ in ami.tunable_params}
         assert names == {
             "Model_Specific_tx_tap_units",
@@ -153,14 +154,14 @@ class TestNestedModelSpecificParams:
     actually registers)."""
 
     def test_tunable_params_nested(self, nested_ami_config):
-        ami = ami_parser.AMIParamConfigurator(nested_ami_config)
+        ami = AMIParamConfigurator(nested_ami_config)
         assert ami.tunable_params == [
             (["Model_Specific", "tx_preset", "coeffs", "main"],
              ami.ami_param_defs["Model_Specific"]["tx_preset"]["coeffs"]["main"])
         ]
 
     def test_set_param_val_nested(self, nested_ami_config):
-        ami = ami_parser.AMIParamConfigurator(nested_ami_config)
+        ami = AMIParamConfigurator(nested_ami_config)
         ami.set_param_val(["Model_Specific", "tx_preset", "coeffs", "main"], 0.75)
         assert ami.fetch_param_val(["Model_Specific", "tx_preset", "coeffs", "main"]) == 0.75
         # The value actually consumed by `AMI_Init()` comes from the Trait, via
@@ -206,7 +207,7 @@ def described_group_ami_config():
 
 class TestDescribedGroupParams:
     def test_tunable_params_skips_description_key(self, described_group_ami_config):
-        ami = ami_parser.AMIParamConfigurator(described_group_ami_config)
+        ami = AMIParamConfigurator(described_group_ami_config)
         paths = {tuple(path) for path, _ in ami.tunable_params}
         # Both the Boolean 'dbg_enable' and the Range 'dbg_level' are sweepable;
         # the 'description' key must not show up as a bogus third entry.
@@ -258,13 +259,13 @@ def mode_selector_ami_config():
 
 class TestModeSelectorParams:
     def test_contiguous_list_integer_is_sweepable(self, mode_selector_ami_config):
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         paths = {tuple(path) for path, _ in ami.tunable_params}
         assert ("Model_Specific", "eq_mode") in paths
         assert ("Model_Specific", "eq_mag") in paths
 
     def test_noncontiguous_list_integer_is_excluded(self, mode_selector_ami_config):
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         paths = {tuple(path) for path, _ in ami.tunable_params}
         assert ("Model_Specific", "odd_steps") not in paths
 
@@ -272,7 +273,7 @@ class TestModeSelectorParams:
         self, mode_selector_ami_config
     ):
         "Regression: sweeping a Boolean/List value must not corrupt AMIParameter.pvalue."
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         eq_mode_param = ami.ami_param_defs["Model_Specific"]["eq_mode"]
         assert eq_mode_param.pvalue == [0, 1]  # The legal-value list, untouched so far.
 
@@ -287,7 +288,7 @@ class TestSetAndFetchParamVal:
 
     def test_list_tip_updates_tip_and_value(self, mode_selector_ami_config):
         """The tip (what the GUI shows) used to stay at "Off" while "1" was sent."""
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         assert ami.fetch_param_val(["Model_Specific", "eq_mode"]) == 0  # Was [0, 1]: the legal values.
         ami.set_param_val(["Model_Specific", "eq_mode"], 1)
         assert ami.eq_mode == "Manual"
@@ -297,7 +298,7 @@ class TestSetAndFetchParamVal:
 
     def test_illegal_value_is_rejected(self, mode_selector_ami_config):
         """An out-of-Range value used to be sent as given."""
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         with pytest.raises(TraitError):
             ami.set_param_val(["Model_Specific", "eq_mag"], 50.0)
         with pytest.raises(ValueError, match="can't be set to 6.5"):
@@ -315,13 +316,13 @@ class TestTapTunerValues:
 
     def test_range(self, mode_selector_ami_config):
         """A Range parameter's tuner used to keep reporting its ``pvalue``."""
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         ami.set_param_val(["Model_Specific", "eq_mag"], 6.0)
         assert _tuner_value(ami, "eq_mag") == 6.0
 
     def test_boolean(self, described_group_ami_config):
         """As did a Boolean parameter's."""
-        ami = ami_parser.AMIParamConfigurator(described_group_ami_config)
+        ami = AMIParamConfigurator(described_group_ami_config)
         ami.set_param_val(["Model_Specific", "debug", "dbg_enable"], True)
         assert _tuner_value(ami, "debug_dbg_enable") == 1.0
 
@@ -330,13 +331,13 @@ class TestTapTunerValues:
         ("grouped_ami_config", "ctle_mode"),
     ])
     def test_list_mode_selector(self, config, name, request):
-        ami = ami_parser.AMIParamConfigurator(request.getfixturevalue(config))
+        ami = AMIParamConfigurator(request.getfixturevalue(config))
         ami.set_param_val(["Model_Specific", name], 1)
         assert _tuner_value(ami, name) == 1.0
 
     def test_trait_set_directly(self, mode_selector_ami_config):
         "As the GUI does."
-        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        ami = AMIParamConfigurator(mode_selector_ami_config)
         ami.trait_set(eq_mag=3.0, eq_mode="Manual")
         assert _tuner_value(ami, "eq_mag") == 3.0
         assert _tuner_value(ami, "eq_mode") == 1.0
@@ -393,13 +394,13 @@ def _ami_file(model_specific, reserved='(AMI_Version (Usage Info) (Type String) 
 class TestTapNames:
     def test_model_gets_tap_numbers(self, tap_ami_config):
         """Taps used to reach the model as ``pre1``/``post0``/``post1``, which it doesn't recognise."""
-        ami = ami_parser.AMIParamConfigurator(tap_ami_config)
+        ami = AMIParamConfigurator(tap_ami_config)
         assert ami.input_ami_params["tx_tap"] == {"-1": 0.0, "0": 1.0, "1": 0.0}
         ami.set_param_val(["Model_Specific", "tx_tap", "-1"], -0.1)
         assert ami.input_ami_params["tx_tap"]["-1"] == -0.1
 
     def test_tuners_keep_display_names(self, tap_ami_config):
-        tuners = ami_parser.AMIParamConfigurator(tap_ami_config).mk_tap_tuners()
+        tuners = AMIParamConfigurator(tap_ami_config).mk_tap_tuners()
         assert [(t.name, t.branch_names) for t in tuners] == [
             ("tx_tap_pre1", ["Model_Specific", "tx_tap", "-1"]),
             ("tx_tap_post0", ["Model_Specific", "tx_tap", "0"]),
@@ -420,7 +421,7 @@ class TestTapNames:
 ])
 def test_default_is_the_initial_value(param, expected):
     """``Default`` picks the value when the user doesn't (IBIS 8.0 Section 10.3.4, p.245)."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
+    ami = AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
     value = ami.input_ami_params["x"]
     assert value == expected and type(value) is type(expected)
     assert not ami.ami_parsing_errors
@@ -435,7 +436,7 @@ def test_default_is_the_initial_value(param, expected):
 ])
 def test_unusable_default_warns(param, expected, warning):
     """A Default of the wrong Type or outside the allowed values is ignored, with a warning; the file still loads."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
+    ami = AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
     assert ami.input_ami_params["x"] == expected
     assert len(ami.ami_parsing_errors) == 1 and warning in ami.ami_parsing_errors[0]
     assert ami.ami_parsing_errors[0].startswith("Model_Specific.x: ")
@@ -443,7 +444,7 @@ def test_unusable_default_warns(param, expected, warning):
 
 def test_list_tip_count_must_match_list():
     """``zip()`` used to drop the extra List entries silently (IBIS 8.0 Section 10.3.4, p.241)."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (List 0 1 2) (List_Tip "a" "b"))'))
+    ami = AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (List 0 1 2) (List_Tip "a" "b"))'))
     assert ami.ami_parsing_errors == ["Model_Specific.x: List_Tip has 2 entries, but List has 3; they must match."]
 
 
@@ -453,7 +454,7 @@ def test_list_tip_count_must_match_list():
 ])
 def test_reserved_parameters_first_from_5_1(reserved, warns):
     """IBIS 8.0 Section 10.3.2, p.237."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved, ms_first=True))
+    ami = AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved, ms_first=True))
     assert any("must come before Model_Specific" in w for w in ami.ami_parsing_errors) == warns
 
 
@@ -462,7 +463,7 @@ def test_newer_reserved_parameters_are_recognised():
     names = ["Modulation_Levels", "PAM_Offsets", "PAM_Thresholds", "Tx_Impulse_Input",
              "Adaptation_Valid", "Rx_Port_Order", "Tx_Port_Order"]
     reserved = " ".join(f'({name} (Usage Info) (Type String) (Value "x"))' for name in names)
-    ami = ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved))
+    ami = AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))", reserved))
     assert not ami.ami_parsing_errors
     assert set(names) <= set(ami.info_ami_params)
 
@@ -489,7 +490,7 @@ class TestFormats:
     """Each of these used to fail the whole ``.ami`` file."""
 
     def test_values_sent_to_model(self, formats_ami_config):
-        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        ami = AMIParamConfigurator(formats_ami_config)
         assert not ami.ami_parsing_errors
         params = ami.input_ami_params
         assert params == {
@@ -505,7 +506,7 @@ class TestFormats:
 
     def test_increment_and_steps_allow_only_their_values(self, formats_ami_config):
         """``typ + N*delta`` within ``[min, max]`` (p.241); Steps' delta is ``(max - min) / steps``."""
-        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        ami = AMIParamConfigurator(formats_ami_config)
         defs = ami.ami_param_defs["Model_Specific"]
         assert defs["gain"].pvalues == [0.0, 0.5, 1.0, 1.5, 2.0]
         assert defs["vga"].pvalues == [0, 2, 4, 6, 8]
@@ -517,7 +518,7 @@ class TestFormats:
     @pytest.mark.parametrize("corner, expected", [("typ", 1.0), ("min", 0.5), ("max", 2.0)])
     def test_corner_follows_sim_corner(self, formats_ami_config, corner, expected):
         """The EDA tool picks typ/slow/fast by its simulation corner, not the user (p.246)."""
-        ami = ami_parser.AMIParamConfigurator(formats_ami_config)
+        ami = AMIParamConfigurator(formats_ami_config)
         ami.sim_corner = corner
         assert ami.input_ami_params["pvt"] == expected
         assert ami.fetch_param_val(["Model_Specific", "pvt"]) == expected
@@ -525,7 +526,7 @@ class TestFormats:
         assert all(path[-1] != "pvt" for path, _ in ami.tunable_params)
 
     def test_table_labels_and_column_types(self, formats_ami_config):
-        poles = ami_parser.AMIParamConfigurator(formats_ami_config).ami_param_defs["Model_Specific"]["poles"]
+        poles = AMIParamConfigurator(formats_ami_config).ami_param_defs["Model_Specific"]["poles"]
         assert poles.plabels == ["flag", "re", "im"]
         assert poles.pvalue == [[1, -5e8, 0.0], [2, -9.4e8, 8.3e8]]
         assert [type(v) for v in poles.pvalue[0]] == [int, float, float]
@@ -540,7 +541,7 @@ class TestFormats:
     ])
     def test_bad_parameter_is_skipped(self, param, reason):
         """Only the bad parameter is dropped, with a warning naming it; the rest of the file loads."""
-        ami = ami_parser.AMIParamConfigurator(_ami_file(f"(grp (bad {param})) (good (Usage In) (Type Integer) (Value 1))"))
+        ami = AMIParamConfigurator(_ami_file(f"(grp (bad {param})) (good (Usage In) (Type Integer) (Value 1))"))
         assert ami.input_ami_params == {"root_name": "my_model", "good": 1}  # The emptied group isn't sent.
         assert len(ami.ami_parsing_errors) == 1
         assert ami.ami_parsing_errors[0].startswith("Skipped parameter Model_Specific.grp.bad: ")
@@ -549,18 +550,18 @@ class TestFormats:
     def test_skipped_required_parameter_still_fails(self):
         """A required Reserved Parameter that can't be read is reported missing, as before."""
         with pytest.raises(RuntimeError, match="'GetWave_Exists', not found"):
-            ami_parser.AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))").replace(
+            AMIParamConfigurator(_ami_file("(x (Usage In) (Type Integer) (Value 1))").replace(
                 "(GetWave_Exists (Usage Info) (Type Boolean) (Value False))",
                 "(GetWave_Exists (Usage Info) (Type Boolean) (Value Maybe))"))
 
     def test_table_default_is_ignored_with_a_warning(self):
-        ami = ami_parser.AMIParamConfigurator(_ami_file("(t (Usage In) (Type Float) (Table (1 2)) (Default 1))"))
+        ami = AMIParamConfigurator(_ami_file("(t (Usage In) (Type Float) (Table (1 2)) (Default 1))"))
         assert ami.input_ami_params["t"] == [1.0, 2.0]
         assert ami.ami_parsing_errors == ["Model_Specific.t: Default is not allowed with Table; ignoring it."]
 
     def test_subparameters_named_like_tags(self):
         """Names like ``Corner``/``Steps`` used for parameters don't turn their branch into one (bad) parameter."""
-        ami = ami_parser.AMIParamConfigurator(_ami_file(
+        ami = AMIParamConfigurator(_ami_file(
             '(Corner (Usage In) (Type String) (List "TT" "FF")) '
             "(ctle (Steps (Usage In) (Type Integer) (Value 3)) (gain (Usage In) (Type Float) (Value 0.5)))"))
         assert ami.ami_parsing_errors == []
@@ -568,13 +569,13 @@ class TestFormats:
 
     def test_empty_child_node_is_skipped_alone(self):
         """An empty node ``(x )`` is skipped on its own; it doesn't make its group look like one bad parameter."""
-        ami = ami_parser.AMIParamConfigurator(_ami_file("(g (x )) (good (Usage In) (Type Integer) (Value 1))"))
+        ami = AMIParamConfigurator(_ami_file("(g (x )) (good (Usage In) (Type Integer) (Value 1))"))
         assert ami.input_ami_params == {"root_name": "my_model", "good": 1}  # Nor its emptied group.
         assert ami.ami_parsing_errors == ["Skipped parameter Model_Specific.g.x: No tags or subparameters."]
 
     def test_boolean_table_rows(self):
         """Table rows may start with a Boolean column (Table 18)."""
-        ami = ami_parser.AMIParamConfigurator(_ami_file("(t (Usage In) (Type Boolean Integer) (Table (True 1) (False 2)))"))
+        ami = AMIParamConfigurator(_ami_file("(t (Usage In) (Type Boolean Integer) (Table (True 1) (False 2)))"))
         assert ami.ami_parsing_errors == []
         assert ami.ami_param_defs["Model_Specific"]["t"].pvalue == [[True, 1], [False, 2]]
 
@@ -594,20 +595,20 @@ def test_gui_view_items_match_traits(config, request):
             elif isinstance(elem, Item) and elem.name:
                 yield elem.name
 
-    ami = ami_parser.AMIParamConfigurator(request.getfixturevalue(config))
+    ami = AMIParamConfigurator(request.getfixturevalue(config))
     view = ami.default_traits_view()
     assert sorted(item_names(view.content.content)) == sorted(ami._param_trait_names)
 
 
 def test_boolean_list_without_default_starts_at_first_value():
     """With no ``Default``, a List starts at its first value (IBIS 8.0 p.241); a Boolean List used to start at False."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file("(bl (Usage In) (Type Boolean) (List True False))"))
+    ami = AMIParamConfigurator(_ami_file("(bl (Usage In) (Type Boolean) (List True False))"))
     assert ami.input_ami_params["bl"] is True
 
 
 def test_pdefault_is_typed():
     """``pdefault`` is the typed Default when it is used, for every Format that takes one; ``None`` when unusable."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file(
+    ami = AMIParamConfigurator(_ami_file(
         "(r (Usage In) (Type Float) (Range 0.5 0 1) (Default 0.7)) "
         "(bad (Usage In) (Type Float) (Range 0.5 0 1) (Default 2)) "
         "(d (Usage Info) (Type Boolean) (Default False)) "
@@ -618,17 +619,28 @@ def test_pdefault_is_typed():
 
 
 def test_description_without_quotes():
-    ami = ami_parser.AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (Value 1) (Description "Tap weight"))'))
+    ami = AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (Value 1) (Description "Tap weight"))'))
     assert ami.ami_param_defs["Model_Specific"]["x"].pdescription == "Tap weight"
 
 
 def test_empty_groups_not_sent():
     """Only In/InOut leaves (and the root name) go into ``AMI_parameters_in`` (IBIS 8.0 Section 10.3.6, p.246-247)."""
-    ami = ami_parser.AMIParamConfigurator(_ami_file(
+    ami = AMIParamConfigurator(_ami_file(
         '(info_only (Dependency (x (Usage Info) (Type Float) (Value 1)))) '
         '(outer (inner (y (Usage Out) (Type Float) (Value 2))) (Description "nothing sent")) '
         "(kept (z (Usage In) (Type Integer) (Value 3)) (w (Usage Info) (Type Integer) (Value 4)))"))
     assert ami.input_ami_params == {"root_name": "my_model", "kept": {"z": 3}}
     assert "info_only" not in ami_model.ami_params_string(ami.input_ami_params)
-    assert ami_parser.AMIParamConfigurator(_ami_file("(g (x (Usage Info) (Type Float) (Value 1)))")).input_ami_params \
+    assert AMIParamConfigurator(_ami_file("(g (x (Usage Info) (Type Float) (Value 1)))")).input_ami_params \
         == {"root_name": "my_model"}  # The root name stays, even with nothing else to send.
+
+
+def test_configurator_still_importable_from_parser():
+    """``from pyibisami.ami.parser import AMIParamConfigurator`` (PyBERT, notebooks, user scripts) still works."""
+    from pyibisami.ami import configurator
+    from pyibisami.ami.parser import AMIParamConfigurator as moved, make_param_traits, trait_name_part
+
+    assert (moved, make_param_traits, trait_name_part) == (
+        configurator.AMIParamConfigurator, configurator.make_param_traits, configurator.trait_name_part)
+    with pytest.raises(AttributeError):
+        ami_parser.no_such_name  # pylint: disable=pointless-statement

@@ -16,10 +16,11 @@ from traitsui.api import Group, HGroup, Item, VGroup, View
 from traitsui.menu import ModalButtons
 
 from ..ami.parameter import FIXED_FORMATS, AMIParameter
-from ..ami.parser import trait_name_part
+from ..ami.configurator import trait_name_part
 
 if TYPE_CHECKING:
-    from ..ami.parser import AMIParamConfigurator, ModelSpecificDict, Parameters
+    from ..ami.configurator import AMIParamConfigurator
+    from ..ami.parser import ModelSpecificDict, Parameters
 
 MAX_ITEMS_PER_ROW = 8
 
