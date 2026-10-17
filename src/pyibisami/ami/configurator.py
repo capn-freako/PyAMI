@@ -530,10 +530,13 @@ def make_param_traits(
                                 break
                     the_trait = Trait(val, tmp_dict)
                 else:
+                    # ``Enum(default, values)``: ``Enum([default] + values)`` would offer the default twice.
                     val = default if default is not None else param.pvalue[0]
-                    the_trait = Enum([val] + param.pvalue)
+                    the_trait = Enum(val, param.pvalue)
             case "Increment" | "Steps":  # Only the discrete values typ + N*delta are legal (IBIS 8.0 p.241).
-                the_trait = Enum([param.pvalue] + param.pvalues)  # type: ignore[operator]
+                legal = param.pvalues or []
+                # A typ outside [min, max] (already warned about) isn't legal; start at the first legal value.
+                the_trait = Enum(param.pvalue if param.pvalue in legal else legal[0], legal)
             case _:
                 raise ValueError(f"Unrecognized AMI parameter format: {pformat}, for parameter `{pname}` of type `{param.ptype}` and usage `{param.pusage}`!")
         if the_trait.metadata:

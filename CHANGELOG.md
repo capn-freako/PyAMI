@@ -72,6 +72,7 @@ For help porting code from v9.x, see
   parameter's `Type`). Empty groups aren't sent. Descriptions lose their quotes.
 - A parameter that can't be built is skipped, with a warning; the rest of the `.ami` file loads.
   Subparameters named like tags (e.g. `Corner`) are kept.
+- A `List` parameter's dropdown no longer offers its default value twice.
 - `set_param_val()` validates through the parameter's trait; tap tuners read their values from the traits.
 - `IBISModel.get_pins_qualified()` used a removed `is_tx` attribute; it now goes by the pin's models'
   `Model_type`s (any model of a `[Model Selector]`).

@@ -442,6 +442,31 @@ def test_unusable_default_warns(param, expected, warning):
     assert ami.ami_parsing_errors[0].startswith("Model_Specific.x: ")
 
 
+@pytest.mark.parametrize("param, values, initial", [
+    ("(Type Integer) (List 0 1)", (0, 1), 0),
+    ("(Type Integer) (List 0 1) (Default 0)", (0, 1), 0),  # Was offered as (0, 0, 1).
+    ("(Type Integer) (List 2 3 28 31) (Default 28)", (2, 3, 28, 31), 28),  # Was (28, 2, 3, 28, 31).
+    ('(Type String) (List "b" "a") (Default "a")', ("b", "a"), "a"),
+    ("(Type Integer) (Increment 2 0 4 1)", (0, 1, 2, 3, 4), 2),  # Was (2, 0, 1, 2, 3, 4).
+    ("(Type Integer) (Increment 2 0 4 1) (Default 3)", (0, 1, 2, 3, 4), 3),
+    ("(Type Float) (Steps 0.5 0 1 2)", (0.0, 0.5, 1.0), 0.5),  # Was (0.5, 0.0, 0.5, 1.0).
+])
+def test_enum_offers_each_legal_value_once(param, values, initial):
+    """A List/Increment/Steps dropdown offers exactly the legal values, in order; the default is just selected."""
+    ami = AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
+    assert ami.trait("x").handler.values == values
+    assert ami.x == initial
+    assert ami.input_ami_params["x"] == initial
+
+
+def test_increment_typ_outside_range_starts_at_first_legal_value():
+    """An out-of-range typ (warned about) isn't offered or sent; the first legal value is."""
+    ami = AMIParamConfigurator(_ami_file("(x (Usage In) (Type Float) (Increment 5 0 1 0.25))"))
+    assert ami.trait("x").handler.values == (0.0, 0.25, 0.5, 0.75, 1.0)
+    assert ami.input_ami_params["x"] == 0.0
+    assert "min <= typ <= max" in ami.ami_parsing_errors[0]
+
+
 def test_list_tip_count_must_match_list():
     """``zip()`` used to drop the extra List entries silently (IBIS 8.0 Section 10.3.4, p.241)."""
     ami = AMIParamConfigurator(_ami_file('(x (Usage In) (Type Integer) (List 0 1 2) (List_Tip "a" "b"))'))
