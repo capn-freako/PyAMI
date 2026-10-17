@@ -354,6 +354,12 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             typ, slow, fast = (_read_value(param_type, v) for v in vals)
             self._value = typ
             self._corners = {"typ": typ, "min": slow, "max": fast}
+            # The value follows the simulation corner (``AMIParamConfigurator.sim_corner``), so a Default
+            # (allowed, IBIS 8.0 p.245) is checked but not used.
+            default = self._typed_default(param_type)
+            if default is not None and default not in (typ, slow, fast):
+                self._msg += f"Default {default} is not one of the Corner values {[typ, slow, fast]}.\n"
+            self._default = default
         elif param_format == "Table":
             self._init_table(vals)
         else:  # Gaussian, Dual-Dirac, DjRj
@@ -447,9 +453,12 @@ def _read_value(param_type: str, value_str: str):
             raise AMIParamError(f"Couldn't read float from '{value_str}'.\n") from exc
     if param_type == "Integer":
         try:
-            return int(float(value_str))  # Hack to accommodate: "1e5", for instance.
+            as_float = float(value_str)  # Accommodates "1e5", for instance.
         except (ValueError, TypeError) as exc:
             raise AMIParamError(f"Couldn't read integer from '{value_str}'.\n") from exc
+        if not as_float.is_integer():  # "if Type is Integer, <value> shall be an integer" (IBIS 8.0 p.245).
+            raise AMIParamError(f"Couldn't read integer from '{value_str}'.\n")
+        return int(as_float)
     if param_type == "Boolean":
         if value_str == "True":
             return True

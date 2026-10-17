@@ -282,6 +282,30 @@ class TestModeSelectorParams:
         assert eq_mode_param.pvalue == [0, 1]
 
 
+class TestSetAndFetchParamVal:
+    """``set_param_val()`` goes through the parameter's trait; ``fetch_param_val()`` reads it back."""
+
+    def test_list_tip_updates_tip_and_value(self, mode_selector_ami_config):
+        """The tip (what the GUI shows) used to stay at "Off" while "1" was sent."""
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        assert ami.fetch_param_val(["Model_Specific", "eq_mode"]) == 0  # Was [0, 1]: the legal values.
+        ami.set_param_val(["Model_Specific", "eq_mode"], 1)
+        assert ami.eq_mode == "Manual"
+        assert ami.input_ami_params["eq_mode"] == ami.fetch_param_val(["Model_Specific", "eq_mode"]) == 1
+        with pytest.raises(ValueError, match="isn't one of the values"):
+            ami.set_param_val(["Model_Specific", "eq_mode"], 2)
+
+    def test_illegal_value_is_rejected(self, mode_selector_ami_config):
+        """An out-of-Range value used to be sent as given."""
+        ami = ami_parser.AMIParamConfigurator(mode_selector_ami_config)
+        with pytest.raises(TraitError):
+            ami.set_param_val(["Model_Specific", "eq_mag"], 50.0)
+        with pytest.raises(ValueError, match="can't be set to 6.5"):
+            ami.set_param_val(["Model_Specific", "odd_steps"], 6.5)  # Integer: was truncated to 6.
+        assert ami.input_ami_params["eq_mag"] == 0.0
+        assert ami.input_ami_params["odd_steps"] == 6
+
+
 @pytest.fixture
 def grouped_ami_config():
     """Prefix-grouped parameters (``ctle_*``), a non-configurable ``Out`` parameter
@@ -370,6 +394,8 @@ def test_default_is_the_initial_value(param, expected):
     ("(Type Float) (Range 0.5 0 1) (Default 1.5)", 0.5, "outside the Range"),
     ("(Type Integer) (List 0 1 2) (Default 3)", 0, "not a member of the List"),
     ("(Type Integer) (List 0 1 2) (Default high)", 0, "Couldn't read integer"),
+    ("(Type Integer) (Range 1 0 3) (Default 2.5)", 1, "Couldn't read integer"),  # Was 2: truncated.
+    ("(Type Float) (Corner 1.0 0.5 2.0) (Default 0.7)", 1.0, "not one of the Corner values"),
 ])
 def test_unusable_default_warns(param, expected, warning):
     """A Default of the wrong Type or outside the allowed values is ignored, with a warning; the file still loads."""

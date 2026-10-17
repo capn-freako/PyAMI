@@ -22,7 +22,6 @@ from typing import Optional
 
 from traits.api import (
     Any,
-    Dict,
     Enum,
     Event,
     Float,
@@ -101,8 +100,6 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     via the ``model_dict`` property.
     """
 
-    pin_ = Property(Any, depends_on=["pin"])
-    pin_rlcs = Property(Dict, depends_on=["pin"])
     model = Property(Any, depends_on=["mod"])
     comps = List  # Always holds the list of valid component selections.
     pins = List  # Always holds the list of valid pin selections, given a component selection.
@@ -390,14 +387,15 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
         "The selected ``Component``."
         return self._components[self.comp]  # type: ignore
 
-    @cached_property
-    def _get_pin_(self):
-        return self.comp_.pins[self.pin]
+    @property
+    def pin_(self) -> tuple[str, dict[str, float]]:
+        "The selected pin's ``(model name, R/L/C values)``."
+        return self.comp_.pins[self.pin]  # type: ignore
 
-    @cached_property
-    def _get_pin_rlcs(self):
-        (_, pin_rlcs) = self.pin_
-        return pin_rlcs
+    @property
+    def pin_rlcs(self) -> dict[str, float]:
+        "The selected pin's R/L/C values."
+        return self.pin_[1]
 
     @cached_property
     def _get_model(self):
@@ -471,8 +469,8 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._pin_changed(self.pin)
 
     def _pin_changed(self, new_value):
-        # (mname, rlc_dict) = self.pin_  # Doesn't work. Because ``pin_`` is a cached property and hasn't yet been marked "dirty"?
-        (mname, _) = self.comp_.pins[new_value]
+        del new_value
+        (mname, _) = self.pin_
         self.models = self._selectable_model_names(mname)
         self.mod = self.models[0]
 

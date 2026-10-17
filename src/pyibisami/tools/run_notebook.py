@@ -58,12 +58,13 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool) -> Path:
     # Import the `*.ibs` file.
     try:
         ibis = IBISModel(str(ibis_file.resolve()))
-        ami_file = ibis.ami_path
-        assert ami_file, RuntimeError(
-            "Missing AMI file definition in IBIS file!"
-        )
     except Exception as err:
         raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
+    _, ami_name = ibis.model.get_ami_files(is_tx)  # Direction-aware, for an I/O model.
+    ami_file = ibis.resolve_file(ami_name)
+    if not ami_file:
+        raise RuntimeError(
+            f"No {'Tx' if is_tx else 'Rx'} AMI file for this platform in {ibis_file}; check --is_tx.")
 
     # Import the `*.ami` file.
     try:

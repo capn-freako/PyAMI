@@ -195,12 +195,30 @@ class AMIParamConfigurator(HasTraits):
         """Returns the value of the parameter found by traversing
         'branch_names' or None if not found.
 
+        A *Model Specific* parameter with a trait (Usage In/InOut) gives its current value (e.g. - the selected
+        List value), as sent to the model; a Corner gives its value for ``sim_corner``.
+
         Note: 'branch_names' should *not* begin with 'root_name'.
         """
-        _param = self.fetch_param(branch_names)
-        if _param:
-            return self._fixed_value(_param) if _param.pformat == "Corner" else _param.pvalue
-        return None
+        _param = self.fetch_param(list(branch_names))
+        if not _param:
+            return None
+        tname = self._param_trait_name(branch_names)
+        if tname:
+            return self._trait_value(tname)
+        return self._fixed_value(_param) if _param.pformat == "Corner" else _param.pvalue
+
+    def _param_trait_name(self, branch_names: list[str]) -> Optional[str]:
+        "The trait holding the value of the parameter at ``branch_names``; ``None`` if it has none."
+        if branch_names[:1] != ["Model_Specific"]:
+            return None
+        tname = "_".join(trait_name_part(name) for name in branch_names[1:])
+        return tname if tname in self._param_trait_names else None
+
+    def _trait_value(self, tname: str) -> Any:
+        "A parameter trait's value, as sent to the model (a mapped trait's (List_Tip's) value, not its label)."
+        trait = self.trait(tname)
+        return getattr(self, f"{tname}_" if trait.is_mapped else tname)
 
     def _fixed_value(self, param: AMIParameter) -> Any:
         """The value sent for a parameter of one of the ``FIXED_FORMATS``: a Corner's value for ``sim_corner``,
@@ -224,61 +242,67 @@ class AMIParamConfigurator(HasTraits):
             branch_names: A sequence of node names, used to traverse the parameter tree.
             new_val: The value to assign to the target parameter.
 
+        Raises:
+            ValueError: No parameter at ``branch_names``; a Corner parameter; an Integer parameter given a
+                non-integer value; or a value that isn't one of a List_Tip parameter's values.
+            TypeError: ``branch_names`` names a group, not a parameter.
+            TraitError: The value isn't legal for the parameter (e.g. - outside its Range).
+
         Notes:
             1. ``branch_names`` should *not* begin with <root_name>.
-            2. Be careful! There is no checking done here!
+            2. A *Model Specific* parameter with a trait (Usage In/InOut) is set on its trait, which checks the
+            value; ``pvalue`` keeps the ``.ami`` file's value. Other parameters (e.g. - Reserved ones) set
+            ``pvalue``, unchecked.
         """
 
         param_dict = self.ami_param_defs
-        tname_parts: list[str] = []  # Fully hierarchical trait name, minus the root key.
-        root_key: Optional[str] = None
-        while branch_names:
-            branch_name = branch_names.pop(0)
-            if root_key is None:
-                root_key = branch_name  # "Reserved_Parameters" or "Model_Specific"; not part of the trait name.
-            else:
-                tname_parts.append(trait_name_part(branch_name))
-            if branch_name in param_dict:
-                param_dict = param_dict[branch_name]  # type: ignore
-            else:
+        for branch_name in branch_names:
+            if branch_name not in param_dict:
                 raise ValueError(
                     f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"
                 )
-        if isinstance(param_dict, AMIParameter):
-            if param_dict.pformat == "Corner":
-                raise ValueError(f"A Corner parameter's value follows `sim_corner`; it can't be set: {branch_names}")
-            if param_dict.pformat in FIXED_FORMATS:  # Table, Gaussian, ...: stored as given, no trait.
-                param_dict.pvalue = new_val
-                return
-            # Coerce to the parameter's declared type. Notably: a `Bool` trait rejects a
-            # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
-            # Integer-typed value (e.g. a List-format mode selector) is expected.
-            if param_dict.ptype == "Boolean":
-                if not isinstance(new_val, bool):
-                    if isinstance(new_val, str):
-                        match new_val:
-                            case "FALSE" | "False" | "false":
-                                new_val = False
-                            case _:
-                                new_val = bool(new_val)
-                    else:
-                        new_val = bool(new_val)
-            elif param_dict.ptype == "Integer":
-                new_val = int(new_val)
-            elif param_dict.ptype in ("Float", "UI", "Tap"):  # A Tap is a (float) tap weight.
-                new_val = float(new_val)
-            # `pvalue`, for 'List' format, holds the list of *legal* values, not the
-            # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
-            if param_dict.pformat != "List":
-                param_dict.pvalue = new_val
-            tname = "_".join(tname_parts)
-            if tname:
-                try:
-                    self.trait_set(**{f"{tname}_": new_val})
-                except Exception:  # pylint: disable=broad-exception-caught
-                    self.trait_set(**{tname: new_val})
-        else:
+            param_dict = param_dict[branch_name]  # type: ignore
+        if not isinstance(param_dict, AMIParameter):
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
+        if param_dict.pformat == "Corner":
+            raise ValueError(f"A Corner parameter's value follows `sim_corner`; it can't be set: {branch_names}")
+        if param_dict.pformat in FIXED_FORMATS:  # Table, Gaussian, ...: stored as given, no trait.
+            param_dict.pvalue = new_val
+            return
+        # Coerce to the parameter's declared type. Notably: a `Bool` trait rejects a
+        # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
+        # Integer-typed value (e.g. a List-format mode selector) is expected.
+        if param_dict.ptype == "Boolean":
+            if not isinstance(new_val, bool):
+                if isinstance(new_val, str):
+                    match new_val:
+                        case "FALSE" | "False" | "false":
+                            new_val = False
+                        case _:
+                            new_val = bool(new_val)
+                else:
+                    new_val = bool(new_val)
+        elif param_dict.ptype == "Integer":
+            as_float = float(new_val)
+            if not as_float.is_integer():
+                raise ValueError(f"Integer parameter {branch_names} can't be set to {new_val!r}.")
+            new_val = int(as_float)
+        elif param_dict.ptype in ("Float", "UI", "Tap"):  # A Tap is a (float) tap weight.
+            new_val = float(new_val)
+        tname = self._param_trait_name(branch_names)
+        if tname:
+            trait = self.trait(tname)
+            if trait.is_mapped:  # List_Tip: the trait holds the tip; ``<tname>_`` follows it (read-only).
+                tips = [tip for tip, value in trait.handler.map.items() if value == new_val]
+                if not tips:
+                    raise ValueError(f"{new_val!r} isn't one of the values of {branch_names}: "
+                                     f"{list(trait.handler.map.values())}")
+                new_val = tips[0]
+            self.trait_set(**{tname: new_val})
+        # `pvalue`, for 'List' format, holds the list of *legal* values, not the
+        # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
+        elif param_dict.pformat != "List":
+            param_dict.pvalue = new_val
 
     @property
     def tunable_params(self) -> list[tuple[list[str], AMIParameter]]:
@@ -401,13 +425,7 @@ class AMIParamConfigurator(HasTraits):
         param = params[pname]
         if isinstance(param, AMIParameter):
             if tname in self._param_trait_names:  # If model specific and of type In or InOut...
-                # See the docs on the *HasTraits* class, if this is confusing.
-                # Querry for a mapped trait, first, by trying to get '<trait_name>_'. (Note the underscore.)
-                try:
-                    res[pname] = self.trait_get(tname + "_")[tname + "_"]
-                # If we get an exception, we have an ordinary (i.e. - not mapped) trait.
-                except Exception:  # pylint: disable=broad-exception-caught
-                    res[pname] = self.trait_get(tname)[tname]
+                res[pname] = self._trait_value(tname)
             elif param.pusage in ("In", "InOut") and param.pformat in FIXED_FORMATS:  # Sent, but has no trait.
                 res[pname] = self._fixed_value(param)
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.

@@ -267,6 +267,17 @@ def test_no_usable_component(tmp_path):
         IBISModel(str(ibis_file))
 
 
+def test_pin_follows_the_selection(tmp_path):
+    """``pin_``/``pin_rlcs`` used to stay at the first pin (a cached property that was never refreshed)."""
+    ibis_file = tmp_path / "mixed.ibs"
+    ibis_file.write_text(MIXED_IBIS, encoding="utf-8")
+    ibis = IBISModel(str(ibis_file))
+    for pin in ibis.pins:
+        ibis.pin = pin
+        assert ibis.pin_ == ibis.comp_.pins[pin]
+        assert ibis.pin_rlcs is ibis.pin_[1]
+
+
 def test_parse_failure_reports_the_reason(tmp_path):
     """A file that fails to parse says where, not "no components"."""
     ibis_file = tmp_path / "broken.ibs"
