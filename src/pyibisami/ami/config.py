@@ -35,6 +35,7 @@ configuration file, so as to ensure consistency between them all.
 
 import importlib.util
 import logging
+import warnings
 from datetime import date
 from pathlib import Path
 from typing import Any, NewType
@@ -46,6 +47,11 @@ from ..ami.parser import ParamValues
 from ..cli_logging import setup_cli_logging
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_MSG = (
+    "`ami-config` / `ami_config()` is deprecated; "
+    "instead, make your model configurator executable and have it call `pyibisami.ami.config.mk_model()`."
+)
 
 NamedParamDict = NewType("NamedParamDict", tuple[str, ParamValues])
 TestDefinition = NewType("TestDefinition", tuple[str, NamedParamDict, NamedParamDict, str])
@@ -206,10 +212,15 @@ def ami_config(py_file):
         py_file: name of model configuration file (<stem>.py)
 
     Notes:
-        1. This function is deprecated! Instead, make your model configurator executable
-        and import what you need from this module. This is much cleaner.
+        1. This function is deprecated!
+        Instead, make your model configurator executable and have it call ``mk_model()``.
     """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
+    _ami_config(py_file)
 
+
+def _ami_config(py_file):
+    "``ami_config()``, without its deprecation warning."
     file_base_name = Path(py_file).stem
 
     # Read model configuration information.
@@ -305,12 +316,13 @@ def main(py_file, debug):
        py_file: name of model configuration file (*.py)
 
     Notes:
-        1. This command is deprecated! Instead, make your model configurator executable
-        and import what you need from this module. This is much cleaner.
+        1. This command is deprecated!
+        Instead, make your model configurator executable and have it call ``mk_model()``.
     """
     setup_cli_logging(debug)
+    logger.warning(_DEPRECATION_MSG)  # A ``DeprecationWarning`` isn't shown to CLI users by default.
     try:
-        ami_config(py_file)
+        _ami_config(py_file)
     except RuntimeError as err:
         raise click.ClickException(str(err)) from err
 

@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 import pyibisami.ami.config as config
 
 
@@ -11,7 +13,8 @@ class TestAMIConfig(object):
 
         mock_date.today.return_value = "2019-02-10"
         configurator = config.ami_config
-        configurator(Path(__file__).parents[1].joinpath("examples", "example_tx.py"))
+        with pytest.deprecated_call():
+            configurator(Path(__file__).parents[1].joinpath("examples", "example_tx.py"))
 
         with open(Path(__file__).parents[1].joinpath("examples", "example_tx.ami")) as ami_file:
             ami = ami_file.read()
@@ -184,7 +187,8 @@ def _copy_example(tmp_path, drop_line=None):
 def test_ami_config_builds_parsable_ibs(tmp_path):
     from pyibisami.ibis.file import IBISModel
 
-    config.ami_config(_copy_example(tmp_path))
+    with pytest.deprecated_call():
+        config.ami_config(_copy_example(tmp_path))
     assert IBISModel(str(tmp_path / "example_tx.ibs")).file_name == "example_tx.ibs"
 
 

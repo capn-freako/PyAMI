@@ -20,7 +20,7 @@ from reportlab.platypus     import Flowable, Image, Paragraph, Spacer
 from scipy.signal           import convolve
 
 from ..ami.model        import AMIModel, AMIModelInitializer
-from ..ami.parser       import AMIParamConfigurator
+from ..ami.configurator import AMIParamConfigurator
 
 from .plot        import (
     RGB, RED, GREEN, BLUE, PLOT_COLOR, PLOT_LINESTYLE,

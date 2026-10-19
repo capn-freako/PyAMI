@@ -17,13 +17,14 @@ import shutil
 import subprocess
 import sys
 import shlex
-from tempfile   import NamedTemporaryFile
+from tempfile   import TemporaryDirectory
 from time       import time
 from typing     import Any, Optional
 
 import click
 
-from ..ami.parser import AMIParamConfigurator, ParamName
+from ..ami.configurator import AMIParamConfigurator
+from ..ami.parser import ParamName
 from ..cli_logging import setup_cli_logging
 from ..ibis.file  import IBISModel
 
@@ -58,13 +59,13 @@ def mk_dummy_run_file(ibis_file: Path, is_tx: bool) -> Path:
     # Import the `*.ibs` file.
     try:
         ibis = IBISModel(str(ibis_file.resolve()))
-        dName = ibis_file.parent
-        assert ibis.ami_file, RuntimeError(
-            "Missing AMI file definition in IBIS file!"
-        )
-        ami_file = dName / ibis.ami_file
     except Exception as err:
         raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
+    _, ami_name = ibis.model.get_ami_files(is_tx)  # Direction-aware, for an I/O model.
+    ami_file = ibis.resolve_file(ami_name)
+    if not ami_file:
+        raise RuntimeError(
+            f"No {'Tx' if is_tx else 'Rx'} AMI file for this platform in {ibis_file}; check --is_tx.")
 
     # Import the `*.ami` file.
     try:
@@ -147,12 +148,11 @@ def run_notebook(
     extra_args = [tok for item in notebook_params.items()
                       for tok  in ['-p', f'{item[0]}', f'{item[1]}']]  # noqa: E127
 
-    with NamedTemporaryFile(suffix='.ipynb',
-                            prefix=(notebook.stem + "_papermill"),
-                            delete_on_close=False) as tmp_notebook:
-        subprocess.run(['papermill', str(notebook), tmp_notebook.name] + extra_args, check=True)
+    with TemporaryDirectory() as tmp_dir:
+        tmp_notebook = str(Path(tmp_dir) / f"{notebook.stem}_papermill.ipynb")
+        subprocess.run(['papermill', str(notebook), tmp_notebook] + extra_args, check=True)
         subprocess.run(
-            ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook.name],
+            ['jupyter', 'nbconvert', '--to', 'html', '--no-input', '--output', html_file, tmp_notebook],
             check=True)
 
     run_time = int(time() - start_time)  # integer seconds

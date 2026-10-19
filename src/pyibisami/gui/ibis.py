@@ -70,7 +70,7 @@ def make_component_view(comp: Component) -> View:  # pylint: disable=unused-argu
         ),
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Component Viewer",
+        title="IBIS Component Viewer",
         id="pyibisami.ibis_parser.Component",
     )
 
@@ -94,18 +94,19 @@ def make_model_view(model: Model) -> View:
             show_border=True,
         ),
     ]
-    mtype = model.mtype.lower()
-    if mtype in ("output", "i/o"):
-        content.append(Item("zout", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    # Only the values this ``Model_type`` (and its data) has; ``Model`` adds a trait for each of them.
+    if model.zout is not None:
+        content.append(Item("zout", label="Output Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    if model.slew is not None:
         content.append(Item("slew", label="Slew Rate (V/ns)", style="readonly", format_str="%4.1f"))
-    elif mtype == "input":
-        content.append(Item("zin", label="Impedance (Ohms)", style="readonly", format_str="%4.1f"))
+    if model.zin is not None:
+        content.append(Item("zin", label="Input Impedance (Ohms)", style="readonly", format_str="%4.1f"))
     if model.iv_data is not None:
         content.append(Item("plot_iv", editor=ComponentEditor(), show_label=False))
     view = View(
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Model Viewer",
+        title="IBIS Model Viewer",
         id="pyibisami.ibis_parser.Model",
     )
     view.set_content(content)
@@ -134,8 +135,8 @@ def make_ibis_file_view(ibis: IBISModel) -> View:  # pylint: disable=unused-argu
         ),
         resizable=False,
         buttons=ModalButtons,
-        title="PyBERT IBIS Model Selector",
-        id="pybert_ibis_model_selector",
+        title="IBIS Model Selector",
+        id="pyibisami_ibis_model_selector",
     )
 
 

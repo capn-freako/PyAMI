@@ -18,7 +18,8 @@ from collections.abc    import Generator
 import numpy as np
 
 from ..common           import Rvec, raised_cosine
-from ..ami.parser       import AMIParamConfigurator, ParamName
+from ..ami.configurator import AMIParamConfigurator
+from ..ami.parser       import ParamName
 from ..ibis.file        import IBISModel
 
 logger = logging.getLogger(__name__)
@@ -104,11 +105,10 @@ def mk_default_test_sweep_file(
     # Import the `*.ibs` file.
     try:
         ibis = IBISModel(str(ibis_file.resolve()))
-        dName = ibis_file.parent
-        assert ibis.ami_file, RuntimeError(
+        ami_file = ibis.ami_path
+        assert ami_file, RuntimeError(
             "Missing AMI file definition in IBIS file!"
         )
-        ami_file = dName / ibis.ami_file
     except Exception as err:
         raise RuntimeError(f"Failed to open/import IBIS file: {ibis_file}!") from err
 

@@ -36,9 +36,11 @@ Extra          Adds                                          Needed for
 ``gui``        `chaco`, `enable`, `traitsui`                 GUIs: ``AMIParamConfigurator.open_gui()``,
                                                              calling ``IBISModel``/``Component``/``Model``
                                                              instances, ``Model.plot_iv``
-``report``     `matplotlib`, `reportlab`                     `test-model` & `run-tests` (PDF/plot reports)
+``report``     `matplotlib`, `reportlab`, `scipy`            `test-model` & `run-tests` (PDF/plot reports),
+                                                             ``testing.test_defs.lossy_channel()``/
+                                                             ``reflective_channel()``
 ``notebook``   `jupyter`, `papermill`, `lxml-html-clean`,    `run-notebook`
-               `matplotlib`
+               plus the ``report`` extra
 ``all``        all of the above
 =============  ============================================  ====================================================
 
@@ -53,7 +55,7 @@ If you have none, install one; e.g.: `pip install pyside6`
 Upgrading from v9.x
 -------------------
 
-Version 10.0 makes the GUI, report, and notebook dependencies optional.
+Version 10.0 makes the GUI, report, and notebook dependencies optional, as well as *SciPy* (now in ``report``).
 If you relied on them being installed along with *PyIBIS-AMI*,
 install the appropriate extra (see above); e.g. - `pip install 'pyibis-ami[all]'`
 
@@ -61,7 +63,17 @@ Other changes affecting library users:
 
 - ``make_gui()`` and ``make_gui_items()`` moved from ``pyibisami.ami.parser``
   to ``pyibisami.gui.ami_config``, and no longer return ``Trait`` s.
-  The ``Trait`` s are built by the new ``pyibisami.ami.parser.make_param_traits()``.
+  The ``Trait`` s are built by the new ``pyibisami.ami.configurator.make_param_traits()``.
+- ``AMIParamConfigurator`` moved from ``pyibisami.ami.parser`` to the new ``pyibisami.ami.configurator``
+  (with ``make_param_traits()`` and ``trait_name_part()``); the old imports still work.
+- Tap parameters (named ``-1``, ``0``, ``1``, ...) get trait names ``pre1``, ``post0``, ``post1``, ...
+  (e.g. - ``tx_tap_pre1``), since tap numbers aren't valid trait names.
+  The names sent to the model, and the ``branch_names`` paths of ``fetch_param_val()``/``set_param_val()``,
+  keep the ``.ami`` file's names.
+- Every ``.ami`` ``Format`` now parses. ``Increment``/``Steps`` parameters offer only their legal values;
+  ``Corner`` parameters follow the new ``AMIParamConfigurator.sim_corner`` (``typ``/``min``/``max``);
+  ``Table``, ``Gaussian``, ``Dual-Dirac`` and ``DjRj`` parameters are sent as written, with no trait.
+  A parameter that can't be built is skipped, with a warning in ``ami_parsing_errors``; the rest of the file loads.
 - The I-V curve data of an IBIS ``[Model]`` is now available, without any GUI dependency,
   via ``Model.iv_data`` (see ``pyibisami.ibis.iv``).
   ``Model.plot_iv`` is still available, but now requires the ``gui`` extra,
@@ -72,6 +84,21 @@ Other changes affecting library users:
   ``pyibisami.gui.ibis.show_alerts(ibis)`` shows them as pop-up dialogs;
   calling the ``IBISModel`` instance (to open its GUI) does this automatically.
   The notice texts are now application-neutral (no references to *PyBERT* tabs).
+- ``IBISModel`` takes no ``is_tx`` argument (removed in v9.0; ``IBISModel(ibis_file, True)`` raises ``TypeError``).
+  To offer only Tx (or Rx) pins in its selector, use the new keyword-only ``model_types`` argument;
+  e.g. - ``IBISModel(ibis_file, model_types=TX_MODEL_TYPES)``
+  (``TX_MODEL_TYPES``/``RX_MODEL_TYPES`` are in ``pyibisami.ibis.file``).
+  Its views' titles no longer mention *PyBERT*, and the selector's ``id`` is now ``pyibisami_ibis_model_selector``.
+- ``IBISModel`` raises ``ValueError`` (``Couldn't parse IBIS file ...``, with the line and column)
+  when the file doesn't parse, instead of logging a warning.
+  Spec violations that don't stop loading are appended to ``ibis_parsing_errors``.
+- ``IBISModel.dll_file``/``ami_file`` now come from the selected model (``Model.dll_file``/``ami_file``),
+  and the new ``dll_path``/``ami_path`` give them resolved against ``ibis_dir``.
+  They take the model's first ``Executable`` line for this platform, whatever its direction;
+  for an ``I/O`` model with both ``Executable_Tx`` and ``Executable_Rx``, use ``Model.get_ami_files(is_tx)``.
+  The private ``Model._exec32Wins`` etc. were removed; ``Model.ami_files`` and ``Model.executables`` remain.
+- ``Model.zout``/``slew``/``zin`` are ``None`` (and the ``Model`` has no such trait) where the ``Model_type``
+  or its data gives no value; they are now also set for ``3-state``, ``Open_*`` and ``I/O_open_*`` models.
 - ``IBISModel.log()`` and ``IBISModel.log_txt`` were removed,
   as was the ``debug`` argument of ``IBISModel`` and ``pyibisami.ibis.parser.parse_ibis_file()``.
   *PyIBIS-AMI* reports through the standard ``logging`` module, under the ``pyibisami`` logger,

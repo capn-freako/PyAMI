@@ -43,6 +43,7 @@ def test_core_modules_import():
         import pyibisami.ami.config
         import pyibisami.ami.model
         import pyibisami.ami.parameter
+        import pyibisami.ami.configurator
         import pyibisami.ami.parser
         import pyibisami.common
         import pyibisami.ibis.file
@@ -81,7 +82,7 @@ def test_ibis_model_headless(ibis_test_file):
 def test_ami_configurator_headless(ami_test_file):
     run_without_extras("""
         import sys
-        from pyibisami.ami.parser import AMIParamConfigurator
+        from pyibisami.ami.configurator import AMIParamConfigurator
 
         with open(sys.argv[1], encoding="utf-8") as ami_file:
             cfg = AMIParamConfigurator(ami_file.read())

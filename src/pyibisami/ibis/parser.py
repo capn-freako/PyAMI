@@ -15,10 +15,11 @@ import re
 
 from functools import reduce
 from typing import Any, Optional, TypeAlias, TypeVar
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Sequence
 
 from parsec import (
     ParseError,
+    Value,
     Parser,
     count,
     eof,
@@ -97,19 +98,35 @@ def word(p: Parser) -> Parser:
     return p << regex(r"\s+")
 
 
+@Parser
+def _line_text(text: Sequence[Any], index: int) -> Value:
+    """The rest of the current line; nothing at the start of a keyword line.
+
+    A ``[`` later in a line is text: keywords start in column 1 (IBIS 8.0 Section 3.2, rule 6).
+    """
+    if (index == 0 or text[index - 1] in "\n\r") and index < len(text) and text[index] == "[":
+        return Value.success(index, "")
+    end = index
+    while end < len(text) and text[end] not in "\n\r":
+        end += 1
+    return Value.success(end, text[index:end])
+
+
 @generate("remainder of line")
 def rest_line() -> GenParser[str]:  # type: ignore
-    "Parse remainder of line."
-    chars = yield many(none_of("[\n\r")) << ignore  # So that we still function as a lexeme.
-    rslt = "".join(chars)
-    return rslt
+    "Parse remainder of line, without a trailing ``|`` comment or whitespace."
+    rslt = yield _line_text << ignore  # So that we still function as a lexeme.
+    return rslt.split("|", 1)[0].rstrip()
 
 
 skip_line: Parser = lexeme(rest_line).result("(Skipped.)")
 name_only: Parser = regex(r"[_a-zA-Z0-9/\.()#-]+")
 name: Parser = word(name_only)
-# Parameters must begin with a letter in column 1.
-param_name: Parser = word(regex(r"^[a-zA-Z]\w*", re.MULTILINE))
+# Pin, signal and model names: any non-blank run (e.g. - ``TX+``, ``DQ<0>``), except a keyword (``[``) or comment (``|``).
+token_only: Parser = regex(r"[^\s\[|][^\s|]*")  # A ``|`` also ends it: a comment may follow at once.
+token: Parser = token_only << regex(r"\s+|(?=\|)")  # Like ``word()``, but a comment may also follow at once.
+# Parameters must begin with a letter in column 1; ``=`` may follow without a space (e.g. - ``Vinl=0.4``).
+param_name: Parser = regex(r"^[a-zA-Z]\w*", re.MULTILINE) << regex(r"\s+|(?==)")
 symbol: Parser = lexeme(regex(r"[a-zA-Z_][^\s()\[\]]*"))
 true: Parser = lexeme(string("True")).result(True)
 false: Parser = lexeme(string("False")).result(False)
@@ -155,11 +172,12 @@ na: Parser = word(string("NA") | string("na")).result(None)
 def typminmax() -> GenParser[list[float]]:
     "Parse Typ/Min/Max values."
     typ = yield number
-    minmax = yield optional(count(number, 2) | count(na, 2).result([]), [])
+    minmax = yield optional(count(number | na, 2), [])
     yield ignore  # So that ``typminmax`` behaves as a lexeme.
-    res = [typ]
-    res.extend(minmax)
-    return res
+    if minmax == [None, None]:  # ``typ NA NA``: just the typical value, as always.
+        return [typ]
+    # Either one may be ``NA``, meaning the typical value (IBIS 8.0 Section 6.1, p.67 and p.80).
+    return [typ] + [typ if val is None else val for val in minmax]
 
 
 vi_line: Parser = (number + typminmax) << ignore
@@ -174,19 +192,36 @@ def ratio() -> GenParser[Optional[float]]:
     return None
 
 
+def _platform_os(chars: list[str]) -> str:
+    """The OS field of an ``Executable`` line's ``Platform_Compiler_Bits``, lower-cased.
+
+    Any OS name, with an optional version, is accepted (IBIS 8.0 Section 10.1, p.213); ``Linux...``/``Windows...``
+    become exactly ``"linux"``/``"windows"``, the only platforms executables are selected for.
+    """
+    token = "".join(chars).lower()
+    for os_name in ("linux", "windows"):
+        if token.startswith(os_name):
+            return os_name
+    return token
+
+
+# ``(direction, ((os, bits), [dll, ami]))``; ``direction`` is ``"tx"``, ``"rx"``, or ``None`` for plain ``Executable``.
 ex_line: Parser = (
-    word(string("Executable_Tx") ^ string("Executable_Rx") ^ string("Executable"))
-    >> (  # noqa: W503
-        (
-            ((string("L") | string("l")) >> string("inux")).result("linux")
-            | ((string("W") | string("w")) >> string("indows")).result("windows")  # noqa: W503
-        )
-        << string("_")  # noqa: W503
-        << many(none_of("_"))  # noqa: W503
-        << string("_")  # noqa: W503
+    word(
+        string("Executable_Tx").result("tx")
+        ^ string("Executable_Rx").result("rx")  # noqa: W503
+        ^ string("Executable").result(None)  # noqa: W503
     )
-    + lexeme(string("32") | string("64"))  # noqa: W503
-    + count(name, 2)  # noqa: W503
+    + (  # noqa: W503
+        (
+            many1(none_of("_ \t\r\n")).parsecmap(_platform_os)
+            << string("_")  # noqa: W503
+            << many(none_of("_"))  # noqa: W503
+            << string("_")  # noqa: W503
+        )
+        + lexeme(string("32") | string("64"))  # noqa: W503
+        + count(name, 2)  # noqa: W503
+    )
     << ignore  # noqa: W503
 )
 
@@ -209,7 +244,10 @@ def ami_test_config() -> GenParser[tuple[str, dict[str, str]]]:
 
 @generate("[Algorithmic Model]")
 def algo_model() -> GenParser[dict]:
-    "Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks."
+    """Parse [Algorithmic Model]: Executable lines then optional [AMI Test Configuration] blocks.
+
+    Each ``executables`` entry is ``(direction, ((os, bits), [dll, ami]))``; see ``ex_line``.
+    """
     execs = yield many1(ex_line)
     cfg_pairs = yield many(keyword("ami_test_configuration") >> ami_test_config)
     yield keyword("end_algorithmic_model")
@@ -292,7 +330,13 @@ allowed_model_types: list[str] = [
     "Terminator",
     "Series",
     "Series_switch",
-]
+    # True differential models, defined through ``[External Model]`` (IBIS 8.0 Section 6.1, p.62).
+    # Their ``[External Model]`` block is skipped, like any other unparsed ``[Model]`` keyword.
+    "Input_diff",
+    "Output_diff",
+    "I/O_diff",
+    "3-state_diff",
+]  # ``word()`` needs whitespace after the name, so e.g. ``Output`` never matches the start of ``Output_diff``.
 model_type_parsers = [word(string(mt)) for mt in allowed_model_types]
 model_type = reduce(try_choice, model_type_parsers)
 
@@ -306,7 +350,7 @@ def param() -> GenParser[tuple[str, Any]]:
         case "Model_type":
             res = yield model_type
         case _:
-            res = yield ((word(string("=")) >> (number | rest_line)) | typminmax | name | rest_line)
+            res = yield (((string("=") << regex(r"[ \t]*")) >> (number | rest_line)) | typminmax | name | rest_line)
     logger.debug("%s", res)
     yield ignore  # So that ``param`` functions as a lexeme.
     return (pname.lower(), res)
@@ -407,19 +451,20 @@ Model_keywords: dict[str, Parser] = {
 @generate("[Model]")
 def model():
     "Parse [Model]."
-    nm = yield name << ignore
+    nm = yield token << ignore
     logger.debug("Parsing model: %s...", nm)
     res = yield many1(node(Model_keywords, IBIS_keywords))
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
-        theModel = Model(dict(res))
+        theModel = Model(dict(res), name=nm)
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {le!s}")
     return {nm: theModel}
 
 
 # [Component]
-rlc = lexeme(string("R_pin") | string("L_pin") | string("C_pin"))
+# ``[Pin]`` sub-parameter names are reserved words, so any case (IBIS 8.0 Section 3.2, rule 1).
+rlc = lexeme(regex(r"(?i)[RLC]_pin\b")).parsecmap(lambda s: s[0].upper() + "_pin")
 
 
 @generate("[Manufacturer]")
@@ -446,13 +491,17 @@ def pin(rlcs):
     @generate("Component Pin")
     def fn():
         "Parse an individual component pin."
-        [nm, sig] = yield count(name, 2)
-        mod = yield name_only
+        [nm, sig] = yield count(token, 2)
+        mod = yield token_only
         rem_line = yield rest_line
-        rlc_vals = optional(count(number, 3), []).parse(rem_line)
         rlc_dict = {}
         if rlcs:
-            rlc_dict.update(dict(zip(rlcs, rlc_vals)))
+            # Each column is a number or ``NA`` (use the ``[Package]`` default; IBIS 8.0 Section 5, p.36).
+            try:
+                vals = [None if tok.upper() == "NA" else number.parse(tok) for tok in rem_line.split()[:3]]
+            except ParseError:
+                vals = []
+            rlc_dict.update({rlc_name: val for rlc_name, val in zip(rlcs, vals) if val is not None})
         return ((nm + "(" + sig + ")"), (mod, rlc_dict))
 
     return fn
@@ -465,10 +514,10 @@ def pins():
     def filt(x):
         (_, (mod, _)) = x
         m = mod.upper()
-        return m not in ("POWER", "GND", "NC")
+        return m not in ("POWER", "GND", "NC", "CIRCUITCALL")
 
     # Parse the section header.
-    yield (lexeme(string("signal_name")) << lexeme(string("model_name")))
+    yield (lexeme(regex(r"(?i)signal_name\b")) << lexeme(regex(r"(?i)model_name\b")))
     rlcs = yield optional(count(rlc, 3), [])
     prs = yield many1(pin(rlcs))
     prs_filt = list(filter(filt, prs))
@@ -502,8 +551,8 @@ def comp():
 @generate("[Model Selector]")
 def modsel():
     "Parse [Model Selector]."
-    nm = yield name
-    res = yield ignore >> many1(name + rest_line)
+    nm = yield token
+    res = yield ignore >> many1(token + rest_line)
     return {nm: res}
 
 
@@ -553,6 +602,67 @@ def ibis_file() -> GenParser[Any]:
     return res
 
 
+# Characters ``[Comment Char]`` may select (IBIS 8.0 Section 4, p.32).
+_COMMENT_CHARS = frozenset("!\"#$%&'()*,:;<>?@\\^`{|}~")
+_COMMENT_CHAR_LINE = re.compile(r"\[comment[ _]char\][ \t]*(?:(\S)_char\b)?", re.IGNORECASE)
+_END_LINE = re.compile(r"\[end\]", re.IGNORECASE)
+
+
+def _comment_start(line: str, char: str) -> Optional[int]:
+    "Index of the first ``char`` in ``line`` outside a ``\"...\"`` string; ``None`` if none."
+    in_quote = False
+    for ix, c in enumerate(line):
+        if c == '"' and char != '"':
+            in_quote = not in_quote
+        elif c == char and not in_quote:
+            return ix
+    return None
+
+
+def _preprocess(text: str) -> tuple[str, list[str]]:
+    """
+    Apply what the grammar doesn't: ``[Comment Char]`` changes, and text after ``[End]``.
+
+    Args:
+        text: The IBIS file contents.
+
+    Returns:
+        The text to parse (line and column positions unchanged), and any warnings.
+
+    Notes:
+        1. ``[Comment Char]`` (IBIS 8.0 Section 3.2, rule 5, p.19; Section 4, p.32): from the line after it,
+            its character starts a comment; it may change several times. Such comments are cut off here
+            (outside ``"..."`` strings). Known limit: after a change, the grammar still reads ``|`` as a comment.
+        2. Anything after the first ``[End]`` line is dropped, with a warning: the spec says ``[End]`` ends the
+            file (Section 4, p.34).
+    """
+    warnings: list[str] = []
+    lines = text.splitlines(keepends=True)
+    if any(_COMMENT_CHAR_LINE.match(line) for line in lines):  # Else, the fast path.
+        char = "|"
+        for n, line in enumerate(lines):
+            body = line.rstrip("\r\n")
+            if char != "|":
+                cut = _comment_start(body, char)
+                if cut is not None:
+                    lines[n] = body[:cut] + line[len(body):]
+            match = _COMMENT_CHAR_LINE.match(line)
+            if match:
+                if match.group(1) in _COMMENT_CHARS:
+                    char = match.group(1)
+                else:
+                    warnings.append(
+                        f"Line {n + 1}: [Comment Char] needs one of {''.join(sorted(_COMMENT_CHARS))} followed by "
+                        f"'_char'; got '{body.strip()}'; keeping '{char}' (IBIS 8.0 Section 4, p.32).")
+    ends = [n for n, line in enumerate(lines) if _END_LINE.match(line)]
+    if ends:
+        tail = [n for n in range(ends[0] + 1, len(lines)) if re.sub(r"\|.*", "", lines[n]).strip()]
+        if tail:
+            warnings.append(f"Line {tail[0] + 1}: text after [End] ignored (IBIS 8.0 Section 4, p.34).")
+            lines = lines[:ends[0] + 1]
+    return "".join(lines), warnings
+
+
 def parse_ibis_file(
     ibis_file_contents_str: str,
 ) -> tuple[str, dict[str, Any]]:
@@ -572,15 +682,22 @@ def parse_ibis_file(
     Returns:
         A pair containing
 
-        - A message describing the nature of any parse failure that occured.
-        - A dictionary containing keyword definitions (empty upon failure).
+        - A message describing the nature of any parse failure that occured, with a 1-based line and column
+          (``"Success!"`` otherwise).
+        - A dictionary containing keyword definitions (empty upon failure). Its ``"warnings"`` entry lists the
+          IBIS spec rules broken that didn't stop the file loading (see ``Model.spec_warnings`` and ``_preprocess()``);
+          each is also logged at ``WARNING``.
     """
 
+    text, warnings = _preprocess(ibis_file_contents_str)
     try:
-        nodes = ibis_file.parse_strict(ibis_file_contents_str)  # Parse must consume the entire file.
+        nodes = ibis_file.parse_strict(text)  # Parse must consume the entire file.
         logger.debug("Parsed nodes:\n%s", nodes)
     except ParseError as pe:
-        return str(pe), {}
+        for warning in warnings:
+            logger.warning("%s", warning)
+        line, col = ParseError.loc_info(pe.text, pe.index)
+        return f"expected: {pe.expected} at line {line + 1}, column {col + 1}", {}
 
     kw_dict = {}
     components = {}
@@ -593,13 +710,21 @@ def parse_ibis_file(
             components.update(val)
         elif kw == "model_selector":
             model_selectors.update(val)
+        elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel], where it's skipped.
+            warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
+                            "permitted; ignored (IBIS 8.0 Section 10.1, p.213).")
         else:
             kw_dict.update({kw: val})
+    for mdl in models.values():
+        warnings.extend(mdl.spec_warnings)
+    for warning in warnings:
+        logger.warning("%s", warning)
     kw_dict.update(
         {
             "components": components,
             "models": models,
             "model_selectors": model_selectors,
+            "warnings": warnings,
         }
     )
     return "Success!", kw_dict
