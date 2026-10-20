@@ -48,7 +48,6 @@ report = [
 notebook = [
     "pyibis-ami[report]",  # The Tester notebook plots with `pyibisami.report.plot`.
     "jupyter==1.1.1",
-    "lxml-html-clean==0.4.5",
     "papermill==2.7.0",
 ]
 all = [
@@ -144,7 +143,7 @@ publish-url = "https://test.pypi.org/legacy/"
 [dependency-groups]
 dev = [
     "pyibis-ami[all]",
-    "m2r2>=0.3.4",
+    "myst-parser>=4.0.0",
     "mypy>=1.19.1",
     "pyside6==6.10.2",
     "pytest>=9.0.2",

@@ -35,7 +35,7 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.todo",
     # "sphinx.ext.autosummary",
-    "m2r2",
+    "myst_parser",
 ]
 autodoc_default_options = {
     "undoc-members": True,
