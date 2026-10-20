@@ -48,7 +48,6 @@ report = [
 notebook = [
     "pyibis-ami[report]",  # The Tester notebook plots with `pyibisami.report.plot`.
     "jupyter==1.1.1",
-    "lxml-html-clean==0.4.5",
     "papermill==2.7.0",
 ]
 all = [
