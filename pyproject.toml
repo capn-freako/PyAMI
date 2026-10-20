@@ -144,7 +144,7 @@ publish-url = "https://test.pypi.org/legacy/"
 [dependency-groups]
 dev = [
     "pyibis-ami[all]",
-    "m2r2>=0.3.4",
+    "myst-parser>=4.0.0",
     "mypy>=1.19.1",
     "pyside6==6.10.2",
     "pytest>=9.0.2",

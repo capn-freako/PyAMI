@@ -24,4 +24,5 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-.. mdinclude:: ../../README.md
+.. include:: ../../README.md
+   :parser: myst_parser.sphinx_
