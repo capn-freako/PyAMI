@@ -212,7 +212,7 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
         Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
 
         Returns:
-            ``True`` if the user accepted the dialog (the selection follows the dialog either way).
+            ``True`` if the user accepted the dialog. The selection follows it; Cancel restores the previous one.
         """
         from ..gui.dialogs import select_ibis_model  # pylint: disable=import-outside-toplevel
         return select_ibis_model(self)

@@ -93,7 +93,7 @@ class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-
         Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
 
         Returns:
-            ``True`` if the user accepted the dialog (its changes are kept either way: they're applied as made).
+            ``True`` if the user accepted the dialog. Changes apply as they're made; Cancel undoes them.
         """
         from ..gui.dialogs import edit_ami_params  # pylint: disable=import-outside-toplevel
         return edit_ami_params(self)
@@ -227,7 +227,7 @@ class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-
         "A snapshot of every settable parameter's current value, keyed by path."
         return dict(self._values)
 
-    def apply_values(self, values: Mapping[ParamPath | str, Any], *, strict: bool = False) -> list[str]:
+    def apply_values(self, values: Mapping[ParamPath, Any] | Mapping[str, Any], *, strict: bool = False) -> list[str]:
         """Set several values (e.g. - a saved ``current_values()``), keyed by path (a tuple, or ``/``-joined).
 
         Keyword Args:

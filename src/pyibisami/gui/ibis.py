@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from ..events import InvalidValueError
 from ..ibis.analog import Pin
 from ..ibis.file import IBISModel
-from ..ibis.model import Model
+from ..ibis.model import Component, Model
 from .bridge import SignalBridge
 from .plots import IVPlot, VTPlot
 
@@ -52,10 +52,22 @@ def _fmt(value: Any, unit: str = "") -> str:
     return str(value)
 
 
-class ModelInfo(QWidget):
-    """The selected pin's ``[Pin]`` row (R/L/C blank: the ``[Package]`` default) and its ``Model``'s keyword values
-    and derived characteristics (read-only)."""
+def _fmt_package(package: Any) -> str:
+    "``[Package]`` R/L/C, one per line (typ / min / max)."
+    if not isinstance(package, dict):
+        return _fmt(package)
+    units = {"r_pkg": "Ω", "l_pkg": "H", "c_pkg": "F"}
+    return "\n".join(f"{name[0].upper()}_pkg: {_fmt(value, units.get(name, ''))}" for name, value in package.items())
 
+
+class ModelInfo(QWidget):
+    """The selected component's ``[Manufacturer]`` and ``[Package]``, pin's ``[Pin]`` row (R/L/C blank: the
+    ``[Package]`` default), and its ``Model``'s keyword values and derived characteristics (read-only)."""
+
+    _COMPONENT_ROWS: tuple[tuple[str, Callable[[Component], Any]], ...] = (
+        ("Manufacturer", lambda c: c.manufacturer),
+        ("Package", lambda c: _fmt_package(c.package)),
+    )
     _PIN_ROWS: tuple[tuple[str, Callable[[Pin], Any], str], ...] = (
         ("Pin", lambda p: p.pin, ""),
         ("Signal", lambda p: p.signal, ""),
@@ -83,7 +95,8 @@ class ModelInfo(QWidget):
         super().__init__(parent)
         form = QFormLayout(self)
         self.values: dict[str, QLabel] = {}
-        for name, _, _ in self._PIN_ROWS + self._ROWS:  # type: ignore[operator]
+        names = [name for name, _ in self._COMPONENT_ROWS] + [name for name, _, _ in self._PIN_ROWS + self._ROWS]
+        for name in names:
             label = QLabel()
             label.setWordWrap(True)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -92,16 +105,20 @@ class ModelInfo(QWidget):
         self.ami_status = QLabel()
         self.ami_status.setWordWrap(True)
         self.values["AMI"] = self.ami_status
-        form.insertRow(len(self._PIN_ROWS) + 2, "AMI:", self.ami_status)  # After Model and Model_type.
+        form.insertRow(len(self._COMPONENT_ROWS) + len(self._PIN_ROWS) + 2, "AMI:", self.ami_status)  # After Model_type.
         self.set_model(model)
 
-    def set_model(self, model: Optional[Model], pin: Optional[Pin] = None, dll_path: Optional[Path] = None) -> None:
-        """Show this model's values, and the pin's (``None``: clear).
+    def set_model(self, model: Optional[Model], pin: Optional[Pin] = None, dll_path: Optional[Path] = None,
+                  component: Optional[Component] = None) -> None:
+        """Show this model's values, and the pin's and component's (``None``: clear).
 
         Keyword Args:
             dll_path: The model's executable for this platform, resolved (``IBISModel.dll_path``); when given, a
                 missing file is flagged.
+            component: The pin's component.
         """
+        for name, get_comp in self._COMPONENT_ROWS:
+            self.values[name].setText("" if component is None else get_comp(component))
         for name, get_pin, unit in self._PIN_ROWS:
             value = None if pin is None else get_pin(pin)
             self.values[name].setText("" if pin is None else ("" if value is None else _fmt(value, unit)))
@@ -248,7 +265,7 @@ class IbisBrowser(QSplitter):
         self.addWidget(self.tabs)
         self.setStretchFactor(1, 1)
         self.setSizes([360, 1000])
-        self._shown: Optional[tuple[Model, Pin]] = None
+        self._shown: Optional[tuple[Model, Pin, str]] = None
         self.selector.selectionChanged.connect(self._show_model)
         self._show_model()
 
@@ -267,12 +284,12 @@ class IbisBrowser(QSplitter):
 
     def _show_model(self) -> None:
         ibis = self.selector.ibis
-        model, pin = ibis.model, ibis.pin
-        if self._shown is not None and self._shown[0] is model and self._shown[1] == pin:
+        model, pin, component = ibis.model, ibis.pin, ibis.component_name
+        if self._shown == (model, pin, component):
             return
         new_model = self._shown is None or self._shown[0] is not model
-        self._shown = (model, pin)
-        self.info.set_model(model, pin, ibis.dll_path)
+        self._shown = (model, pin, component)
+        self.info.set_model(model, pin, ibis.dll_path, ibis.component)
         if new_model:
             for plot in self.plots:
                 if isinstance(plot, IVPlot):

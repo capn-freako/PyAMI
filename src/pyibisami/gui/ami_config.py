@@ -10,10 +10,13 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -22,7 +25,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
+    QSlider,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -34,11 +37,13 @@ from ..ami.parameter import AMIParameter
 from ..events import InvalidValueError
 from .bridge import SignalBridge
 
-__all__ = ["AmiParamEditor", "load_preset", "save_preset"]
+__all__ = ["AmiParamEditor", "RangeEditor", "load_preset", "save_preset"]
 
 _COLUMNS = ("Parameter", "Value", "Format", "Description")
 _EDITOR_MARGINS = (8, 2, 12, 2)  # Left, top, right, bottom (px) around each value editor, inside its cell.
-_VALUE_COLUMN_MIN = 160  # px
+_VALUE_COLUMN_MIN = 360  # px: room for a Range editor's slider.
+_SLIDER_STEPS = 10000  # Slider positions across a Float/UI/Tap Range (as TraitsUI's, in 10.x); the text box is exact.
+_TEXT_WIDTH = 110  # px, of a Range editor's text box.
 
 
 def _padded(editor: QWidget) -> QWidget:
@@ -48,6 +53,80 @@ def _padded(editor: QWidget) -> QWidget:
     layout.setContentsMargins(*_EDITOR_MARGINS)
     layout.addWidget(editor)
     return box
+
+
+class _Slider(QSlider):
+    "A slider that only takes the mouse wheel once focused, so scrolling the tree doesn't change values."
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # pylint: disable=invalid-name
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
+class RangeEditor(QWidget):
+    """A Range parameter's editor with its min, a slider, its max, and a text box.
+
+    The text box shows the value exactly and takes any typed value (checked by the configurator). An Integer's slider
+    has a position per value; a Float/UI/Tap's has ``_SLIDER_STEPS`` across the Range. A drag previews in the text box
+    and sends the value on release; a click or a key sends it at once.
+    """
+
+    def __init__(self, param: AMIParameter, commit: Callable[[Any], None], commit_text: Callable[[str], None],
+                 parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._is_int = param.ptype == "Integer"
+        self._lo, self._hi = param.pmin, param.pmax
+        self._commit = commit
+        self.slider = _Slider(Qt.Orientation.Horizontal)
+        self.slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        if self._is_int:
+            self.slider.setRange(int(self._lo), int(self._hi))
+        else:
+            self.slider.setRange(0, _SLIDER_STEPS)
+            self.slider.setPageStep(_SLIDER_STEPS // 10)
+            self.slider.setSingleStep(_SLIDER_STEPS // 100)
+        self.text = QLineEdit()
+        self.text.setMaximumWidth(_TEXT_WIDTH)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        lo, hi = QLabel(f"{self._lo:g}"), QLabel(f"{self._hi:g}")
+        width = lo.fontMetrics().horizontalAdvance("-0.000e-00")  # Same width in every row, so the sliders line up.
+        for label, align in ((lo, Qt.AlignmentFlag.AlignRight), (hi, Qt.AlignmentFlag.AlignLeft)):
+            label.setFixedWidth(width)
+            label.setAlignment(align | Qt.AlignmentFlag.AlignVCenter)
+        for widget in (lo, self.slider, hi, self.text):
+            layout.addWidget(widget)
+        self.slider.valueChanged.connect(self._slid)
+        self.slider.sliderReleased.connect(lambda: commit(self.slider_value()))
+        self.text.editingFinished.connect(lambda: commit_text(self.text.text()))
+
+    def slider_value(self) -> Any:
+        "The value at the slider's position."
+        pos = self.slider.value()
+        if self._is_int:
+            return pos
+        return float(f"{self._lo + (self._hi - self._lo) * pos / _SLIDER_STEPS:.12g}")  # Drop float noise.
+
+    def show_value(self, value: Any) -> None:
+        "Show a value (from the configurator), without sending it."
+        self.text.setText(str(value))
+        if self._is_int:
+            pos = int(value)
+        else:
+            span = self._hi - self._lo
+            pos = round((value - self._lo) / span * _SLIDER_STEPS) if span else 0
+        self.slider.blockSignals(True)
+        self.slider.setValue(pos)
+        self.slider.blockSignals(False)
+
+    def _slid(self, _pos: int) -> None:
+        value = self.slider_value()
+        if self.slider.isSliderDown():
+            self.text.setText(str(value))  # Preview while dragging; sent on release.
+        else:
+            self._commit(value)
 
 
 def save_preset(cfg: AMIParamConfigurator, file: str | Path) -> None:
@@ -190,14 +269,10 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
                 text = tips[ix] if tips and ix < len(tips) else str(value)
                 editor.addItem(text if text == str(value) else f"{text} ({value})", value)
             editor.activated.connect(lambda ix, p=path, box=editor: self._set(p, box.itemData(ix)))
-        elif param.pformat == "Range" and param.ptype == "Integer":
-            editor = QSpinBox()
-            editor.setRange(int(param.pmin), int(param.pmax))
-            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.value()))
-        else:  # Value, or a Float/UI/Tap Range: typed, so any magnitude (e.g. - 2e-12 s; IBIS 8.0 p.239) stays exact.
+        elif param.pformat == "Range":
+            editor = RangeEditor(param, partial(self._set, path), partial(self._set_text, path))
+        else:  # Value: typed, so any magnitude (e.g. - 2e-12 s; IBIS 8.0 p.239) stays exact.
             editor = QLineEdit()
-            if param.pformat == "Range":
-                editor.setPlaceholderText(f"{param.pmin:g} to {param.pmax:g}")
             editor.editingFinished.connect(lambda p=path, box=editor: self._set_text(p, box.text()))
         return editor
 
@@ -214,8 +289,8 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
                     editor.setChecked(bool(value))
                 elif isinstance(editor, QComboBox):
                     editor.setCurrentIndex(max(editor.findData(value), 0))
-                elif isinstance(editor, QSpinBox):
-                    editor.setValue(value)
+                elif isinstance(editor, RangeEditor):
+                    editor.show_value(value)
                 elif isinstance(editor, QLineEdit):
                     editor.setText(str(value))
             finally:

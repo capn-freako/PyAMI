@@ -4,13 +4,14 @@ import json
 import threading
 
 import pytest
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLineEdit, QSpinBox, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLabel, QLineEdit, QWidget
 
 from pyibisami.ami.configurator import AMIParamConfigurator
-from pyibisami.gui import AmiParamEditor, IbisBrowser, IbisSelector, IVPlot, VTPlot, ibis as gui_ibis
-from pyibisami.gui.ami_config import load_preset, save_preset
+from pyibisami.gui import AmiParamEditor, IbisAmiBrowser, IbisBrowser, IbisSelector, IVPlot, VTPlot, ibis as gui_ibis
+from pyibisami.gui.ami_config import RangeEditor, load_preset, save_preset
 from pyibisami.gui.app import MainWindow
-from pyibisami.gui.dialogs import edit_ami_params
+from pyibisami.gui.dialogs import edit_ami_params, select_ibis_model
 from pyibisami.ibis.file import IBISModel
 
 AMI = """(m
@@ -45,8 +46,8 @@ def editor(qtbot, cfg):
 
 def test_one_editor_per_settable_parameter(editor, cfg):
     kinds = {path[-1]: type(editor.editor(path)) for path, _ in cfg.iter_settable()}
-    assert kinds == {"gain": QLineEdit, "taps": QSpinBox, "mode": QComboBox, "step": QComboBox,
-                     "en": QCheckBox, "name": QLineEdit, "-1": QLineEdit, "delay": QLineEdit}
+    assert kinds == {"gain": RangeEditor, "taps": RangeEditor, "mode": QComboBox, "step": QComboBox,
+                     "en": QCheckBox, "name": QLineEdit, "-1": RangeEditor, "delay": RangeEditor}
     mode = editor.editor(("Model_Specific", "mode"))
     assert [mode.itemText(i) for i in range(mode.count())] == ["Off (0)", "On (1)"]
 
@@ -63,7 +64,7 @@ def test_widget_edit_sets_value(editor, cfg):
 def test_tiny_float_range_edited_exactly(editor, cfg):
     """A Float Range in seconds (IBIS 8.0 p.269 example) is shown and set exactly; leaving it unchanged sets nothing."""
     path = ("Model_Specific", "delay")
-    box = editor.editor(path)
+    box = editor.editor(path).text
     assert box.text() == "2e-12"
     changes = []
     cfg.values_changed.connect(lambda *args: changes.append(args))
@@ -74,6 +75,23 @@ def test_tiny_float_range_edited_exactly(editor, cfg):
     assert cfg.fetch_param_val(list(path)) == 2.5e-12
 
 
+def test_range_editor_shows_bounds_and_slides(qtbot, editor, cfg):
+    """As in 10.x: min, slider, max and text box; the tool tip stays the description. A drag is sent on release."""
+    gain = editor.editor(("Model_Specific", "gain"))
+    assert [label.text() for label in gain.findChildren(QLabel)] == ["0", "1"]
+    assert gain.toolTip() == "Gain"
+    assert gain.slider.value() == 5000 and gain.text.text() == "0.5"
+    gain.slider.setSliderDown(True)
+    gain.slider.setValue(7500)
+    assert gain.text.text() == "0.75" and cfg.fetch_param_val(["Model_Specific", "gain"]) == 0.5  # Preview only.
+    gain.slider.setSliderDown(False)  # Emits sliderReleased.
+    assert cfg.fetch_param_val(["Model_Specific", "gain"]) == 0.75
+    taps = editor.editor(("Model_Specific", "taps"))
+    assert (taps.slider.minimum(), taps.slider.maximum()) == (0, 8)
+    qtbot.keyClick(taps.slider, Qt.Key.Key_Right)  # A key moves it one value, sent at once.
+    assert cfg.fetch_param_val(["Model_Specific", "taps"]) == 3
+
+
 def test_illegal_value_reported_and_reverted(editor, cfg):
     editor._set(("Model_Specific", "gain"), 7.0)  # pylint: disable=protected-access  # As a stale widget could.
     assert "outside the Range" in editor.status.text()
@@ -82,7 +100,7 @@ def test_illegal_value_reported_and_reverted(editor, cfg):
 
 def test_core_change_shown(qtbot, editor, cfg):
     cfg.set_param_val(["Model_Specific", "taps"], 5)
-    qtbot.waitUntil(lambda: editor.editor(("Model_Specific", "taps")).value() == 5)
+    qtbot.waitUntil(lambda: editor.editor(("Model_Specific", "taps")).slider.value() == 5)
 
 
 def test_change_from_another_thread_converges(qtbot, editor, cfg):
@@ -94,7 +112,7 @@ def test_change_from_another_thread_converges(qtbot, editor, cfg):
     worker = threading.Thread(target=sweep)
     worker.start()
     worker.join()
-    qtbot.waitUntil(lambda: editor.editor(("Model_Specific", "taps")).value() == 8)
+    qtbot.waitUntil(lambda: editor.editor(("Model_Specific", "taps")).slider.value() == 8)
 
 
 def test_corner_shown_read_only(qtbot, editor, cfg):
@@ -251,6 +269,40 @@ def test_dialog_freed_after_closing(qtbot, monkeypatch, cfg):
     assert not len(cfg.values_changed)
 
 
+def test_cancel_undoes_ami_edits(monkeypatch, cfg):
+    """As in 10.x: Cancel puts back the values (and corner) the dialog opened with."""
+    def edit_then_cancel(self):
+        cfg.set_param_val(["Model_Specific", "taps"], 7)
+        cfg.sim_corner = "max"
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", edit_then_cancel)
+    assert not edit_ami_params(cfg)
+    assert cfg.fetch_param_val(["Model_Specific", "taps"]) == 2 and cfg.sim_corner == "typ"
+
+
+def test_cancel_undoes_ibis_selection(monkeypatch, ibis_test_file):
+    ibis = IBISModel(ibis_test_file)
+    before = (ibis.component_name, ibis.pin_name, ibis.model_name)
+
+    def pick_then_cancel(self):
+        ibis.pin_name = ibis.pin_choices[1]
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", pick_then_cancel)
+    assert not select_ibis_model(ibis)
+    assert (ibis.component_name, ibis.pin_name, ibis.model_name) == before
+
+
+def test_model_info_shows_component(qtbot, ibis_test_file):
+    """As in 10.x's component view: the component's Manufacturer and Package."""
+    ibis = IBISModel(ibis_test_file)
+    browser = IbisBrowser(ibis)
+    qtbot.addWidget(browser)
+    assert browser.info.values["Manufacturer"].text() == ibis.component.manufacturer
+    assert browser.info.values["Package"].text().splitlines()[0] == "R_pkg: 0.1 / 0 / 0.5 Ω"
+
+
 def test_load_preset_rejects_other_json(tmp_path, cfg):
     file = tmp_path / "not_a_preset.json"
     file.write_text(json.dumps({"values": [1, 2]}), encoding="utf-8")
@@ -298,3 +350,26 @@ def test_app_opens_ibis_and_ami(qtbot, ibis_test_file, ami_test_file, monkeypatc
     bad.write_text("not IBIS", encoding="utf-8")
     assert not window.open_file(bad)
     assert isinstance(window.centralWidget().widget(0), AmiParamEditor)  # The previous file stays shown.
+
+
+def test_ibis_ami_browser_embeds(qtbot, ibis_test_file, ami_test_file):
+    """``IbisAmiBrowser`` is a plain widget: the selected model's AMI editor and warnings as tabs, and its
+    ``configurator`` for the application (e.g. - PyBERT) to simulate with."""
+    ibis = IBISModel(ibis_test_file)
+    if ibis.ami_path is None:
+        pytest.skip("No example executable for this platform")
+    ibis.ami_path.write_text(ami_test_file.read_text(encoding="utf-8"), encoding="utf-8")
+    host = QWidget()
+    qtbot.addWidget(host)
+    browser = IbisAmiBrowser(ibis, host)
+    assert browser.visible_tabs() == ["Pulldown", "Pullup", "AMI parameters", "Warnings"]
+    cfg = browser.configurator
+    assert cfg is not None and cfg.root_name
+    titles = [browser.tabs.tabText(i) for i in range(browser.tabs.count())]
+    editor = browser.tabs.widget(titles.index("AMI parameters"))
+    assert isinstance(editor, AmiParamEditor) and editor.configurator is cfg
+    assert "Success!" in browser.warnings.toPlainText()
+    with qtbot.assertNotEmitted(browser.amiChanged):
+        ibis.pin_name = ibis.pin_choices[1]  # Same model: same configurator, editor kept.
+        qtbot.waitUntil(lambda: browser.info.values["Signal"].text() == ibis.pin.signal)
+    assert browser.configurator is cfg

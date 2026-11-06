@@ -31,7 +31,7 @@ For help porting code from v10.x, see
 - `IBISModel.alert`/`selection_changed` and `AMIParamConfigurator.values_changed`/`sim_corner_changed`
   are `pyibisami.events.Signal`s: `connect(callback)`.
 - The `gui` extra is now `pyside6` and `matplotlib`. The GUI is rebuilt on Qt as embeddable widgets
-  (`AmiParamEditor`, `IbisSelector`, `IbisBrowser`, `ModelInfo`, `IVPlot`, `VTPlot`) and `open_gui()` dialogs.
+  (`AmiParamEditor`, `IbisSelector`, `IbisBrowser`, `IbisAmiBrowser`, `ModelInfo`, `IVPlot`, `VTPlot`) and `open_gui()` dialogs.
 
 ### Added
 

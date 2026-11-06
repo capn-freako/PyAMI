@@ -6,7 +6,8 @@ Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
 The widgets are plain ``QWidget`` s, so applications (e.g. - PyBERT) can embed them:
 
 - ``AmiParamEditor``: edit an ``AMIParamConfigurator``'s parameter values.
-- ``IbisSelector``: select an ``IBISModel``'s component, pin and model; ``IbisBrowser`` adds model tabs.
+- ``IbisSelector``: select an ``IBISModel``'s component, pin and model; ``IbisBrowser`` adds model tabs, and
+  ``IbisAmiBrowser`` the selected model's AMI parameters and the parsing warnings.
 - ``ModelInfo``: a ``Model``'s keyword values.
 - ``IVPlot``, ``VTPlot``: a ``Model``'s I-V curves and V-T waveforms.
 
@@ -29,6 +30,7 @@ except ImportError as err:
 
 from .ami_config import AmiParamEditor
 from .ibis import IbisBrowser, IbisSelector, ModelInfo, show_alerts
+from .ibis_ami import IbisAmiBrowser
 from .plots import IVPlot, VTPlot
 
-__all__ = ["AmiParamEditor", "IVPlot", "IbisBrowser", "IbisSelector", "ModelInfo", "VTPlot", "show_alerts"]
+__all__ = ["AmiParamEditor", "IVPlot", "IbisAmiBrowser", "IbisBrowser", "IbisSelector", "ModelInfo", "VTPlot", "show_alerts"]

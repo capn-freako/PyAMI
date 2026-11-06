@@ -18,14 +18,14 @@ from typing import Optional
 
 import click
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QTabWidget, QWidget
+from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QTabWidget
 
 from ..ami.configurator import AMIParamConfigurator
 from ..cli_logging import setup_cli_logging
 from ..ibis.file import IBISModel
 from .ami_config import AmiParamEditor
 from .dialogs import ensure_app
-from .ibis import IbisBrowser
+from .ibis_ami import IbisAmiBrowser
 
 __all__ = ["MainWindow", "main", "open_in_text_editor"]
 
@@ -64,12 +64,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PyIBIS-AMI")
         self.resize(1200, 750)
         self.ibis: Optional[IBISModel] = None
-        self.browser: Optional[IbisBrowser] = None
+        self.browser: Optional[IbisAmiBrowser] = None
         self.warnings = QPlainTextEdit()
         self.warnings.setReadOnly(True)
-        self._ami_tab_index = -1
-        self._ami_shown: Optional[Path] = None  # The .ami the AMI tab shows (rebuilt only when it changes).
-        self._configurators: dict[Path, AMIParamConfigurator] = {}  # Kept, so values survive model changes.
         self.ibis_path: Optional[Path] = None  # The open .ibs file.
         self.ami_path: Optional[Path] = None  # The open .ami file, or the selected model's.
 
@@ -144,62 +141,20 @@ class MainWindow(QMainWindow):
 
     def _show_ibis(self, path: Path) -> None:
         ibis = IBISModel(path)
-        browser = IbisBrowser(ibis)
-        self.warnings = QPlainTextEdit()
-        self.warnings.setReadOnly(True)
-        self._ami_tab_index = browser.tabs.addTab(QLabel(), "AMI parameters")
-        browser.tabs.addTab(self.warnings, "Warnings")
+        browser = IbisAmiBrowser(ibis)
         browser.selector.selectionChanged.connect(self._model_changed)
-        self.ibis, self.browser = ibis, browser
+        self.ibis, self.browser, self.warnings = ibis, browser, browser.warnings
         self.ibis_path = path
-        self._ami_shown = None
-        self._configurators.clear()
         self.setCentralWidget(browser)
         self._model_changed()
 
     def _model_changed(self) -> None:
-        "Show the selected model's AMI parameters and the warnings."
+        "Follow the selected model: its .ami file (Tools menu) and the status bar."
         if self.ibis is None or self.browser is None:
             return
-        ami_path = self.ibis.ami_path
-        self.ami_path = ami_path
+        self.ami_path = self.browser.ami_path
         self._update_actions()
-        cfg: Optional[AMIParamConfigurator] = None
-        ami_errors: list[str] = []
-        if ami_path is not None:
-            try:
-                if ami_path not in self._configurators:
-                    self._configurators[ami_path] = AMIParamConfigurator(ami_path.read_text(encoding="utf-8"))
-                cfg = self._configurators[ami_path]
-                ami_errors = cfg.ami_parsing_errors
-            except (OSError, ValueError, RuntimeError) as err:
-                ami_errors = [str(err)]
-        if ami_path is None or ami_path != self._ami_shown:  # Keep the editor (and its scroll) if it's the same file.
-            widget: QWidget
-            if cfg is not None:
-                widget = AmiParamEditor(cfg)
-            elif ami_path is not None:
-                widget = QLabel(f"Couldn't load {ami_path}:\n{ami_errors[0]}")
-            else:
-                widget = QLabel()
-            tabs = self.browser.tabs
-            current = tabs.currentIndex()
-            old = tabs.widget(self._ami_tab_index)
-            tabs.removeTab(self._ami_tab_index)
-            tabs.insertTab(self._ami_tab_index, widget, "AMI parameters")
-            if old is not None:
-                old.deleteLater()
-            tabs.setCurrentIndex(current)
-            self._ami_shown = ami_path
-            self.browser.show_tab(widget, ami_path is not None)
-        model = self.ibis.model
-        text = [f"IBIS: {self.ibis.ibis_parsing_errors}"]
-        if model.spec_warnings:
-            text += ["", f"[Model] {model.name}:"] + [f"- {w}" for w in model.spec_warnings]
-        if ami_errors:
-            text += ["", f"AMI ({ami_path}):"] + [f"- {e}" for e in ami_errors]
-        self.warnings.setPlainText("\n".join(text))
-        self.statusBar().showMessage(f"{self.ibis.component_name} / {self.ibis.pin_name} / {model.name}")
+        self.statusBar().showMessage(f"{self.ibis.component_name} / {self.ibis.pin_name} / {self.ibis.model.name}")
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
