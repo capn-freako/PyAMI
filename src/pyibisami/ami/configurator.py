@@ -10,74 +10,59 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 from __future__     import annotations
 from ctypes         import c_double
 import re
+from collections.abc import Callable, Iterator, Mapping
 from typing         import Any, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from traits.api import Bool, Enum, HasTraits, Range, Trait, TraitType
 
+from ..events                   import InvalidValueError, Signal
 from .model                     import AMIModelInitializer
 from .parameter                 import FIXED_FORMATS, AmiParamTuner, AMIParameter
 from .parser                    import (ModelSpecificDict, ParamName, Parameters, ParamValues, ReservedParamDict,
                                         parse_ami_file_contents)
 
-__all__ = ["AMIParamConfigurator", "make_param_traits", "trait_name_part"]
+__all__ = ["AMIParamConfigurator", "ParamPath", "SIM_CORNERS", "display_name", "display_name_part"]
+
+ParamPath = tuple[str, ...]  # A parameter's path in the ``.ami`` file, rooted at "Model_Specific" (no root name).
+SIM_CORNERS = ("typ", "min", "max")
 
 #####
 # AMI parameter configurator.
 #####
 
 
-class AMIParamConfigurator(HasTraits):
-    """Customizable IBIS-AMI model parameter configurator.
-
-    This class can be configured to present a customized GUI to the user
-    for configuring a particular IBIS-AMI model.
+class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+    """The user's choice of values for an IBIS-AMI model's parameters.
 
     The intended use model is as follows:
 
-     1. Instantiate this class only once per IBIS-AMI model invocation.
-        When instantiating, provide the unprocessed contents of the AMI
-        file, as a single string. This class will take care of getting
-        that string parsed properly, and report any errors or warnings
-        it encounters, in its ``ami_parsing_errors`` property.
+     1. Instantiate this class once per IBIS-AMI model, giving the unprocessed contents of its ``.ami`` file.
+        Any warnings found while parsing are in ``ami_parsing_errors``.
 
-     2. When you want to let the user change the AMI parameter
-        configuration, call the ``open_gui`` member function.
-        (Or, just call the instance as if it were a function.)
-        The instance will then present a GUI to the user,
-        allowing him to modify the values of any *In* or *InOut* parameters.
-        The resultant AMI parameter dictionary, suitable for passing
-        into the ``ami_params`` parameter of the ``AMIModelInitializer``
-        constructor, can be accessed, via the instance's
-        ``input_ami_params`` property. The latest user selections will be
-        remembered, as long as the instance remains in scope.
+     2. Set parameter values with ``set_param_val()`` (or let the user do it, in the ``gui`` extra's
+        ``AmiParamEditor``, or ``open_gui()``). Every *Model Specific* parameter of Usage *In* or *InOut*
+        (except the ``FIXED_FORMATS``) has a current value, starting at its ``AMIParameter.initial_value``.
 
-    The entire AMI parameter definition dictionary, which should *not* be
-    passed to the ``AMIModelInitializer`` constructor, is available in the
-    instance's ``ami_param_defs`` property.
+     3. Pass ``input_ami_params`` (or use ``get_init()``) to ``AMIModelInitializer``.
 
-    Any errors or warnings encountered while parsing are available, in
-    the ``ami_parsing_errors`` property.
+    Each change of a value is announced through ``values_changed`` (``(path, old, new)``), and each change of
+    ``sim_corner`` through ``sim_corner_changed`` (``(old, new)``).
 
     Parameters of Format Corner aren't user-selectable: their value follows ``sim_corner``
     (``"typ"``, ``"min"`` (slow) or ``"max"`` (fast); IBIS 8.0 Section 10.3.5, p.246), the same
     corner the application uses for the IBIS model data.
     """
 
-    sim_corner = Enum("typ", "min", "max")  # Simulation corner; selects each Corner parameter's value.
-
     def __init__(self, ami_file_contents_str: str) -> None:
         """
         Args:
             ami_file_contents_str: The unprocessed contents of the AMI file, as a single string.
+
+        Raises:
+            RuntimeError: The file couldn't be parsed.
+            ValueError: It has no ``Reserved_Parameters`` section.
         """
-
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
-
-        # Parse the AMI file contents, storing any errors or warnings, and customize the view accordingly.
         (errors,
          warnings,
          root_name,
@@ -90,35 +75,46 @@ class AMIParamConfigurator(HasTraits):
             raise RuntimeError("\n\t".join(err_msgs))
         if not reserved_param_dict:
             raise ValueError("No 'Reserved_Parameters' section found!")
-        trait_names = []
-        for pname, param in model_specific_dict.items():
-            for trait_name, trait in make_param_traits(trait_name_part(pname), param):
-                self.add_trait(trait_name, trait)
-                trait_names.append(trait_name)
-        self._param_trait_names = trait_names
         self._root_name = root_name
         self._ami_parsing_errors = errors + warnings
         self._reserved_param_dict = reserved_param_dict
         self._model_specific_dict = model_specific_dict
         self._description = description
+        self._sim_corner = "typ"
+        self._settable: dict[ParamPath, AMIParameter] = dict(
+            _walk_leaves(model_specific_dict, ("Model_Specific",), lambda param: param.is_settable))
+        self._values: dict[ParamPath, Any] = {path: param.initial_value for path, param in self._settable.items()}
+        self.values_changed = Signal()  # (path, old, new)
+        self.sim_corner_changed = Signal()  # (old, new)
 
-    def __call__(self):
-        self.open_gui()
-
-    def open_gui(self):
-        """Present a customized GUI to the user, for parameter
-        customization.
+    def open_gui(self) -> bool:
+        """Let the user set the parameter values, in a modal dialog.
 
         Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
-        """
-        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
-        # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
-        self.configure_traits()
 
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        from ..gui.ami_config import make_view  # pylint: disable=import-outside-toplevel
-        return make_view(self)
+        Returns:
+            ``True`` if the user accepted the dialog (its changes are kept either way: they're applied as made).
+        """
+        from ..gui.dialogs import edit_ami_params  # pylint: disable=import-outside-toplevel
+        return edit_ami_params(self)
+
+    @property
+    def sim_corner(self) -> str:
+        "The simulation corner (``typ``, ``min`` or ``max``); selects each Corner parameter's value."
+        return self._sim_corner
+
+    @sim_corner.setter
+    def sim_corner(self, corner: str) -> None:
+        if corner not in SIM_CORNERS:
+            raise InvalidValueError(f"sim_corner must be one of {SIM_CORNERS}; got {corner!r}.")
+        old, self._sim_corner = self._sim_corner, corner
+        if old != corner:
+            self.sim_corner_changed.emit(old, corner)
+
+    @property
+    def description(self) -> str:
+        "The model's description, from the ``.ami`` file."
+        return self._description
 
     @property
     def root_name(self) -> str:
@@ -127,22 +123,20 @@ class AMIParamConfigurator(HasTraits):
 
     @property
     def model_specific_dict(self) -> ModelSpecificDict:
-        "The parsed ``Model_Specific`` parameter definitions."
+        "The parsed ``Model_Specific`` parameter definitions (read-only: values are set with ``set_param_val()``)."
         return self._model_specific_dict
 
-    def fetch_param(self, branch_names):
+    def fetch_param(self, branch_names) -> Optional[AMIParameter]:
         """Returns the parameter found by traversing 'branch_names' or None if
         not found.
 
         Note: 'branch_names' should *not* begin with 'root_name'.
         """
-        param_dict = self.ami_param_defs
-        while branch_names:
-            branch_name = branch_names.pop(0)
-            if branch_name in param_dict:
-                param_dict = param_dict[branch_name]
-            else:
+        param_dict: Any = self.ami_param_defs
+        for branch_name in branch_names:
+            if not isinstance(param_dict, dict) or branch_name not in param_dict:
                 return None
+            param_dict = param_dict[branch_name]
         if isinstance(param_dict, AMIParameter):
             return param_dict
         return None
@@ -151,30 +145,18 @@ class AMIParamConfigurator(HasTraits):
         """Returns the value of the parameter found by traversing
         'branch_names' or None if not found.
 
-        A *Model Specific* parameter with a trait (Usage In/InOut) gives its current value (e.g. - the selected
+        A settable *Model Specific* parameter (Usage In/InOut) gives its current value (e.g. - the selected
         List value), as sent to the model; a Corner gives its value for ``sim_corner``.
 
         Note: 'branch_names' should *not* begin with 'root_name'.
         """
-        _param = self.fetch_param(list(branch_names))
+        _param = self.fetch_param(branch_names)
         if not _param:
             return None
-        tname = self._param_trait_name(branch_names)
-        if tname:
-            return self._trait_value(tname)
+        path = tuple(branch_names)
+        if path in self._values:
+            return self._values[path]
         return self._fixed_value(_param) if _param.pformat == "Corner" else _param.pvalue
-
-    def _param_trait_name(self, branch_names: list[str]) -> Optional[str]:
-        "The trait holding the value of the parameter at ``branch_names``; ``None`` if it has none."
-        if branch_names[:1] != ["Model_Specific"]:
-            return None
-        tname = "_".join(trait_name_part(name) for name in branch_names[1:])
-        return tname if tname in self._param_trait_names else None
-
-    def _trait_value(self, tname: str) -> Any:
-        "A parameter trait's value, as sent to the model (a mapped trait's (List_Tip's) value, not its label)."
-        trait = self.trait(tname)
-        return getattr(self, f"{tname}_" if trait.is_mapped else tname)
 
     def _fixed_value(self, param: AMIParameter) -> Any:
         """The value sent for a parameter of one of the ``FIXED_FORMATS``: a Corner's value for ``sim_corner``,
@@ -187,7 +169,7 @@ class AMIParamConfigurator(HasTraits):
 
     def set_param_val(
         self: AMIParamConfigurator,
-        branch_names: list[str],
+        branch_names: list[str] | ParamPath,
         new_val: Any
     ) -> None:
         """
@@ -199,66 +181,78 @@ class AMIParamConfigurator(HasTraits):
             new_val: The value to assign to the target parameter.
 
         Raises:
-            ValueError: No parameter at ``branch_names``; a Corner parameter; an Integer parameter given a
-                non-integer value; or a value that isn't one of a List_Tip parameter's values.
+            ValueError: No parameter at ``branch_names``, or a Corner parameter.
             TypeError: ``branch_names`` names a group, not a parameter.
-            TraitError: The value isn't legal for the parameter (e.g. - outside its Range).
+            InvalidValueError: The value isn't legal for the parameter (see ``AMIParameter.validate()``).
 
         Notes:
             1. ``branch_names`` should *not* begin with <root_name>.
-            2. A *Model Specific* parameter with a trait (Usage In/InOut) is set on its trait, which checks the
-               value; ``pvalue`` keeps the ``.ami`` file's value. Other parameters (e.g. - Reserved ones) set
-               ``pvalue``, unchecked.
+            2. A settable *Model Specific* parameter (Usage In/InOut) is checked, and its current value set
+               (announced through ``values_changed``); ``pvalue`` keeps the ``.ami`` file's value. Other parameters
+               (e.g. - Reserved ones) set ``pvalue``, unchecked.
         """
 
-        param_dict = self.ami_param_defs
+        param_dict: Any = self.ami_param_defs
         for branch_name in branch_names:
-            if branch_name not in param_dict:
+            if not isinstance(param_dict, dict) or branch_name not in param_dict:
+                keys = param_dict.keys() if isinstance(param_dict, dict) else []
                 raise ValueError(
-                    f"Failed parameter tree search looking for: {branch_name}; available keys: {param_dict.keys()}"
+                    f"Failed parameter tree search looking for: {branch_name}; available keys: {keys}"
                 )
-            param_dict = param_dict[branch_name]  # type: ignore
+            param_dict = param_dict[branch_name]
         if not isinstance(param_dict, AMIParameter):
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
         if param_dict.pformat == "Corner":
             raise ValueError(f"A Corner parameter's value follows `sim_corner`; it can't be set: {branch_names}")
-        if param_dict.pformat in FIXED_FORMATS:  # Table, Gaussian, ...: stored as given, no trait.
-            param_dict.pvalue = new_val
-            return
-        # Coerce to the parameter's declared type. Notably: a `Bool` trait rejects a
-        # float outright, and a vendor's AMI_Init() parser may choke on "1.0" where an
-        # Integer-typed value (e.g. a List-format mode selector) is expected.
-        if param_dict.ptype == "Boolean":
-            if not isinstance(new_val, bool):
-                if isinstance(new_val, str):
-                    match new_val:
-                        case "FALSE" | "False" | "false":
-                            new_val = False
-                        case _:
-                            new_val = bool(new_val)
-                else:
-                    new_val = bool(new_val)
-        elif param_dict.ptype == "Integer":
-            as_float = float(new_val)
-            if not as_float.is_integer():
-                raise ValueError(f"Integer parameter {branch_names} can't be set to {new_val!r}.")
-            new_val = int(as_float)
-        elif param_dict.ptype in ("Float", "UI", "Tap"):  # A Tap is a (float) tap weight.
-            new_val = float(new_val)
-        tname = self._param_trait_name(branch_names)
-        if tname:
-            trait = self.trait(tname)
-            if trait.is_mapped:  # List_Tip: the trait holds the tip; ``<tname>_`` follows it (read-only).
-                tips = [tip for tip, value in trait.handler.map.items() if value == new_val]
-                if not tips:
-                    raise ValueError(f"{new_val!r} isn't one of the values of {branch_names}: "
-                                     f"{list(trait.handler.map.values())}")
-                new_val = tips[0]
-            self.trait_set(**{tname: new_val})
-        # `pvalue`, for 'List' format, holds the list of *legal* values, not the
-        # current one (that lives on the Trait) -- leave it alone, to avoid corrupting it.
+        path = tuple(branch_names)
+        if path in self._values:
+            new_val = param_dict.validate(new_val)
+            old = self._values[path]
+            self._values[path] = new_val
+            if old != new_val:
+                self.values_changed.emit(path, old, new_val)
+        # `pvalue`, for 'List' format, holds the list of *legal* values, not the current one -- leave it alone.
         elif param_dict.pformat != "List":
             param_dict.pvalue = new_val
+
+    def iter_settable(self) -> Iterator[tuple[ParamPath, AMIParameter]]:
+        "Each settable parameter (``AMIParameter.is_settable``) and its path, in ``.ami`` file order."
+        yield from self._settable.items()
+
+    def current_values(self) -> dict[ParamPath, Any]:
+        "A snapshot of every settable parameter's current value, keyed by path."
+        return dict(self._values)
+
+    def apply_values(self, values: Mapping[ParamPath | str, Any], *, strict: bool = False) -> list[str]:
+        """Set several values (e.g. - a saved ``current_values()``), keyed by path (a tuple, or ``/``-joined).
+
+        Keyword Args:
+            strict: Raise on the first unknown path or illegal value, instead of skipping it.
+                Default: ``False``
+
+        Returns:
+            One message per skipped entry.
+        """
+        skipped = []
+        for key, value in values.items():
+            path = tuple(key.split("/")) if isinstance(key, str) else tuple(key)
+            if path not in self._values:
+                if strict:
+                    raise ValueError(f"No settable parameter at {path}.")
+                skipped.append(f"No settable parameter at {'/'.join(path)}; skipped.")
+                continue
+            try:
+                self.set_param_val(path, value)
+            except InvalidValueError as err:
+                if strict:
+                    raise
+                skipped.append(f"{'/'.join(path)}: {err} Skipped.")
+        return skipped
+
+    def reset_to_defaults(self) -> None:
+        "Set every settable parameter back to its ``AMIParameter.initial_value``."
+        for path, param in self._settable.items():
+            self.set_param_val(path, param.initial_value)
 
     @property
     def tunable_params(self) -> list[tuple[list[str], AMIParameter]]:
@@ -286,10 +280,10 @@ class AMIParamConfigurator(HasTraits):
         qualify: Range-format, Boolean, and contiguous Integer/List "mode
         selector" parameters).
 
-        Each tuner's ``value`` is the parameter's current value (its trait's), as sent to the model."""
+        Each tuner's ``value`` is the parameter's current value, as sent to the model."""
         tuners = []
         for branch_names, param in self.tunable_params:
-            tname = "_".join(map(trait_name_part, branch_names[1:]))  # Drop the "Model_Specific" root.
+            tname = display_name(branch_names)
             if param.pformat == "Range":
                 pmin, pmax = float(param.pmin), float(param.pmax)
                 step = (pmax - pmin) / 10 or 1.0
@@ -300,8 +294,7 @@ class AMIParamConfigurator(HasTraits):
                 # `pvalue`, for 'List' format, is the list of *legal* values, not the current one.
                 vals = [float(v) for v in param.pvalue]
                 pmin, pmax, step, is_int = min(vals), max(vals), 1.0, True
-            # `pvalue` keeps the `.ami` file's value; the current one lives on the trait.
-            value = float(self._trait_value(tname))
+            value = float(self._values[tuple(branch_names)])
             tuners.append(AmiParamTuner(
                 name=tname,
                 branch_names=branch_names,
@@ -342,14 +335,14 @@ class AMIParamConfigurator(HasTraits):
         res[ParamName("root_name")] = str(self._root_name)
         params = self._model_specific_dict
         for pname in params:
-            res.update(self.input_ami_param(params, pname))
+            res.update(self.input_ami_param(params, pname, prefix=("Model_Specific",)))
         return res
 
     def input_ami_param(
         self,
         params: Parameters,
         pname: ParamName,
-        prefix: str = ""
+        prefix: ParamPath = ("Model_Specific",)
     ) -> ParamValues:
         """
         Retrieve one AMI parameter value, or dictionary of subparameter values,
@@ -360,31 +353,25 @@ class AMIParamConfigurator(HasTraits):
             pname: The simple name of the parameter of interest, used by the IBIS-AMI model.
 
         Keyword Args:
-            prefix: The current working parameter name prefix.
+            prefix: The path of ``params``.
+                Default: ``("Model_Specific",)``
 
         Returns:
-            A dictionary of parameter values indexed by non-prefixed parameter names.
-
-        Notes:
-            1. The "prefix" referred to above refers to a string encoding of the
-            hierarchy above a particular trait. We need this hierarchy for the
-            sake of the ``Traits/UI`` machinery, which addresses traits by name
-            alone. However, the IBIS-AMI model is not expecting it. So, we have
-            to strip it off, before sending the result here into ``AMI_Init()``.
+            A dictionary of parameter values indexed by (unprefixed) parameter names.
         """
 
         res = {}
-        tname = prefix + trait_name_part(pname)  # The fully hierarchical trait name, used by the Traits/UI machinery.
+        path = (*prefix, pname)
         param = params[pname]
         if isinstance(param, AMIParameter):
-            if tname in self._param_trait_names:  # If model specific and of type In or InOut...
-                res[pname] = self._trait_value(tname)
-            elif param.pusage in ("In", "InOut") and param.pformat in FIXED_FORMATS:  # Sent, but has no trait.
+            if path in self._values:  # If settable (model specific and of type In or InOut)...
+                res[pname] = self._values[path]
+            elif param.pusage in ("In", "InOut") and param.pformat in FIXED_FORMATS:  # Sent, but not settable.
                 res[pname] = self._fixed_value(param)
         elif isinstance(param, dict):  # We received a dictionary of subparameters, in 'param'.
             subs: ParamValues = {}
             for sname in param:
-                subs.update(self.input_ami_param(param, sname, prefix=tname + "_"))  # type: ignore
+                subs.update(self.input_ami_param(param, sname, prefix=path))  # type: ignore
             if subs:  # A group with nothing to send is left out (IBIS 8.0 Section 10.3.6, p.246).
                 res[pname] = subs
         return res
@@ -402,29 +389,20 @@ class AMIParamConfigurator(HasTraits):
         ami_params: Optional[dict[str, Any]] = None
     ) -> AMIModelInitializer:
         """
-        Get a model initializer, configured by the user if necessary.
+        Get a model initializer.
+
+        Keyword Args:
+            ami_params: The AMI parameters to send; ``input_ami_params`` (the current values) when ``None``.
+                Default: ``None``
         """
 
-        row_size = len(channel_response)
-        if ami_params:
-            initializer = AMIModelInitializer(
-                ami_params,
-                info_params=self.info_ami_params,
-                bit_time=c_double(bit_time),
-                row_size=row_size,
-                sample_interval=c_double(sample_interval)
-            )
-        else:
-            # This call will invoke a GUI applet for the user to interact with,
-            # to configure the AMI parameter values.
-            self()
-            initializer = AMIModelInitializer(
-                self.input_ami_params,
-                info_params=self.info_ami_params,
-                bit_time=c_double(bit_time),
-                row_size=row_size,
-                sample_interval=c_double(sample_interval)
-            )
+        initializer = AMIModelInitializer(
+            ami_params if ami_params is not None else self.input_ami_params,
+            info_params=self.info_ami_params,
+            bit_time=c_double(bit_time),
+            row_size=len(channel_response),
+            sample_interval=c_double(sample_interval)
+        )
 
         # Don't try to pack this into the parentheses above!
         initializer.channel_response = channel_response
@@ -448,36 +426,31 @@ def _is_sweepable(param: AMIParameter) -> bool:
 def _walk_tunable_params(
     params: Parameters, prefix: list[str]
 ) -> list[tuple[list[str], AMIParameter]]:
-    """Recursively collect every sweepable (see `_is_sweepable`) leaf of a
-    *Model Specific* parameter (sub)tree.
+    "Every sweepable (see `_is_sweepable`) leaf of a *Model Specific* parameter (sub)tree, with its path."
+    return [(list(path), param) for path, param in _walk_leaves(params, tuple(prefix), _is_sweepable)]
 
-    Args:
-        params: The (sub)dictionary of AMI parameters to walk.
-        prefix: The branch name path leading to ``params``.
 
-    Returns:
-        A list of (branch name path, parameter) pairs, one per sweepable leaf.
-    """
-
-    results: list[tuple[list[str], AMIParameter]] = []
+def _walk_leaves(
+    params: Parameters, prefix: ParamPath, keep: Callable[[AMIParameter], bool]
+) -> Iterator[tuple[ParamPath, AMIParameter]]:
+    "Each leaf of a parameter (sub)tree for which ``keep`` is true, with its path, in file order."
     for pname, param in params.items():
         if pname == "description":  # A branch's optional descriptive text, not a subparameter.
             continue
-        path = prefix + [pname]
+        path = (*prefix, pname)
         if isinstance(param, AMIParameter):
-            if _is_sweepable(param):
-                results.append((path, param))
+            if keep(param):
+                yield path, param
         else:  # Subparameter branch.
-            results.extend(_walk_tunable_params(param, path))
-    return results
+            yield from _walk_leaves(param, path, keep)
 
 
-def trait_name_part(name: str) -> str:
-    """The trait/display form of one AMI parameter name.
+def display_name_part(name: str) -> str:
+    """The display form of one AMI parameter name.
 
-    Tap weights are named by tap number (``-1``, ``0``, ``1``; IBIS 8.0 Section 10.3.4, p.240), which isn't a valid
-    trait name, so they're shown as ``pre1``, ``post0``, ``post1``. Everything sent to the
-    model (``input_ami_params``, ``fetch_param_val()``/``set_param_val()`` paths) keeps the ``.ami`` names.
+    Tap weights are named by tap number (``-1``, ``0``, ``1``; IBIS 8.0 Section 10.3.4, p.240), shown as ``pre1``,
+    ``post0``, ``post1``. Everything sent to the model (``input_ami_params``, ``fetch_param_val()``/
+    ``set_param_val()`` paths) keeps the ``.ami`` names.
     """
     m = re.fullmatch(r"([-+]?)([0-9]+)", name)
     if not m:
@@ -485,69 +458,7 @@ def trait_name_part(name: str) -> str:
     return ("pre" if m[1] == "-" else "post") + m[2]
 
 
-def make_param_traits(
-    pname: str,
-    param: AMIParameter | Parameters
-) -> list[tuple[str, TraitType]]:
-    """
-    Builds list of ``Trait`` s from AMI parameter or dictionary.
-
-    Args:
-        pname: Parameter or sub-group name.
-        param: AMI parameter or dictionary of AMI parameters to be configured.
-
-    Returns:
-        The list of new (name, ``Trait``) pairs created, one per *In* or *InOut* leaf parameter.
-
-    Notes:
-        1. Sub-parameter trait names are the underscore-joined hierarchical parameter names.
-    """
-
-    if isinstance(param, AMIParameter):  # pylint: disable=no-else-return
-        if param.pusage not in ("In", "InOut") or param.pformat in FIXED_FORMATS:  # Not user-selectable.
-            return []
-
-        if param.ptype == "Boolean":
-            return [(pname, Bool(param.pvalue))]
-
-        pformat = param.pformat
-        match pformat:
-            case "Value":  # Value
-                the_trait = Trait(param.pvalue)
-            case "Range":
-                the_trait = Range(param.pmin, param.pmax, param.pvalue)
-            case "List":
-                list_tips = param.plist_tip
-                default = param.pdefault
-                if list_tips:
-                    tmp_dict: dict[str, Any] = {}
-                    tmp_dict.update(list(zip(list_tips, param.pvalue)))
-                    val = next(iter(tmp_dict.keys()))
-                    if default is not None:  # Already checked to be a List member, of the List's type.
-                        for tip in tmp_dict.items():
-                            if tip[1] == default:
-                                val = tip[0]
-                                break
-                    the_trait = Trait(val, tmp_dict)
-                else:
-                    # ``Enum(default, values)``: ``Enum([default] + values)`` would offer the default twice.
-                    val = default if default is not None else param.pvalue[0]
-                    the_trait = Enum(val, param.pvalue)
-            case "Increment" | "Steps":  # Only the discrete values typ + N*delta are legal (IBIS 8.0 p.241).
-                legal = param.pvalues or []
-                # A typ outside [min, max] (already warned about) isn't legal; start at the first legal value.
-                the_trait = Enum(param.pvalue if param.pvalue in legal else legal[0], legal)
-            case _:
-                raise ValueError(f"Unrecognized AMI parameter format: {pformat}, for parameter `{pname}` of type `{param.ptype}` and usage `{param.pusage}`!")
-        if the_trait.metadata:
-            the_trait.metadata.update({"transient": False})  # Required to support modal dialogs.
-        else:
-            the_trait.metadata = {"transient": False}
-        return [(pname, the_trait)]
-
-    else:  # subparameter branch
-        new_traits: list[tuple[str, TraitType]] = []
-        for subparam_name in sorted(param.keys()):
-            if subparam_name != "description":
-                new_traits.extend(make_param_traits(pname + "_" + trait_name_part(subparam_name), param[subparam_name]))
-        return new_traits
+def display_name(path: list[str] | ParamPath) -> str:
+    "A parameter's flat display name: its path (less the ``Model_Specific`` root) as ``display_name_part`` s, ``_``-joined."
+    parts = path[1:] if path[:1] in (["Model_Specific"], ("Model_Specific",)) else path
+    return "_".join(map(display_name_part, parts))

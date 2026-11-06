@@ -1,5 +1,4 @@
-"""
-Traits/UI view for ``AMIParamConfigurator``.
+"""``AmiParamEditor``: a Qt widget for editing an ``AMIParamConfigurator``'s parameter values.
 
 Original Author: David Banas <capn.freako@gmail.com>
 
@@ -10,118 +9,257 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import json
+from pathlib import Path
+from typing import Any, Optional
 
-from traitsui.api import Group, HGroup, Item, VGroup, View
-from traitsui.menu import ModalButtons
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from ..ami.parameter import FIXED_FORMATS, AMIParameter
-from ..ami.configurator import trait_name_part
+from ..ami.configurator import SIM_CORNERS, AMIParamConfigurator, ParamPath, display_name_part
+from ..ami.parameter import AMIParameter
+from ..events import InvalidValueError
+from .bridge import SignalBridge
 
-if TYPE_CHECKING:
-    from ..ami.configurator import AMIParamConfigurator
-    from ..ami.parser import ModelSpecificDict, Parameters
+__all__ = ["AmiParamEditor", "load_preset", "save_preset"]
 
-MAX_ITEMS_PER_ROW = 8
-
-
-def make_view(cfg: AMIParamConfigurator) -> View:
-    """
-    Builds the parameter configuration ``View`` for an ``AMIParamConfigurator``.
-
-    Args:
-        cfg: The configurator whose *In* and *InOut* parameters are to be presented.
-
-    Returns:
-        The Traits/UI ``View``.
-    """
-    view = View(
-        resizable=False,
-        buttons=ModalButtons,
-        title=f"{cfg.root_name} AMI Parameter Configurator",
-    )
-    view.set_content([make_gui(cfg.model_specific_dict)])
-    return view
-
-
-def make_gui(params: ModelSpecificDict) -> Group:
-    """
-    Builds top-level ``Group`` from AMI parameter dictionary.
-
-    Args:
-        params: Dictionary of AMI parameters to be configured.
-
-    Returns:
-        The top-level ``Group`` for the ``View``.
-    """
-
-    gui_items: list[Item | Group] = []
-
-    # Place parameters with a common prefix in their names,
-    # but no pre-existing enclosing group, in a ``VGroup``.
-    # - Generate grouped parameter names and list of unique group names.
-    pnames = list(params.keys())
-    pnames_split = [n.split('_') for n in pnames]
-    group_names = [xs[0] for xs in pnames_split]
-    grouped_pnames = list(zip(pnames, group_names))
-    # The following doesn't preserve the parameter ordering of the AMI file!
-    # for group_name in set(group_names):  # Iterate over unique group names.
-    unique_group_names = []
-    for group_name in group_names:
-        if group_name not in unique_group_names:
-            unique_group_names.append(group_name)
-    # - Process all parameters, trapping those from a non-explicit group for special processing.
-    for group_name in unique_group_names:
-        pnames_in_group = [pname for pname, grp_name in grouped_pnames if grp_name == group_name]
-        if len(pnames_in_group) > 1:
-            _gui_items: list[Item | Group] = []
-            for pname in pnames_in_group:
-                _gui_items.extend(make_gui_items(trait_name_part(pname), params[pname]))
-            gui_items.append(VGroup(*_gui_items, label=group_name, show_border=True))
-        else:
-            pname = pnames_in_group[0]
-            gui_items.extend(make_gui_items(trait_name_part(pname), params[pname]))
-
-    # Finally, split into two rows if necessary.
-    if len(gui_items) > MAX_ITEMS_PER_ROW:
-        return VGroup(
-            HGroup(*(gui_items[:MAX_ITEMS_PER_ROW])),
-            HGroup(*(gui_items[MAX_ITEMS_PER_ROW:])))
-    return HGroup(*gui_items)
+_COLUMNS = ("Parameter", "Value", "Format", "Description")
+_EDITOR_MARGINS = (8, 2, 12, 2)  # Left, top, right, bottom (px) around each value editor, inside its cell.
+_VALUE_COLUMN_MIN = 160  # px
 
 
-def make_gui_items(pname: str, param: AMIParameter | Parameters) -> list[Item | Group]:
-    """
-    Builds list of GUI items from AMI parameter or dictionary.
+def _padded(editor: QWidget) -> QWidget:
+    "``editor`` in a container with margins, so it doesn't touch the cell's edges."
+    box = QWidget()
+    layout = QHBoxLayout(box)
+    layout.setContentsMargins(*_EDITOR_MARGINS)
+    layout.addWidget(editor)
+    return box
 
-    Args:
-        pname: Parameter or sub-group name.
-        param: AMI parameter or dictionary of AMI parameters to be configured.
+
+def save_preset(cfg: AMIParamConfigurator, file: str | Path) -> None:
+    "Save ``cfg``'s current values as JSON, keyed by ``/``-joined ``.ami`` path."
+    values = {"/".join(path): value for path, value in cfg.current_values().items()}
+    Path(file).write_text(json.dumps({"root_name": cfg.root_name, "values": values}, indent=2), encoding="utf-8")
+
+
+def load_preset(cfg: AMIParamConfigurator, file: str | Path) -> list[str]:
+    """Apply values saved by ``save_preset()``.
 
     Returns:
-        The list of GUI items for the ``View``.
+        One message per entry that was skipped (unknown path, illegal value), plus one if the preset is for
+        another model.
+    """
+    data = json.loads(Path(file).read_text(encoding="utf-8"))
+    notes = []
+    if data.get("root_name") != cfg.root_name:
+        notes.append(f"Preset is for model {data.get('root_name')!r}, not {cfg.root_name!r}.")
+    return notes + cfg.apply_values(data.get("values", {}))
 
-    Notes:
-        1. Item names must match the trait names registered by ``make_param_traits()``.
-        2. A dictionary passed through ``param`` may have sub-dictionaries.
-           These will be converted into sub- ``Group`` s in the returned list of GUI items.
+
+class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
+    """Edit an ``AMIParamConfigurator``'s settable parameters, live.
+
+    Each edit calls ``set_param_val()`` at once; an illegal value is reported below the tree and the editor shows
+    the current value again. Changes made elsewhere (e.g. - by an optimizer thread) are shown as they happen.
+    Parameters that aren't settable (Out/Info, Corner, Table, ...) are listed read-only with the value sent.
     """
 
-    if isinstance(param, AMIParameter):
-        if param.pusage not in ("In", "InOut") or param.pformat in FIXED_FORMATS:  # No trait to show.
-            return []
+    def __init__(self, cfg: AMIParamConfigurator, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._cfg = cfg
+        self._editors: dict[ParamPath, QWidget] = {}
+        self._fixed_items: list[tuple[ParamPath, QTreeWidgetItem]] = []
+
+        self._corner = QComboBox()
+        self._corner.addItems(list(SIM_CORNERS))
+        self._corner.setToolTip("Simulation corner: picks each Corner parameter's value.")
+        self._corner.currentTextChanged.connect(self._set_corner)
+        reset = QPushButton("Reset to defaults")
+        reset.clicked.connect(self._reset)
+        save = QPushButton("Save preset...")
+        save.clicked.connect(self._save)
+        load = QPushButton("Load preset...")
+        load.clicked.connect(self._load)
+        bar = QHBoxLayout()
+        bar.addWidget(QLabel(f"Model: <b>{cfg.root_name}</b>"))
+        bar.addStretch()
+        bar.addWidget(QLabel("Corner:"))
+        bar.addWidget(self._corner)
+        for button in (reset, save, load):
+            bar.addWidget(button)
+
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(len(_COLUMNS))
+        self.tree.setHeaderLabels(list(_COLUMNS))
+        self.tree.setAlternatingRowColors(True)
+        self.status = QLabel()
+        self.status.setWordWrap(True)
+
+        layout = QVBoxLayout(self)
+        if cfg.description:
+            desc = QLabel(cfg.description)
+            desc.setWordWrap(True)
+            layout.addWidget(desc)
+        layout.addLayout(bar)
+        layout.addWidget(self.tree)
+        layout.addWidget(self.status)
+
+        self._build_tree()
+        self.tree.expandAll()
+        for col in range(len(_COLUMNS) - 1):
+            self.tree.resizeColumnToContents(col)
+        self.tree.setColumnWidth(1, max(self.tree.columnWidth(1), _VALUE_COLUMN_MIN))
+        self._bridge = SignalBridge(self, cfg.values_changed, cfg.sim_corner_changed)
+        self._bridge.changed.connect(self.refresh)
+        self.refresh()
+
+    @property
+    def configurator(self) -> AMIParamConfigurator:
+        "The configurator being edited."
+        return self._cfg
+
+    def editor(self, path: ParamPath) -> QWidget:
+        "The editor widget for a settable parameter."
+        return self._editors[tuple(path)]
+
+    # Building.
+
+    def _build_tree(self) -> None:
+        settable = dict(self._cfg.iter_settable())
+        for root in ("Model_Specific", "Reserved_Parameters"):
+            params = self._cfg.ami_param_defs[root]
+            top = QTreeWidgetItem(self.tree, [root])
+            self._add_branch(top, params, (root,), settable)  # type: ignore[arg-type]
+            if root == "Reserved_Parameters":
+                top.setExpanded(False)
+
+    def _add_branch(
+        self, parent: QTreeWidgetItem, params: dict[str, Any], prefix: ParamPath,
+        settable: dict[ParamPath, AMIParameter],
+    ) -> None:
+        for name, param in params.items():
+            if name == "description":
+                parent.setText(3, str(param))
+                continue
+            path = (*prefix, name)
+            label = display_name_part(name)
+            item = QTreeWidgetItem(parent, [label if label == name else f"{label} ({name})"])
+            if isinstance(param, AMIParameter):
+                item.setText(2, f"{param.pformat} {param.ptype} ({param.pusage})")
+                item.setText(3, param.pdescription)
+                item.setToolTip(0, param.pdescription)
+                if path in settable:
+                    editor = self._make_editor(path, param)
+                    editor.setToolTip(param.pdescription)
+                    self._editors[path] = editor
+                    self.tree.setItemWidget(item, 1, _padded(editor))
+                else:
+                    self._fixed_items.append((path, item))
+            else:
+                self._add_branch(item, param, path, settable)
+
+    def _make_editor(self, path: ParamPath, param: AMIParameter) -> QWidget:
+        editor: QWidget
         if param.ptype == "Boolean":
-            return [Item(pname, tooltip=param.pdescription)]
-        return [Item(name=pname, label=pname.split("_")[-1], tooltip=param.pdescription)]
+            editor = QCheckBox()
+            editor.toggled.connect(lambda value, p=path: self._set(p, value))
+        elif param.choices is not None:
+            editor = QComboBox()
+            tips = param.plist_tip if param.pformat == "List" and param.plist_tip else None
+            for ix, value in enumerate(param.choices):
+                text = tips[ix] if tips and ix < len(tips) else str(value)
+                editor.addItem(text if text == str(value) else f"{text} ({value})", value)
+            editor.activated.connect(lambda ix, p=path, box=editor: self._set(p, box.itemData(ix)))
+        elif param.pformat == "Range" and param.ptype == "Integer":
+            editor = QSpinBox()
+            editor.setRange(int(param.pmin), int(param.pmax))
+            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.value()))
+        elif param.pformat == "Range":
+            editor = QDoubleSpinBox()
+            editor.setDecimals(6)
+            editor.setRange(float(param.pmin), float(param.pmax))
+            editor.setSingleStep((float(param.pmax) - float(param.pmin)) / 100 or 0.1)
+            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.value()))
+        else:  # Value
+            editor = QLineEdit()
+            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.text()))
+        return editor
 
-    # subparameter branch
-    gui_items: list[Item | Group] = []
-    group_desc = None
-    for subparam_name in sorted(param.keys()):
-        if subparam_name == "description":
-            group_desc = param[subparam_name]
+    # Core -> widgets.
+
+    def refresh(self) -> None:
+        "Show the configurator's current values."
+        values = self._cfg.current_values()
+        for path, editor in self._editors.items():
+            value = values[path]
+            editor.blockSignals(True)
+            try:
+                if isinstance(editor, QCheckBox):
+                    editor.setChecked(bool(value))
+                elif isinstance(editor, QComboBox):
+                    editor.setCurrentIndex(max(editor.findData(value), 0))
+                elif isinstance(editor, (QSpinBox, QDoubleSpinBox)):
+                    editor.setValue(value)
+                elif isinstance(editor, QLineEdit):
+                    editor.setText(str(value))
+            finally:
+                editor.blockSignals(False)
+        for path, item in self._fixed_items:
+            item.setText(1, str(self._cfg.fetch_param_val(list(path))))
+        self._corner.blockSignals(True)
+        self._corner.setCurrentText(self._cfg.sim_corner)
+        self._corner.blockSignals(False)
+
+    # Widgets -> core.
+
+    def _set(self, path: ParamPath, value: Any) -> None:
+        try:
+            self._cfg.set_param_val(path, value)
+        except InvalidValueError as err:
+            self._report(str(err), error=True)
+            self.refresh()
         else:
-            gui_items.extend(make_gui_items(pname + "_" + trait_name_part(subparam_name), param[subparam_name]))
-    if group_desc:
-        gui_items = [Item(label=group_desc)] + gui_items
-    return [VGroup(*gui_items, label=pname.split("_")[-1], show_border=True)]
+            self._report("")
+
+    def _set_corner(self, corner: str) -> None:
+        self._cfg.sim_corner = corner
+
+    def _reset(self) -> None:
+        self._cfg.reset_to_defaults()
+        self._report("Reset to defaults.")
+
+    def _save(self) -> None:
+        file, _ = QFileDialog.getSaveFileName(self, "Save AMI preset", f"{self._cfg.root_name}.json", "JSON (*.json)")
+        if file:
+            save_preset(self._cfg, file)
+            self._report(f"Saved {file}.")
+
+    def _load(self) -> None:
+        file, _ = QFileDialog.getOpenFileName(self, "Load AMI preset", "", "JSON (*.json)")
+        if file:
+            try:
+                notes = load_preset(self._cfg, file)
+            except (OSError, ValueError) as err:
+                self._report(f"Couldn't load {file}: {err}", error=True)
+                return
+            self._report("\n".join(notes) or f"Loaded {file}.", error=bool(notes))
+
+    def _report(self, msg: str, error: bool = False) -> None:
+        self.status.setText(msg)
+        self.status.setStyleSheet("color: red;" if error else "")
+        self.status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

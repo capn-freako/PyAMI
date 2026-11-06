@@ -8,7 +8,51 @@ Releases before 10.0.0 are summarized from their
 For help porting code from v9.x, see
 [Upgrading from v9.x](https://pyibis-ami.readthedocs.io/en/latest/install.html#upgrading-from-v9-x).
 
-## [10.0.0] - Unreleased
+## [11.0.0] - Unreleased
+
+For help porting code from v10.x, see
+[Upgrading from v10.x](https://pyibis-ami.readthedocs.io/en/latest/install.html#upgrading-from-v10-x).
+
+### Removed (breaking)
+
+- *Traits*, *TraitsUI*, *Chaco*, *Enable* and *PyFace*. `AMIParamConfigurator`, `AmiParamTuner` (now a dataclass),
+  `IBISModel`, `Component` and `Model` are plain Python classes. No compatibility shims.
+- `make_param_traits()`, `trait_name_part()` (`display_name_part()` replaces it), the `pyibisami.ami.parser`
+  re-export of `AMIParamConfigurator`, calling instances to open a GUI, `get_init()` opening a GUI,
+  `IBISModel.observe()`, `model_dict`, `get_models()`, `comp_`, `pin_`, `pin_rlcs`, `Component.pin`,
+  `Model.plot_iv`, and the Traits/UI views.
+
+### Changed (breaking)
+
+- `IBISModel` selection is named after the IBIS keywords: `component_name`/`pin_name`/`model_name` (were
+  `comp`/`pin`/`mod`), `component_choices`/`pin_choices`/`model_choices` (were `comps`/`pins`/`models`),
+  `component` (was `comp_`), `pin` (a `Pin` record), and `select(component=, pin=, model=)`.
+- Illegal values raise `pyibisami.events.InvalidValueError` (a `ValueError`) instead of `TraitError`.
+- `IBISModel.alert`/`selection_changed` and `AMIParamConfigurator.values_changed`/`sim_corner_changed`
+  are `pyibisami.events.Signal`s: `connect(callback)`.
+- The `gui` extra is now `pyside6` and `matplotlib`. The GUI is rebuilt on Qt as embeddable widgets
+  (`AmiParamEditor`, `IbisSelector`, `IbisBrowser`, `ModelInfo`, `IVPlot`, `VTPlot`) and `open_gui()` dialogs.
+
+### Added
+
+- `[Rising Waveform]`/`[Falling Waveform]` tables are parsed (they were skipped): `Model.waveforms`, `rising`,
+  `falling`, with their fixtures (`pyibisami.ibis.vt`). `[Composite Current]` is still skipped.
+- `pyibisami-gui`: a viewer for `.ibs` files (selection, pin table, model info, I-V curves, V-T waveforms,
+  the selected model's AMI parameters, warnings) and `.ami` files.
+- The AMI parameter editor saves and loads presets (JSON), and resets to the defaults.
+- `AMIParamConfigurator.iter_settable()`, `current_values()`, `apply_values()`, `reset_to_defaults()`;
+  `AMIParameter.validate()`, `is_settable`, `choices`, `initial_value`.
+- `IBISModel.from_text()`, `component_names`, `model_names`, `components`, `model_selectors`, `file_name` etc.;
+  `Component.pin_table`; `Model.name`, `model_type` and its other keyword values, as read-only properties.
+- `IVCurve.na_min`/`na_max`; `NA` min/max columns aren't plotted.
+
+### Fixed
+
+- I-V plots (`IVData.series()`, `IVCurve.ground_referenced()`): `[Pullup]`/`[POWER Clamp]` currents are no longer
+  negated (IBIS currents are positive into the pin in every table), and each corner's Vcc-relative voltages are
+  converted with that corner's `[Voltage Range]` (min/max curves were shifted by the typ-min/max supply difference).
+
+## [10.0.0] - 19 Oct 2026 [IBIS v8.0 Compliance](https://github.com/capn-freako/PyAMI/releases/tag/v10.0.0)
 
 ### Changed (breaking)
 

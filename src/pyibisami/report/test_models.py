@@ -104,12 +104,12 @@ def test_ibis_ami_models(
     pages = title_page(ibis_file)
 
     ibis_model, _ = get_ibis_contents(ibis_file)
-    if 'models' not in ibis_model.model_dict or len(ibis_model.model_dict['models']) == 0:
+    if not ibis_model.model_names:
         raise RuntimeError("The IBIS file contains no model definitions!")
 
     ami_model_names = list(filter(
-        lambda nm: ibis_model.model_dict['models'][nm].is_ami,
-        ibis_model.model_dict['models'].keys()))
+        lambda nm: ibis_model.get_model(nm).is_ami,
+        ibis_model.model_names))
     n_ami_models = len(ami_model_names)
     if n_ami_models == 0:
         raise RuntimeError("There were no AMI models found in this IBIS file.")

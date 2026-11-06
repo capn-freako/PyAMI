@@ -13,11 +13,11 @@ Copyright (c) 2019 by David Banas; All rights reserved World wide.
 import logging
 import platform
 from collections.abc import Mapping
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
-from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
-
+from .analog import Pin
 from .iv import IVCurve, IVData, IVKeyword
+from .vt import MAX_VT_ROWS, MAX_VT_TABLES, VTWaveform
 
 logger = logging.getLogger(__name__)
 
@@ -80,26 +80,22 @@ def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]
     return pc_z
 
 
-class Component(HasTraits):
+class Component:
     """Encapsulation of a particular component from an IBIS model file."""
 
-    # Created dynamically in ``__init__`` via ``add_trait``; declared here for static checkers.
-    # ``_pin`` is the selected pin name; ``_pin_`` is the Traits mapped shadow, ``_pins[_pin]``.
-    _pin: str
-    _pin_: tuple[str, dict[str, float]]
-
-    def __init__(self, subDict):
+    def __init__(self, subDict, name: str = ""):
         """
         Args:
             subDict(dict): Dictionary of [Component] sub-keywords/params.
-        """
 
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
+        Keyword Args:
+            name: The ``[Component]`` name.
+                Default: "" (unnamed)
+        """
 
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
+        self._name = name
 
         # Fetch available keyword/parameter definitions,
         # flagging an error if any required keywords are missing.
@@ -107,11 +103,6 @@ class Component(HasTraits):
         self._pkg = subDict["package"]
         self._pins = subDict["pin"]
         self._diffs = subDict.get("diff_pin")  # Won't flag error; returns `None`.
-
-        # Expose as traits, for viewing/selection.
-        self.add_trait("manufacturer", String(self._mfr))
-        self.add_trait("package", String(self._pkg))
-        self.add_trait("_pin", Trait(next(iter(self._pins)), self._pins))
 
     def __str__(self):
         res = "Manufacturer:\t" + self._mfr + "\n"
@@ -121,40 +112,34 @@ class Component(HasTraits):
             res += "    " + pname + ":\t" + str(self._pins[pname]) + "\n"
         return res
 
-    def __call__(self):
-        """Present the component viewer GUI.
-
-        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
-        """
-        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
-        self.edit_traits()
-
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        from ..gui.ibis import make_component_view  # pylint: disable=import-outside-toplevel
-        return make_component_view(self)
+    @property
+    def name(self) -> str:
+        "The ``[Component]`` name (empty if not given)."
+        return self._name
 
     @property
-    def pin(self):
-        """The data for the pin selected most recently by the user.
-
-        Returns the ``(model_name, rlc_dict)`` entry from the ``[Pin]`` table,
-        not the pin name. (The name is in ``_pin``.) Defaults to the first
-        pin's entry if the user hasn't made a selection yet.
-        """
-        return self._pin_
+    def manufacturer(self) -> str:
+        "The ``[Manufacturer]``."
+        return self._mfr
 
     @property
-    def pins(self):
-        "The list of component pins."
+    def package(self) -> Any:
+        "The ``[Package]`` R/L/C values."
+        return self._pkg
+
+    @property
+    def pins(self) -> dict[str, tuple[str, dict[str, float]]]:
+        """The component's ``[Pin]`` table: ``{"pin(signal)": (model name, R/L/C values)}``, in file order."""
         return self._pins
 
+    @property
+    def pin_table(self) -> list[Pin]:
+        "The ``[Pin]`` table as ``Pin`` records, in file order."
+        return [Pin.from_entry(key, entry) for key, entry in self._pins.items()]
 
-class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
+
+class Model:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Encapsulation of a particular I/O model from an IBIS model file."""
-
-    # Chaco plot of ``iv_data``, built on first access; requires the ``gui`` extra.
-    plot_iv = Property(Any)
 
     def __init__(self, subDict, name: str = ""):  # pylint: disable=too-many-locals,too-many-statements
         """
@@ -168,10 +153,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         Raises:
             LookupError: A required keyword is missing.
         """
-
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
 
         # Stash the sub-keywords/parameters.
         self._subDict = subDict
@@ -204,6 +185,15 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._slew: Optional[float] = None
         self._zin: Optional[float] = None
         self._infer_analog(subDict, name)
+        self._waveforms: list[VTWaveform] = []
+        self._waveform_problems: list[str] = []
+        for direction, table in subDict.get("waveforms", []):
+            try:
+                self._waveforms.append(VTWaveform.from_table(direction, table["params"], table["rows"]))
+            except ValueError as err:
+                self._waveform_problems.append(f"Ignoring a [{direction.capitalize()} Waveform]: {err}")
+                logger.warning("[Model] %s: Ignoring a [%s Waveform]: %s", name or "<unnamed>",
+                               direction.capitalize(), err)
 
         # AMI executables.
         self._test_configs = {}
@@ -215,19 +205,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             self._ami_executables = [AmiExecutable(direction, os, bits, dll, ami)
                                      for (direction, ((os, bits), [dll, ami]))
                                      in algo_model_data.get("executables", [])]
-
-        # Expose as traits, for viewing.
-        self.add_trait("model_type", String(self._mtype))
-        raw_values = {  # Numbers, typ/min/max lists, or `None` when absent.
-            "c_comp": self._ccomp, "cref": self._cref, "vref": self._vref, "vmeas": self._vmeas,
-            "rref": self._rref, "trange": self._trange, "vrange": self._vrange,
-        }
-        for trait_name in raw_values:
-            self.add_trait(trait_name, Any())  # Values set below, not as (instance-shared) defaults.
-        self.trait_set(**raw_values)
-        for trait_name, value in (("zout", self._zout), ("slew", self._slew), ("zin", self._zin)):
-            if value is not None:
-                self.add_trait(trait_name, Float(value))
 
     def _infer_analog(self, subDict: dict, name: str) -> None:
         "Set ``_iv_data``, ``_zout``, ``_slew`` and ``_zin``, as far as the ``Model_type`` and its data allow."
@@ -253,7 +230,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             required = ("gnd_clamp", "power_clamp")
         elif strict:
             required = sides
-        iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=required)
+        iv_data = IVData.from_model_dict(subDict, self._vrange, required=required)
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
         if sides:
@@ -289,25 +266,50 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 res += f"\t{keywords[ex.direction]:<14}{ex.os} {ex.bits}-bit: {ex.dll}, {ex.ami}\n"
         return res
 
-    def __call__(self):
-        """Present the model viewer GUI.
+    @property
+    def name(self) -> str:
+        "The ``[Model]`` name (empty if not given)."
+        return self._name
 
-        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
-        """
-        from .. import gui  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
-        self.edit_traits(kind="livemodal")
+    @property
+    def model_type(self) -> str:
+        "The ``Model_type``, as written."
+        return self._mtype
 
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        from ..gui.ibis import make_model_view  # pylint: disable=import-outside-toplevel
-        return make_model_view(self)
+    @property
+    def c_comp(self) -> Any:
+        "``C_comp`` (typ/min/max), or ``None``."
+        return self._ccomp
 
-    @cached_property
-    def _get_plot_iv(self):
-        if self._iv_data is None:
-            return None
-        from ..gui.ibis import make_iv_plot  # pylint: disable=import-outside-toplevel
-        return make_iv_plot(self._iv_data)
+    @property
+    def cref(self) -> Optional[float]:
+        "``Cref``, or ``None``."
+        return self._cref
+
+    @property
+    def vref(self) -> Optional[float]:
+        "``Vref``, or ``None``."
+        return self._vref
+
+    @property
+    def vmeas(self) -> Optional[float]:
+        "``Vmeas``, or ``None``."
+        return self._vmeas
+
+    @property
+    def rref(self) -> Optional[float]:
+        "``Rref``, or ``None``."
+        return self._rref
+
+    @property
+    def trange(self) -> Any:
+        "``[Temperature Range]`` (typ/min/max), or ``None``."
+        return self._trange
+
+    @property
+    def vrange(self) -> Any:
+        "``[Voltage Range]`` (typ/min/max)."
+        return self._vrange
 
     @property
     def iv_data(self) -> Optional[IVData]:
@@ -345,6 +347,21 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         return self._zin
 
     @property
+    def waveforms(self) -> list[VTWaveform]:
+        "The ``[Rising Waveform]`` and ``[Falling Waveform]`` tables, in file order (unusable ones left out)."
+        return list(self._waveforms)
+
+    @property
+    def rising(self) -> list[VTWaveform]:
+        "The ``[Rising Waveform]`` tables."
+        return [wave for wave in self._waveforms if wave.direction == "rising"]
+
+    @property
+    def falling(self) -> list[VTWaveform]:
+        "The ``[Falling Waveform]`` tables."
+        return [wave for wave in self._waveforms if wave.direction == "falling"]
+
+    @property
     def ccomp(self):
         "The parasitic capacitance."
         return self._ccomp
@@ -364,7 +381,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         """IBIS spec rules this model breaks, which don't stop it loading (diagnostics only).
 
         Checks ``[Algorithmic Model]`` use per ``Model_type`` (IBIS 8.0 Section 10.1, p.213-214, Table 47),
-        the ``.ami`` file extension (p.214), and the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1).
+        the ``.ami`` file extension (p.214), the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1),
+        and the waveform table limits (p.107; unusable tables are listed too).
         """
         mtype = self._mtype.lower()
         execs = self._ami_executables
@@ -398,6 +416,12 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                 "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62); "
                                 "not needed if the model is only used through [Diff Pin], whose vdiff supersedes them "
                                 "(Section 5, p.55)")
+        problems.extend(self._waveform_problems)
+        if len(self._waveforms) > MAX_VT_TABLES:
+            problems.append(f"{len(self._waveforms)} waveform tables; at most {MAX_VT_TABLES} are allowed "
+                            "(IBIS 8.0 Section 6.1, p.107)")
+        if any(len(wave.t) > MAX_VT_ROWS for wave in self._waveforms):
+            problems.append(f"A waveform table has more than {MAX_VT_ROWS} rows (IBIS 8.0 Section 6.1, p.107)")
         return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property

@@ -12,6 +12,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import importlib.util
 import os
 import sys
 
@@ -42,17 +43,10 @@ autodoc_default_options = {
     "inherited-members": False,
     "show-inheritance": True,
     "members": True,
-    "exclude-members": "default_traits_view",
 }
-autodoc_mock_imports = [
-    "chaco",
-    "click",
-    "em",
-    "enable",
-    "scipy",
-    "traits",
-    "traitsui",
-]
+# Mock only what isn't installed (e.g. - on Read the Docs, which installs ``docs/requirements.txt``): with PySide6
+# installed, its import hook can't inspect a mocked module.
+autodoc_mock_imports = [name for name in ("click", "em", "PySide6", "scipy") if importlib.util.find_spec(name) is None]
 autoclass_content = "both"
 autodata_content = "both"
 

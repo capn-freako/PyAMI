@@ -33,9 +33,9 @@ Everything else is an optional *extra*, installed by naming it in brackets:
 =============  ============================================  ====================================================
 Extra          Adds                                          Needed for
 =============  ============================================  ====================================================
-``gui``        `chaco`, `enable`, `traitsui`                 GUIs: ``AMIParamConfigurator.open_gui()``,
-                                                             calling ``IBISModel``/``Component``/``Model``
-                                                             instances, ``Model.plot_iv``
+``gui``        `pyside6`, `matplotlib`                       The Qt widgets (``pyibisami.gui``), the
+                                                             `pyibisami-gui` viewer, and ``open_gui()`` of
+                                                             ``AMIParamConfigurator``/``IBISModel``
 ``report``     `matplotlib`, `reportlab`, `scipy`            `test-model` & `run-tests` (PDF/plot reports),
                                                              ``testing.test_defs.lossy_channel()``/
                                                              ``reflective_channel()``
@@ -48,9 +48,38 @@ Several extras may be combined, e.g.: `pip install 'pyibis-ami[gui,report]'`
 
 Using a feature whose extra isn't installed raises an ``ImportError`` naming the extra to install.
 
-The ``gui`` extra doesn't install a Qt binding, so that applications (e.g. - *PyBERT*) may choose their own.
-If none is chosen (via the ``QT_API`` environment variable), the first one installed is used.
-If you have none, install one; e.g.: `pip install pyside6`
+The ``gui`` extra's widgets are built on PySide6.
+
+Upgrading from v10.x
+--------------------
+
+Version 11.0 removes *Traits*, *TraitsUI*, *Chaco*, *Enable* and *PyFace* entirely: the model classes are plain
+Python classes, and the GUI is rebuilt on Qt (PySide6). There are no compatibility shims.
+
+- ``except TraitError`` on an illegal value: ``except InvalidValueError`` (``pyibisami.events``; a ``ValueError``).
+- ``from pyibisami.ami.parser import AMIParamConfigurator``: import it from ``pyibisami.ami.configurator``.
+- ``cfg.<trait name>``, ``cfg.trait_set(...)``: ``cfg.fetch_param_val(path)``, ``cfg.set_param_val(path, value)``;
+  also ``cfg.current_values()``/``apply_values()``/``reset_to_defaults()``.
+- ``cfg.observe(cb, name)``: ``cfg.values_changed.connect(cb)`` (``cb(path, old, new)``); ``cfg.sim_corner_changed``.
+- ``cfg()``, ``ibis()``, ``comp()``, ``model()``: ``cfg.open_gui()``, ``ibis.open_gui()``; or embed
+  ``AmiParamEditor``/``IbisBrowser`` (``pyibisami.gui``).
+- ``get_init(...)`` without ``ami_params`` no longer opens a GUI: it sends the current values (``input_ami_params``).
+- ``make_param_traits()``, ``trait_name_part()``: gone; ``display_name_part()``/``display_name()`` give the
+  ``pre1``/``post0`` display names.
+- ``AmiParamTuner`` is a dataclass, with the same fields.
+- ``ibis.observe(cb, "alert")`` (``event.new``): ``ibis.alert.connect(cb)`` (``cb(msg)``).
+- ``ibis.comp``, ``ibis.pin``, ``ibis.mod`` (names): ``ibis.component_name``, ``ibis.pin_name``, ``ibis.model_name``;
+  ``ibis.select(component=, pin=, model=)``; ``ibis.selection_changed``.
+- ``ibis.comps``, ``ibis.pins``, ``ibis.models``: ``ibis.component_choices``, ``pin_choices``, ``model_choices``.
+- ``ibis.comp_``: ``ibis.component``. ``ibis.pin_``, ``ibis.pin_rlcs``: ``ibis.pin`` (a ``Pin``: ``pin``,
+  ``signal``, ``model``, ``r_pin``, ``l_pin``, ``c_pin``).
+- ``ibis.model_dict``: ``ibis.model_names``, ``get_model()``, ``components``, ``model_selectors``.
+- ``ibis.get_models()``: ``ibis.get_model_names()``. ``Component.pin``: ``ibis.pin``, or ``Component.pin_table``.
+- ``Model.plot_iv`` (Chaco): ``pyibisami.gui.IVPlot(model.iv_data)``.
+- ``Model`` display values (``vmeas``, ``vrange``, ...) are read-only properties.
+
+New in 11.0: ``Model.waveforms``/``rising``/``falling`` (``[Rising Waveform]``/``[Falling Waveform]``; see
+``pyibisami.ibis.vt``), ``IVCurve.na_min``/``na_max``, ``IBISModel.from_text()``, and the `pyibisami-gui` viewer.
 
 Upgrading from v9.x
 -------------------

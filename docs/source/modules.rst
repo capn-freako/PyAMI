@@ -3,6 +3,8 @@
 
 .. automodule:: pyibisami
 
+.. automodule:: pyibisami.events
+
 .. toctree::
    :maxdepth: 2
    :caption: Modules:

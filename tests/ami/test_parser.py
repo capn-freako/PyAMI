@@ -3,7 +3,7 @@ import pytest
 import pyibisami.ami.model as ami_model
 import pyibisami.ami.parser as ami_parser
 from pyibisami.ami.configurator import AMIParamConfigurator
-from traits.api import TraitError
+from pyibisami.events import InvalidValueError
 
 
 @pytest.fixture
@@ -148,10 +148,7 @@ def nested_ami_config():
 
 class TestNestedModelSpecificParams:
     """Regression coverage for nested (grouped) `Model_Specific` parameters,
-    which exercise a hierarchical-trait-name path that `set_param_val()`
-    previously got wrong (it synced only the leaf name, not the full,
-    underscore-joined hierarchical trait name that `make_param_traits()`
-    actually registers)."""
+    which exercise the hierarchical path that `set_param_val()` previously got wrong."""
 
     def test_tunable_params_nested(self, nested_ami_config):
         ami = AMIParamConfigurator(nested_ami_config)
@@ -164,7 +161,7 @@ class TestNestedModelSpecificParams:
         ami = AMIParamConfigurator(nested_ami_config)
         ami.set_param_val(["Model_Specific", "tx_preset", "coeffs", "main"], 0.75)
         assert ami.fetch_param_val(["Model_Specific", "tx_preset", "coeffs", "main"]) == 0.75
-        # The value actually consumed by `AMI_Init()` comes from the Trait, via
+        # The value actually consumed by `AMI_Init()` comes from the current values, via
         # `input_ami_params`, not from `AMIParameter.pvalue` -- this is what was broken.
         assert ami.input_ami_params["tx_preset"]["coeffs"]["main"] == 0.75
 
@@ -291,7 +288,6 @@ class TestSetAndFetchParamVal:
         ami = AMIParamConfigurator(mode_selector_ami_config)
         assert ami.fetch_param_val(["Model_Specific", "eq_mode"]) == 0  # Was [0, 1]: the legal values.
         ami.set_param_val(["Model_Specific", "eq_mode"], 1)
-        assert ami.eq_mode == "Manual"
         assert ami.input_ami_params["eq_mode"] == ami.fetch_param_val(["Model_Specific", "eq_mode"]) == 1
         with pytest.raises(ValueError, match="isn't one of the values"):
             ami.set_param_val(["Model_Specific", "eq_mode"], 2)
@@ -299,7 +295,7 @@ class TestSetAndFetchParamVal:
     def test_illegal_value_is_rejected(self, mode_selector_ami_config):
         """An out-of-Range value used to be sent as given."""
         ami = AMIParamConfigurator(mode_selector_ami_config)
-        with pytest.raises(TraitError):
+        with pytest.raises(InvalidValueError):
             ami.set_param_val(["Model_Specific", "eq_mag"], 50.0)
         with pytest.raises(ValueError, match="can't be set to 6.5"):
             ami.set_param_val(["Model_Specific", "odd_steps"], 6.5)  # Integer: was truncated to 6.
@@ -335,10 +331,10 @@ class TestTapTunerValues:
         ami.set_param_val(["Model_Specific", name], 1)
         assert _tuner_value(ami, name) == 1.0
 
-    def test_trait_set_directly(self, mode_selector_ami_config):
-        "As the GUI does."
+    def test_apply_values(self, mode_selector_ami_config):
+        "As a saved preset does."
         ami = AMIParamConfigurator(mode_selector_ami_config)
-        ami.trait_set(eq_mag=3.0, eq_mode="Manual")
+        assert ami.apply_values({("Model_Specific", "eq_mag"): 3.0, "Model_Specific/eq_mode": 1, "nope": 1})             == ["No settable parameter at nope; skipped."]
         assert _tuner_value(ami, "eq_mag") == 3.0
         assert _tuner_value(ami, "eq_mode") == 1.0
 
@@ -454,15 +450,15 @@ def test_unusable_default_warns(param, expected, warning):
 def test_enum_offers_each_legal_value_once(param, values, initial):
     """A List/Increment/Steps dropdown offers exactly the legal values, in order; the default is just selected."""
     ami = AMIParamConfigurator(_ami_file(f"(x (Usage In) {param})"))
-    assert ami.trait("x").handler.values == values
-    assert ami.x == initial
+    assert tuple(ami.fetch_param(["Model_Specific", "x"]).choices) == values
+    assert ami.fetch_param_val(["Model_Specific", "x"]) == initial
     assert ami.input_ami_params["x"] == initial
 
 
 def test_increment_typ_outside_range_starts_at_first_legal_value():
     """An out-of-range typ (warned about) isn't offered or sent; the first legal value is."""
     ami = AMIParamConfigurator(_ami_file("(x (Usage In) (Type Float) (Increment 5 0 1 0.25))"))
-    assert ami.trait("x").handler.values == (0.0, 0.25, 0.5, 0.75, 1.0)
+    assert ami.fetch_param(["Model_Specific", "x"]).choices == [0.0, 0.25, 0.5, 0.75, 1.0]
     assert ami.input_ami_params["x"] == 0.0
     assert "min <= typ <= max" in ami.ami_parsing_errors[0]
 
@@ -535,10 +531,10 @@ class TestFormats:
         defs = ami.ami_param_defs["Model_Specific"]
         assert defs["gain"].pvalues == [0.0, 0.5, 1.0, 1.5, 2.0]
         assert defs["vga"].pvalues == [0, 2, 4, 6, 8]
-        ami.gain = 1.5  # As the GUI sets it.
+        ami.set_param_val(["Model_Specific", "gain"], 1.5)
         assert ami.input_ami_params["gain"] == 1.5
-        with pytest.raises(TraitError):
-            ami.gain = 1.2
+        with pytest.raises(InvalidValueError):
+            ami.set_param_val(["Model_Specific", "gain"], 1.2)
 
     @pytest.mark.parametrize("corner, expected", [("typ", 1.0), ("min", 0.5), ("max", 2.0)])
     def test_corner_follows_sim_corner(self, formats_ami_config, corner, expected):
@@ -547,7 +543,7 @@ class TestFormats:
         ami.sim_corner = corner
         assert ami.input_ami_params["pvt"] == expected
         assert ami.fetch_param_val(["Model_Specific", "pvt"]) == expected
-        assert "pvt" not in ami._param_trait_names
+        assert ("Model_Specific", "pvt") not in dict(ami.iter_settable())
         assert all(path[-1] != "pvt" for path, _ in ami.tunable_params)
 
     def test_table_labels_and_column_types(self, formats_ami_config):
@@ -605,26 +601,6 @@ class TestFormats:
         assert ami.ami_param_defs["Model_Specific"]["t"].pvalue == [[True, 1], [False, 2]]
 
 
-@pytest.mark.parametrize(
-    "config", ["test_ami_config", "nested_ami_config", "described_group_ami_config", "grouped_ami_config",
-               "tap_ami_config", "formats_ami_config"])
-def test_gui_view_items_match_traits(config, request):
-    """Every editable ``Item`` in the GUI view must name a registered parameter Trait."""
-    pytest.importorskip("traitsui")
-    from traitsui.api import Group, Item
-
-    def item_names(content):
-        for elem in content:
-            if isinstance(elem, Group):
-                yield from item_names(elem.content)
-            elif isinstance(elem, Item) and elem.name:
-                yield elem.name
-
-    ami = AMIParamConfigurator(request.getfixturevalue(config))
-    view = ami.default_traits_view()
-    assert sorted(item_names(view.content.content)) == sorted(ami._param_trait_names)
-
-
 def test_boolean_list_without_default_starts_at_first_value():
     """With no ``Default``, a List starts at its first value (IBIS 8.0 p.241); a Boolean List used to start at False."""
     ami = AMIParamConfigurator(_ami_file("(bl (Usage In) (Type Boolean) (List True False))"))
@@ -660,12 +636,17 @@ def test_empty_groups_not_sent():
         == {"root_name": "my_model"}  # The root name stays, even with nothing else to send.
 
 
-def test_configurator_still_importable_from_parser():
-    """``from pyibisami.ami.parser import AMIParamConfigurator`` (PyBERT, notebooks, user scripts) still works."""
-    from pyibisami.ami import configurator
-    from pyibisami.ami.parser import AMIParamConfigurator as moved, make_param_traits, trait_name_part
-
-    assert (moved, make_param_traits, trait_name_part) == (
-        configurator.AMIParamConfigurator, configurator.make_param_traits, configurator.trait_name_part)
-    with pytest.raises(AttributeError):
-        ami_parser.no_such_name  # pylint: disable=pointless-statement
+def test_values_changed_and_sim_corner_signals(formats_ami_config):
+    """Each change of a value, or of ``sim_corner``, is announced once; setting the same value isn't."""
+    ami = AMIParamConfigurator(formats_ami_config)
+    seen = []
+    ami.values_changed.connect(lambda *args: seen.append(args))
+    ami.sim_corner_changed.connect(lambda *args: seen.append(args))
+    ami.set_param_val(["Model_Specific", "gain"], 1.5)
+    ami.set_param_val(["Model_Specific", "gain"], 1.5)
+    ami.sim_corner = "max"
+    assert seen == [(("Model_Specific", "gain"), 1.0, 1.5), ("typ", "max")]
+    with pytest.raises(InvalidValueError):
+        ami.sim_corner = "fast"
+    ami.reset_to_defaults()
+    assert ami.fetch_param_val(["Model_Specific", "gain"]) == 1.0

@@ -18,6 +18,16 @@ iv
 
 .. automodule:: pyibisami.ibis.iv
 
+vt
+--
+
+.. automodule:: pyibisami.ibis.vt
+
+analog
+------
+
+.. automodule:: pyibisami.ibis.analog
+
 parser
 ------
 

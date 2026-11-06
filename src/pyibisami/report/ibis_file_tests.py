@@ -115,13 +115,13 @@ def test_ami_models(
         """
 
         flowables.append(Paragraph(f"Model: {model_name}", H1))
-        model = ibis_model.model_dict['models'][model_name]
+        model = ibis_model.get_model(model_name)
         flowables.extend(test_ami_model(model_name, model, ibis_file, test_sweeps_dir))
         flowables.append(page_break)
         return flowables
 
     if model_name:
-        if model_name not in ibis_model.model_dict['models']:
+        if model_name not in ibis_model.model_names:
             flowables.append(Paragraph(f"Error: The requested model: {model_name}, was not found!"))
             flowables.append(page_break)
             return flowables

@@ -18,94 +18,246 @@ import logging
 import platform
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from traits.api import (
-    Any,
-    Enum,
-    Event,
-    Float,
-    HasTraits,
-    List,
-    Property,
-    Str,
-    String,
-    TraitType,
-    cached_property,
-)
+from ..events import InvalidValueError, Signal
+from .analog import Pin
 
 # ``TX_MODEL_TYPES``/``RX_MODEL_TYPES`` live in ``.model`` (which can't import this module); re-exported here.
 from .model import RX_MODEL_TYPES, TX_MODEL_TYPES, Component, Model
 from .parser import parse_ibis_file
 
+__all__ = ["IBISModel", "RX_MODEL_TYPES", "TX_MODEL_TYPES"]
+
 logger = logging.getLogger(__name__)
 
+Selection = tuple[str, list[str], str, list[str], str]  # component, pin choices, pin, model choices, model
 
-class ModelTypes(TraitType):
-    """``None``, or a collection of ``Model_type`` names, held as a lower-cased ``frozenset``.
 
-    A single string is rejected (it would otherwise be read one character at a time).
+def _model_types(value: Optional[Iterable[str]]) -> Optional[frozenset[str]]:
+    """``None``, or a collection of ``Model_type`` names as a lower-cased ``frozenset``.
+
+    Raises:
+        InvalidValueError: ``value`` is a single string (it would otherwise be read one character at a time), or
+            not a collection.
     """
-
-    default_value = None
-    info_text = "None or a collection of Model_type names (not a single string)"
-
-    def validate(self, obj, name, value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            self.error(obj, name, value)
-        try:
-            return frozenset(str(mtype).lower() for mtype in value)
-        except TypeError:
-            return self.error(obj, name, value)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        raise InvalidValueError(f"model_types must be None or a collection of Model_type names, not a string: {value!r}")
+    try:
+        return frozenset(str(mtype).lower() for mtype in value)
+    except TypeError as err:
+        raise InvalidValueError(f"model_types must be None or a collection of Model_type names; got {value!r}") from err
 
 
-class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
-    """HasTraits subclass for wrapping and interacting with an IBIS model.
-
-    This class can be configured to present a customized GUI to the user
-    for interacting with a particular IBIS model (i.e. - selecting components,
-    pins, and models).
+class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+    """A parsed IBIS file, with a selection of one component, pin and model.
 
     The intended use model is as follows:
 
-     1. Instantiate this class only once per IBIS model file.
-        When instantiating, provide the name of the IBIS file.
-        This class will take care of opening that file,
-        parsing its contents, and reporting any errors or warnings
-        it encounters, in its ``ibis_parsing_errors`` property.
+     1. Instantiate this class once per IBIS file, giving its name (or use ``from_text()``).
+        Any spec warnings found while parsing are in ``ibis_parsing_errors``.
 
-     2. When you want to let the user select a particular component/pin/model,
-        call the newly created instance, as if it were a function, passing
-        no arguments.
-        The instance will then present a GUI to the user,
-        allowing him to select a particular component/pin/model, which may then
-        be retrieved, via the ``model`` property.
-        The latest user selections will be remembered,
-        as long as the instance remains in scope.
+     2. Select a component, pin and model: set ``component_name``, ``pin_name`` or ``model_name`` (a new component
+        selects its first offered pin, and a new pin its first offered model), or several at once with
+        ``select()``; or let the user do it, in the ``gui`` extra's ``IbisSelector`` (or ``open_gui()``).
+        The offered names are in ``component_choices``, ``pin_choices`` and ``model_choices``; the selected
+        objects in ``component``, ``pin`` (a ``Pin`` record) and ``model``.
 
     To offer only some kinds of pin (e.g. - only Tx pins), give the ``model_types`` to allow::
 
         IBISModel(ibis_file_name, model_types=TX_MODEL_TYPES)
 
-    Any errors or warnings encountered while parsing are available, in
-    the ``ibis_parsing_errors`` property.
+    Signals (``pyibisami.events.Signal``):
 
-    User-facing notices (e.g. - whether the selected model has an AMI executable
-    for this platform) are logged and also fired through the ``alert`` event,
-    which GUIs may observe; see ``pyibisami.gui.ibis.show_alerts()``.
-
-    The complete dictionary containing all parsed models may be retrieved,
-    via the ``model_dict`` property.
+    - ``selection_changed(component_name, pin_name, model_name)``, after any change of the selection.
+    - ``alert(msg)``, with each user-facing notice (e.g. - whether the selected model has an AMI
+      executable for this platform); also logged. See ``pyibisami.gui.show_alerts()``.
     """
 
-    model = Property(Any, depends_on=["mod"])
-    comps = List  # Always holds the list of valid component selections.
-    pins = List  # Always holds the list of valid pin selections, given a component selection.
-    models = List  # Always holds the list of valid model selections, given a pin selection.
-    alert = Event(Str)  # Fired with each user-facing notice; GUIs observe this.
-    model_types = ModelTypes  # ``Model_type`` s offered for selection (any case); ``None`` (the default) offers all.
+    def __init__(
+        self: "IBISModel",
+        ibis_file_name: str | Path,
+        *,
+        model_types: Optional[Iterable[str]] = None,
+    ) -> None:
+        """
+        Args:
+            ibis_file_name: The name of the IBIS file.
+
+        Keyword Args:
+            model_types: Offer only the pins (and models) with one of these ``Model_type`` s (any case);
+                e.g. - ``TX_MODEL_TYPES`` or ``RX_MODEL_TYPES``. ``None`` offers all.
+                May be changed later, through the ``model_types`` property.
+                Default: ``None``
+
+        Raises:
+            ValueError: If the file can't be parsed, or no component has a pin to offer.
+            InvalidValueError: If ``model_types`` is a single string, or not a collection.
+
+        Notes:
+            1. For parsing details, enable ``DEBUG`` logging for the ``pyibisami.ibis`` logger.
+            2. A pin is offered if any of its models (e.g. - in a ``[Model Selector]``) has an allowed
+                ``Model_type``; only those models are offered for it.
+            3. If a later ``model_types`` change leaves nothing to offer,
+                the selection is kept and an ``alert`` is fired.
+        """
+        logger.debug("Loading IBIS file: %s", ibis_file_name)
+        with open(ibis_file_name, "r", encoding="utf-8") as file:
+            text = file.read()
+        self._load(text, Path(ibis_file_name).absolute().parent, str(ibis_file_name), model_types)
+
+    @classmethod
+    def from_text(
+        cls, text: str, ibis_dir: str | Path = ".", *, model_types: Optional[Iterable[str]] = None
+    ) -> "IBISModel":
+        """An ``IBISModel`` from the contents of an IBIS file.
+
+        Args:
+            text: The IBIS file contents.
+            ibis_dir: The directory the files it names (e.g. - ``Executable`` s) are resolved against.
+                Default: the current directory
+
+        Keyword Args:
+            model_types: As for ``__init__``.
+        """
+        obj = cls.__new__(cls)
+        obj._load(text, Path(ibis_dir).absolute(), "<text>", model_types)  # pylint: disable=protected-access
+        return obj
+
+    def _load(self, text: str, ibis_dir: Path, source: str, model_types: Optional[Iterable[str]]) -> None:
+        "Parse ``text`` and make the initial selection."
+        self.alert = Signal()
+        self.selection_changed = Signal()
+        self._model_types = _model_types(model_types)
+        self._ibis_dir = ibis_dir
+
+        err_str, model_dict = parse_ibis_file(text)
+        self._file_name: str = model_dict.get("file_name", "(n/a)")
+        self._ibis_ver: Any = model_dict.get("ibis_ver", "(n/a)")
+        self._file_rev: str = model_dict.get("file_rev", "(n/a)")
+        self._date: str = model_dict.get("date", "(n/a)")
+        if err_str != "Success!":
+            raise ValueError(f"Couldn't parse IBIS file {source}: {err_str}")
+        logger.debug("IBIS parsing: %s", err_str)
+        if "components" not in model_dict or not model_dict["components"]:
+            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
+            raise ValueError("This IBIS model has no components!")
+        if "models" not in model_dict or not model_dict["models"]:
+            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
+            raise ValueError("This IBIS model has no models!")
+
+        self._models: dict[str, Model] = model_dict["models"]
+        self._components: dict[str, Component] = model_dict["components"]
+        self._model_selectors: dict[str, list[str]] = dict(model_dict.get("model_selectors", {}))
+
+        # Only components with a pin naming a defined model (of an allowed ``model_types``) are offered for selection.
+        # (Skipped ones remain in ``components``; e.g. - for ``get_pins_qualified()``.)
+        comps = self._selectable_components()
+        for cname in self._components:
+            if cname not in comps:
+                if self._model_types is None:
+                    logger.warning("Component '%s' has no pins with a defined model; it can't be selected.", cname)
+                else:
+                    logger.warning("Component '%s' has no pins with a model of Model_type %s; it can't be selected.",
+                                   cname, sorted(self._model_types))
+        if not comps:
+            raise ValueError(self._no_selectable_component())
+
+        self._ibis_parsing_errors = err_str  # Plus any spec warnings (already logged by the parser).
+        if model_dict.get("warnings"):
+            self._ibis_parsing_errors += "\nWarnings:\n" + "\n".join(f"- {w}" for w in model_dict["warnings"])
+
+        self._component_choices = comps
+        self._component_name = comps[0]
+        self._pin_choices = self._selectable_pins(self._components[comps[0]])
+        self._pin_name = self._pin_choices[0]
+        self._model_choices = self._selectable_model_names(self._pin_model(comps[0], self._pin_name))
+        self._model_name = self._model_choices[0]
+        self._announce_model()
+
+    def __str__(self):
+        return f"IBIS Model '{self._file_name}'"
+
+    def info(self):
+        """Basic information about the IBIS model."""
+        res = "\n".join([
+            f"ibis_ver:\t{self._ibis_ver}",
+            f"file_name:\t{self._file_name}",
+            f"file_rev:\t{self._file_rev}"])
+        res += f"\ndate:\t\t{self._date}\n"
+        res += "\nComponents:"
+        res += "\n=========="
+        for c in self._components:
+            res += f"\n{c}:\n---\n{self._components[c]}\n"
+        res += "\nModel Selectors:"
+        res += "\n===============\n"
+        for s in self._model_selectors:
+            res += f"{s}\n"
+        res += "\nModels:"
+        res += "\n======"
+        for m in self._models:
+            res += f"\n{m}:\n---\n{self._models[m]}"
+        return res
+
+    def open_gui(self) -> bool:
+        """Let the user select a component, pin and model, in a modal dialog.
+
+        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
+
+        Returns:
+            ``True`` if the user accepted the dialog (the selection follows the dialog either way).
+        """
+        from ..gui.dialogs import select_ibis_model  # pylint: disable=import-outside-toplevel
+        return select_ibis_model(self)
+
+    # File contents.
+
+    @property
+    def file_name(self) -> str:
+        "The ``[File Name]``."
+        return self._file_name
+
+    @property
+    def ibis_ver(self) -> Any:
+        "The ``[IBIS Ver]``."
+        return self._ibis_ver
+
+    @property
+    def file_rev(self) -> str:
+        "The ``[File Rev]``."
+        return self._file_rev
+
+    @property
+    def date(self) -> str:
+        "The ``[Date]`` (``(n/a)`` if absent)."
+        return self._date
+
+    @property
+    def ibis_parsing_errors(self) -> str:
+        "The parse status, plus any spec warnings found while parsing."
+        return self._ibis_parsing_errors
+
+    @property
+    def components(self) -> dict[str, Component]:
+        "Every ``[Component]``, by name (including any not offered for selection)."
+        return dict(self._components)
+
+    @property
+    def component_names(self) -> list[str]:
+        "The names of every ``[Component]``, in file order."
+        return list(self._components)
+
+    @property
+    def model_names(self) -> list[str]:
+        "The names of every ``[Model]``, in file order."
+        return list(self._models)
+
+    @property
+    def model_selectors(self) -> dict[str, list[str]]:
+        "Each ``[Model Selector]``'s entries, by selector name."
+        return dict(self._model_selectors)
 
     def get_model(self, mname: str) -> Model:
         """
@@ -147,54 +299,15 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
                 else:
                     logger.warning("Model selector '%s' names undefined model '%s'; ignoring it.", mname, pr[0])
             return names
-        else:
-            if mname in self._models:
-                return [mname]
-            else:
-                return []
+        if mname in self._models:
+            return [mname]
+        return []
 
-    def get_models(self, mname: str) -> list[str]:
-        """Deprecated synonym of ``get_model_names``"""
-        return self.get_model_names(mname)
+    def get_pins(self) -> list[str]:
+        "All the selected component's pin names (``pin_choices`` has the ones offered)."
+        return list(self.component.pins)
 
-    def get_pins(self):
-        return list(self.comp_.pins)
-
-    def _selectable_model_names(self, mname: str) -> list[str]:
-        "``get_model_names(mname)``, keeping only the models of an allowed ``model_types``."
-        names = self.get_model_names(mname)
-        if self.model_types is None:
-            return names
-        return [name for name in names if self._models[name].mtype.lower() in self.model_types]  # type: ignore
-
-    def _selectable_pins(self, comp: Optional[Component] = None) -> list[str]:
-        """
-        A component's pins that name a defined model or model selector (with a model of an allowed ``model_types``).
-
-        Keyword Args:
-            comp: The component to inspect; the currently selected one when ``None``.
-                Default: ``None``
-
-        Notes:
-            1. The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.
-            2. Components with none aren't offered for selection; see ``__init__``.
-        """
-        pins = (comp if comp is not None else self.comp_).pins
-        return [pname for pname in pins if self._selectable_model_names(pins[pname][0])]
-
-    def _selectable_components(self) -> list[str]:
-        "The components with a selectable pin."
-        return [cname for cname, comp in self._components.items() if self._selectable_pins(comp)]
-
-    def _no_selectable_component(self) -> str:
-        "Why no component can be selected."
-        if self.model_types is None:
-            return "No component in this IBIS model has a pin with a defined model!"
-        return (f"No component ({', '.join(self._components)}) has a pin with a model of Model_type "
-                f"{sorted(self.model_types)}; Model_types found: "  # type: ignore
-                f"{sorted({m.mtype for m in self._models.values()})}")
-
-    def get_pins_qualified(self, is_tx: bool, comp_name: Optional[str] = None) -> list[Any]:
+    def get_pins_qualified(self, is_tx: bool, comp_name: Optional[str] = None) -> list[str]:
         """
         Get the list of appropriate pins, given requested type (i.e. - Tx or Rx).
 
@@ -221,7 +334,7 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
             2. Pins naming an undefined model are skipped. (The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.)
         """
         if comp_name is None:
-            comp = self.comp_  # type: ignore
+            comp = self.component
         elif comp_name in self._components:
             comp = self._components[comp_name]
         else:
@@ -235,182 +348,189 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         return list(filter(pin_ok, list(pins)))
 
-    def __init__(
-        self: "IBISModel",
-        ibis_file_name: str,
-        *,
-        model_types: Optional[Iterable[str]] = None,
-    ) -> None:
-        """
-        Args:
-            ibis_file_name (str): The name of the IBIS file.
+    # Selection.
 
-        Keyword Args:
-            model_types: Offer only the pins (and models) with one of these ``Model_type`` s (any case);
-                e.g. - ``TX_MODEL_TYPES`` or ``RX_MODEL_TYPES``. ``None`` offers all.
-                May be changed later, through the ``model_types`` trait.
-                Default: ``None``
+    @property
+    def model_types(self) -> Optional[frozenset[str]]:
+        "The ``Model_type`` s offered for selection (lower-cased); ``None`` offers all."
+        return self._model_types
+
+    @model_types.setter
+    def model_types(self, value: Optional[Iterable[str]]) -> None:
+        "Re-filter the choices, keeping each selection that's still offered; undo a change that leaves nothing."
+        old, self._model_types = self._model_types, _model_types(value)
+        comps = self._selectable_components()
+        if not comps:
+            msg = self._no_selectable_component()
+            self._model_types = old
+            self._notify(f"{msg} Keeping the previous model_types and selection.")
+            return
+        self._component_choices = comps
+        # A pin is kept only with its component, and a model only with its pin.
+        component = self._component_name if self._component_name in comps else comps[0]
+        pins = self._selectable_pins(self._components[component])
+        pin = self._pin_name if component == self._component_name and self._pin_name in pins else pins[0]
+        models = self._selectable_model_names(self._pin_model(component, pin))
+        model = self._model_name if pin == self._pin_name and self._model_name in models else models[0]
+        self._commit((component, pins, pin, models, model))
+
+    @property
+    def component_choices(self) -> list[str]:
+        "The components offered for selection: those with a pin to offer."
+        return list(self._component_choices)
+
+    @property
+    def pin_choices(self) -> list[str]:
+        "The selected component's pins offered for selection (``pin(signal)`` names)."
+        return list(self._pin_choices)
+
+    @property
+    def model_choices(self) -> list[str]:
+        "The selected pin's models offered for selection (several, for a ``[Model Selector]``)."
+        return list(self._model_choices)
+
+    @property
+    def component_name(self) -> str:
+        "The selected component's name. Setting it selects that component's first offered pin and model."
+        return self._component_name
+
+    @component_name.setter
+    def component_name(self, name: str) -> None:
+        self.select(component=name)
+
+    @property
+    def pin_name(self) -> str:
+        "The selected pin's ``pin(signal)`` name. Setting it selects that pin's first offered model."
+        return self._pin_name
+
+    @pin_name.setter
+    def pin_name(self, name: str) -> None:
+        self.select(pin=name)
+
+    @property
+    def model_name(self) -> str:
+        "The selected model's name."
+        return self._model_name
+
+    @model_name.setter
+    def model_name(self, name: str) -> None:
+        self.select(model=name)
+
+    def select(
+        self, component: Optional[str] = None, pin: Optional[str] = None, model: Optional[str] = None
+    ) -> None:
+        """Select a component, pin and/or model at once, with one ``selection_changed``.
+
+        A pin not given stays, unless a component is given: then it's that component's first offered pin.
+        Likewise, a model not given stays unless a component or pin is given.
 
         Raises:
-            ValueError: If no component has a pin to offer.
-            TraitError: If ``model_types`` is a single string, or not a collection.
+            InvalidValueError: A name isn't offered (e.g. - a pin that isn't one of the given component's).
+                Nothing is changed.
+        """
+        if component is None:
+            component = self._component_name
+        elif component not in self._component_choices:
+            raise InvalidValueError(f"Component {component!r} isn't offered; choices: {self._component_choices}")
+        pins = self._selectable_pins(self._components[component])
+        new_component = component != self._component_name
+        if pin is None:
+            pin = pins[0] if new_component else self._pin_name
+        elif pin not in pins:
+            raise InvalidValueError(f"Pin {pin!r} isn't offered for component {component!r}; choices: {pins}")
+        models = self._selectable_model_names(self._pin_model(component, pin))
+        if model is None:
+            model = models[0] if new_component or pin != self._pin_name else self._model_name
+        elif model not in models:
+            raise InvalidValueError(f"Model {model!r} isn't offered for pin {pin!r}; choices: {models}")
+        self._commit((component, pins, pin, models, model))
+
+    @property
+    def component(self) -> Component:
+        "The selected ``Component``."
+        return self._components[self._component_name]
+
+    @property
+    def pin(self) -> Pin:
+        "The selected pin's row of the ``[Pin]`` table."
+        return Pin.from_entry(self._pin_name, self.component.pins[self._pin_name])
+
+    @property
+    def model(self) -> Model:
+        "The selected ``Model``."
+        return self._models[self._model_name]
+
+    def _commit(self, selection: Selection) -> None:
+        "Store a checked selection; announce it (and a newly selected model) if it changed."
+        component, pins, pin, models, model = selection
+        old = (self._component_name, self._pin_name, self._model_name)
+        self._component_name, self._pin_choices, self._pin_name = component, pins, pin
+        self._model_choices, self._model_name = models, model
+        if model != old[2]:
+            self._announce_model()
+        if (component, pin, model) != old:
+            self.selection_changed.emit(component, pin, model)
+
+    def _pin_model(self, component: str, pin: str) -> str:
+        "The model (or model selector) name a component's pin names."
+        return self._components[component].pins[pin][0]
+
+    def _selectable_model_names(self, mname: str) -> list[str]:
+        "``get_model_names(mname)``, keeping only the models of an allowed ``model_types``."
+        names = self.get_model_names(mname)
+        if self._model_types is None:
+            return names
+        return [name for name in names if self._models[name].mtype.lower() in self._model_types]
+
+    def _selectable_pins(self, comp: Component) -> list[str]:
+        """
+        A component's pins that name a defined model or model selector (with a model of an allowed ``model_types``).
 
         Notes:
-            1. For parsing details, enable ``DEBUG`` logging for the ``pyibisami.ibis`` logger.
-            2. A pin is offered if any of its models (e.g. - in a ``[Model Selector]``) has an allowed
-                ``Model_type``; only those models are offered for it.
-            3. If a later ``model_types`` change leaves nothing to offer,
-                the selection is kept and an ``alert`` is fired.
+            1. The parser already drops ``POWER``, ``GND``, ``NC`` and ``CIRCUITCALL`` pins.
+            2. Components with none aren't offered for selection; see ``_load``.
         """
+        pins = comp.pins
+        return [pname for pname in pins if self._selectable_model_names(pins[pname][0])]
 
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
-        self.trait_setq(model_types=model_types)  # Quietly: there's no selection to update yet.
+    def _selectable_components(self) -> list[str]:
+        "The components with a selectable pin."
+        return [cname for cname, comp in self._components.items() if self._selectable_pins(comp)]
 
-        logger.debug("Loading IBIS file: %s", ibis_file_name)
-        self._ibis_dir = Path(ibis_file_name).absolute().parent
-
-        # Parse the IBIS file contents, storing any errors or warnings, and validate it.
-        with open(ibis_file_name, "r", encoding="utf-8") as file:
-            ibis_file_contents_str = file.read()
-        err_str, model_dict = parse_ibis_file(ibis_file_contents_str)
-        self._file_name: str = model_dict.get("file_name", "(n/a)")
-        self._ibis_ver: float = model_dict.get("ibis_ver", "(n/a)")
-        self._file_rev: str = model_dict.get("file_rev", "(n/a)")
-        self._date: str = model_dict.get("date", "(n/a)")
-        if err_str != "Success!":
-            raise ValueError(f"Couldn't parse IBIS file {ibis_file_name}: {err_str}")
-        logger.debug("IBIS parsing: %s", err_str)
-        if "components" not in model_dict or not model_dict["components"]:
-            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
-            raise ValueError("This IBIS model has no components!")
-        components = model_dict["components"]
-        if "models" not in model_dict or not model_dict["models"]:
-            logger.debug("Parsed IBIS model dictionary:\n%s", model_dict)
-            raise ValueError("This IBIS model has no models!")
-
-        self._model_dict: dict[str, Any] = model_dict
-        self._models: dict[str, Model] = model_dict["models"]
-        self._components: dict[str, Component] = components
-        self._model_selectors: dict[str, list[str]] = {}
-        if "model_selectors" in model_dict:
-            self._model_selectors.update(model_dict["model_selectors"])
-
-        # Only components with a pin naming a defined model (of an allowed ``model_types``) are offered for selection.
-        # (Skipped ones remain in ``_components``; e.g. - for ``get_pins_qualified()``.)
-        comps = self._selectable_components()
-        for cname in components:
-            if cname not in comps:
-                if model_types is None:
-                    logger.warning("Component '%s' has no pins with a defined model; it can't be selected.", cname)
-                else:
-                    logger.warning("Component '%s' has no pins with a model of Model_type %s; it can't be selected.",
-                                   cname, sorted(self.model_types))  # type: ignore
-        if not comps:
-            raise ValueError(self._no_selectable_component())
-
-        # Add Traits for various attributes found in the IBIS file.
-        self.comps = comps  # type: ignore
-        self.add_trait("comp", Enum(comps[0], values="comps"))
-        self.pins = self._selectable_pins()  # type: ignore
-        try:
-            self.add_trait("pin", Enum(self.pins[0], values="pins"))  # type: ignore
-        except Exception as err:
-            raise ValueError(f"self.pins: {self.pins}") from err
-        (mname, _) = self.pin_
-        self.models = self._selectable_model_names(mname)  # type: ignore
-        self.add_trait("mod", Enum(self.models[0], values="models"))  # type: ignore
-        self.add_trait("ibis_ver", Float(model_dict["ibis_ver"]))
-        self.add_trait("file_name", String(model_dict["file_name"]))
-        self.add_trait("file_rev", String(model_dict["file_rev"]))
-        if "date" in model_dict:
-            self.add_trait("date", String(model_dict["date"]))
-        else:
-            self.add_trait("date", String("(n/a)"))
-
-        self._ibis_parsing_errors = err_str  # Plus any spec warnings (already logged by the parser).
-        if model_dict.get("warnings"):
-            self._ibis_parsing_errors += "\nWarnings:\n" + "\n".join(f"- {w}" for w in model_dict["warnings"])
-
-        self._comp_changed(comps[0])  # Wasn't being called automatically.
-        # Wasn't being called automatically:
-        self._pin_changed(self.pins[0])  # type: ignore
-
-    def __str__(self):
-        return f"IBIS Model '{self._file_name}'"
-
-    def info(self):
-        """Basic information about the IBIS model."""
-        res = "\n".join([
-            f"ibis_ver:\t{self._ibis_ver}",
-            f"file_name:\t{self._file_name}",
-            f"file_rev:\t{self._file_rev}"])
-        res += f"\ndate:\t\t{self._date}\n"
-        res += "\nComponents:"
-        res += "\n=========="
-        for c in self._components:
-            res += f"\n{c}:\n---\n{self._components[c]}\n"
-        res += "\nModel Selectors:"
-        res += "\n===============\n"
-        for s in self._model_selectors:
-            res += f"{s}\n"
-        res += "\nModels:"
-        res += "\n======"
-        for m in self._models:
-            res += f"\n{m}:\n---\n{self._models[m]}"
-        return res
-
-    def __call__(self):
-        """Present a customized GUI to the user, for model selection, etc.
-
-        Subsequent ``alert`` s are shown as pop-up dialogs.
-        Requires the ``gui`` extra: ``pip install 'pyibis-ami[gui]'``.
-        """
-        from ..gui.ibis import show_alerts  # pylint: disable=import-outside-toplevel
-        show_alerts(self)
-        # self.configure_traits(kind='modal')  # Waiting for Enthought/Traits PR1841 to be accepted.
-        self.configure_traits()
+    def _no_selectable_component(self) -> str:
+        "Why no component can be selected."
+        if self._model_types is None:
+            return "No component in this IBIS model has a pin with a defined model!"
+        return (f"No component ({', '.join(self._components)}) has a pin with a model of Model_type "
+                f"{sorted(self._model_types)}; Model_types found: "
+                f"{sorted({m.mtype for m in self._models.values()})}")
 
     def _notify(self, msg: str) -> None:
-        "Log a user-facing notice and fire it through the ``alert`` event."
+        "Log a user-facing notice and fire it through ``alert``."
         logger.info(msg)
-        self.alert = msg
+        self.alert.emit(msg)
 
-    def default_traits_view(self):
-        "Default Traits/UI view definition."
-        from ..gui.ibis import make_ibis_file_view  # pylint: disable=import-outside-toplevel
-        return make_ibis_file_view(self)
+    def _announce_model(self) -> None:
+        "Tell the user whether the selected model has an AMI executable for this platform."
+        name = self._model_name
+        model = self._models[name]
+        try:
+            model.get_ami_files()
+        except ValueError:
+            logger.warning(
+                "Model `%s` has both Executable_Tx and Executable_Rx for this platform; the direction is ambiguous, "
+                "so `dll_file`/`ami_file` give the first listed (%s). Use Model.get_ami_files(is_tx) to choose.",
+                name, model.dll_file)
+        if model.dll_file:
+            self._notify(f"Model `{name}` has an AMI executable for this platform: {model.dll_file}")
+        elif model.is_ami:
+            self._notify(
+                f"Model `{name}` has an [Algorithmic Model], but no executable for this platform: "
+                f"{platform.system()}-{platform.architecture()[0]}")
+        else:
+            self._notify(f"Model `{name}` has no [Algorithmic Model].")
 
-    @property
-    def comp_(self) -> Component:
-        "The selected ``Component``."
-        return self._components[self.comp]  # type: ignore
-
-    @property
-    def pin_(self) -> tuple[str, dict[str, float]]:
-        "The selected pin's ``(model name, R/L/C values)``."
-        return self.comp_.pins[self.pin]  # type: ignore
-
-    @property
-    def pin_rlcs(self) -> dict[str, float]:
-        "The selected pin's R/L/C values."
-        return self.pin_[1]
-
-    @cached_property
-    def _get_model(self):
-        return self._models[self.mod]
-
-    @property
-    def ibis_parsing_errors(self):
-        """Any errors or warnings encountered, while parsing the IBIS file
-        contents."""
-        return self._ibis_parsing_errors
-
-    @property
-    def model_dict(self):
-        "Dictionary of all model keywords."
-        return self._model_dict
+    # Files.
 
     @property
     def dll_file(self) -> str:
@@ -459,61 +579,3 @@ class IBISModel(HasTraits):  # pylint: disable=too-many-instance-attributes
     def ami_path(self) -> Optional[Path]:
         "The selected model's AMI parameter file for this platform, resolved; ``None`` if none."
         return self.resolve_file(self.ami_file)
-
-    def _comp_changed(self, new_value):
-        del new_value
-        self.pins = self._selectable_pins()
-        old_pin = self.pin  # type: ignore
-        self.pin = self.pins[0]
-        if self.pin == old_pin:  # A pin of the same name in the new component fires no ``pin`` change.
-            self._pin_changed(self.pin)
-
-    def _pin_changed(self, new_value):
-        del new_value
-        (mname, _) = self.pin_
-        self.models = self._selectable_model_names(mname)
-        self.mod = self.models[0]
-
-    def _model_types_changed(self, old, new):  # pylint: disable=unused-argument
-        "Re-filter the selections, keeping each one that's still offered; undo a change that leaves nothing."
-        comps = self._selectable_components()
-        if not comps:
-            msg = self._no_selectable_component()
-            self.trait_setq(model_types=old)  # Quietly: the lists and selection still match ``old``.
-            self._notify(f"{msg} Keeping the previous model_types and selection.")
-            return
-        # A pin is kept only with its component, and a model only with its pin. (The handlers are called
-        # explicitly: shrinking an ``Enum``'s list can change its value without a change event.)
-        (comp, pin, mod) = (self.comp, self.pin, self.mod)  # type: ignore
-        self.comps = comps
-        if comp not in comps:
-            self.comp = comps[0]
-            self._comp_changed(self.comp)  # Its first offered pin and model.
-            return
-        self.pins = self._selectable_pins()
-        if pin not in self.pins:
-            self.pin = self.pins[0]
-            self._pin_changed(self.pin)  # Its first offered model.
-            return
-        (mname, _) = self.comp_.pins[pin]
-        self.models = self._selectable_model_names(mname)
-        if mod not in self.models:
-            self.mod = self.models[0]
-
-    def _mod_changed(self, new_value):
-        model = self._models[new_value]
-        try:
-            model.get_ami_files()
-        except ValueError:
-            logger.warning(
-                "Model `%s` has both Executable_Tx and Executable_Rx for this platform; the direction is ambiguous, "
-                "so `dll_file`/`ami_file` give the first listed (%s). Use Model.get_ami_files(is_tx) to choose.",
-                new_value, model.dll_file)
-        if model.dll_file:
-            self._notify(f"Model `{new_value}` has an AMI executable for this platform: {model.dll_file}")
-        elif model.is_ami:
-            self._notify(
-                f"Model `{new_value}` has an [Algorithmic Model], but no executable for this platform: "
-                f"{platform.system()}-{platform.architecture()[0]}")
-        else:
-            self._notify(f"Model `{new_value}` has no [Algorithmic Model].")

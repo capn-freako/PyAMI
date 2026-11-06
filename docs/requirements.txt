@@ -1,7 +1,11 @@
-myst-parser
+click
+empy
 matplotlib
+myst-parser
 numpy
 parsec
+pyside6
 reportlab
+scipy
 sphinx
 sphinx_rtd_theme

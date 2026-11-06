@@ -9,9 +9,10 @@ Copyright (c) 2019 David Banas; all rights reserved World wide.
 
 import math
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, Optional
 
-from traits.api import Bool, Float, HasTraits, List, Str
+from ..events import InvalidValueError
 
 #####
 # AMI parameter
@@ -20,7 +21,7 @@ from traits.api import Bool, Float, HasTraits, List, Str
 # Data formats (IBIS 8.0 Section 10.3.4, p.240-244).
 FORMATS = ("Value", "Range", "List", "Corner", "Increment", "Steps", "Table", "Gaussian", "Dual-Dirac", "DjRj")
 # Formats whose value the user doesn't choose: Corner is picked by the simulation corner; the others are sent as
-# written. They get no trait, GUI item or tuner.
+# written. They get no settable value, GUI editor or tuner.
 FIXED_FORMATS = ("Corner", "Table", "Gaussian", "Dual-Dirac", "DjRj")
 # Types each format allows, where it restricts them (IBIS 8.0 Section 10.3.5, p.245; Table 18, p.247).
 _NUMERIC_TYPES = ("Float", "UI", "Integer", "Tap")
@@ -338,7 +339,7 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
         elif param_format == "List":
             temp_vals = [_read_value(param_type, v) for v in vals]
             self._value = temp_vals
-            # The current List selection lives on the trait ``make_param_traits()`` builds from ``pdefault``.
+            # The current List selection lives in ``AMIParamConfigurator``, starting at ``initial_value``.
             default = self._typed_default(param_type)
             if default is not None and default not in temp_vals:
                 self._msg += f"Default {default} is not a member of the List {temp_vals}; using {temp_vals[0]}.\n"
@@ -434,6 +435,80 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
             self._msg += f"Ignoring Default: {err}"
             return None
 
+    @property
+    def is_settable(self) -> bool:
+        "Whether the user chooses this parameter's value: Usage In/InOut, and not one of the ``FIXED_FORMATS``."
+        return self.pusage in ("In", "InOut") and self.pformat not in FIXED_FORMATS
+
+    @property
+    def choices(self) -> Optional[list]:
+        "The legal values of a List, Increment or Steps parameter, in order (each once); ``None`` for other formats."
+        if self.pformat == "List":
+            return list(self.pvalue)
+        if self.pformat in ("Increment", "Steps"):
+            return list(self.pvalues or [])
+        return None
+
+    @property
+    def initial_value(self) -> Any:
+        """The value a settable parameter starts at: ``Default`` (already checked) or the format's typical value.
+
+        List: ``Default``, else the first List value. Increment/Steps: typ, or the first legal value if typ isn't
+        legal. Value/Range/Boolean: ``pvalue``.
+        """
+        if self.pformat == "List":
+            return self.pdefault if self.pdefault is not None else self.pvalue[0]
+        if self.pformat in ("Increment", "Steps"):
+            legal = self.pvalues or []
+            return self.pvalue if self.pvalue in legal else legal[0]
+        return self.pvalue
+
+    def validate(self, value: Any) -> Any:
+        """``value`` coerced to this parameter's Type and checked against its Format.
+
+        Coercion: Boolean from ``bool``/number/string (``"False"``/``"false"``/``"FALSE"`` are false); Integer from
+        any whole number (``1.0``, ``"1e3"``); Float/UI/Tap from anything ``float()`` takes. A vendor's ``AMI_Init()``
+        parser may choke on ``1.0`` where an Integer is expected, so the type matters.
+
+        Returns:
+            The value to store (for Increment/Steps, the matching legal value, without float noise).
+
+        Raises:
+            InvalidValueError: The value can't be read as the Type, or isn't legal for the Format (outside the
+                Range; not a List, Increment or Steps value).
+        """
+        ptype, pformat = self.ptype, self.pformat
+        try:
+            if ptype == "Boolean":
+                if isinstance(value, str):
+                    value = value not in ("FALSE", "False", "false", "")
+                else:
+                    value = bool(value)
+            elif ptype == "Integer":
+                as_float = float(value)
+                if not as_float.is_integer():
+                    raise InvalidValueError(f"Integer parameter {self.pname} can't be set to {value!r}.")
+                value = int(as_float)
+            elif ptype in ("Float", "UI", "Tap"):  # A Tap is a (float) tap weight.
+                value = float(value)
+        except (TypeError, ValueError) as err:
+            if isinstance(err, InvalidValueError):
+                raise
+            raise InvalidValueError(f"{self.pname}: can't read {value!r} as {ptype}.") from err
+        if pformat == "Range":
+            if not self.pmin <= value <= self.pmax:
+                raise InvalidValueError(f"{self.pname}: {value!r} is outside the Range [{self.pmin}, {self.pmax}].")
+        elif pformat == "List":
+            if value not in self.pvalue:
+                raise InvalidValueError(f"{value!r} isn't one of the values of {self.pname}: {self.pvalue}")
+        elif pformat in ("Increment", "Steps"):
+            legal = self.pvalues or []
+            matches = [v for v in legal if math.isclose(v, value, rel_tol=1e-9, abs_tol=1e-12)]
+            if not matches:
+                raise InvalidValueError(f"{value!r} isn't one of the values of {self.pname}: {legal}")
+            value = matches[0]
+        return value
+
     def __str__(self):
         return f"{self.pvalue}"
 
@@ -474,59 +549,19 @@ def _read_value(param_type: str, value_str: str):
 #####
 
 
-# pylint: disable=too-many-instance-attributes,too-few-public-methods
-class AmiParamTuner(HasTraits):
-    """Object used to populate the rows of a Tx/Rx AMI parameter tuning table.
+@dataclass
+class AmiParamTuner:  # pylint: disable=too-many-instance-attributes
+    """One row of a Tx/Rx AMI parameter tuning table.
 
-    Represents one *Model_Specific* 'In'/'InOut' AMI parameter, of 'Range'
-    format, offered to the user for inclusion in EQ optimization.
+    Represents one *Model_Specific* 'In'/'InOut' AMI parameter, offered to the user for inclusion in EQ optimization
+    (see ``AMIParamConfigurator.tunable_params``).
     """
 
-    name = Str("(noname)")  # Display name (fully hierarchical, e.g. "tx_preset_coeffs_main").
-    branch_names = List(Str)  # Hierarchical path for `fetch_param_val()`/`set_param_val()`.
-    enabled = Bool(False)  # Will participate in EQ optimization when *True*.
-    min_val = Float(0.0)  # Minimum allowed value during optimization.
-    max_val = Float(0.0)  # Maximum allowed value during optimization.
-    step = Float(0.0)  # Increment used during optimization.
-    value = Float(0.0)  # Current value.
-    is_int = Bool(False)  # Round swept values to the nearest integer when *True*.
-
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def __init__(
-        self, name: str = "(noname)", branch_names: "list[str] | None" = None, enabled: bool = False,
-        min_val: float = 0.0, max_val: float = 0.0, step: float = 0.0, value: float = 0.0, is_int: bool = False
-    ):
-        """
-        Allows user to define properties, at instantiation.
-
-        Keyword Args:
-            name: Parameter name/label.
-                Default: "(noname)"
-            branch_names: Hierarchical path to the parameter, rooted at "Model_Specific".
-                Default: []
-            enabled: Will participate in EQ optimization when *True*.
-                Default: *False*
-            min_val: Minimum allowed value during optimization.
-                Default: 0.0
-            max_val: Maximum allowed value during optimization.
-                Default: 0.0
-            step: Increment used during optimization.
-                Default: 0.0
-            value: Current value.
-                Default: 0.0
-            is_int: Round swept values to the nearest integer when *True*.
-                Default: *False*
-        """
-
-        # Super-class initialization is ABSOLUTELY NECESSARY, in order
-        # to get all the Traits/UI machinery setup correctly.
-        super().__init__()
-
-        self.name = name
-        self.branch_names = branch_names or []
-        self.enabled = enabled
-        self.min_val = min_val
-        self.max_val = max_val
-        self.step = step
-        self.value = value
-        self.is_int = is_int
+    name: str = "(noname)"  # Display name (fully hierarchical, e.g. "tx_preset_coeffs_main").
+    branch_names: list[str] = field(default_factory=list)  # Path for `fetch_param_val()`/`set_param_val()`.
+    enabled: bool = False  # Will participate in EQ optimization when *True*.
+    min_val: float = 0.0  # Minimum allowed value during optimization.
+    max_val: float = 0.0  # Maximum allowed value during optimization.
+    step: float = 0.0  # Increment used during optimization.
+    value: float = 0.0  # Current value.
+    is_int: bool = False  # Round swept values to the nearest integer when *True*.

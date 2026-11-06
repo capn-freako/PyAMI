@@ -14,7 +14,7 @@ from __future__     import annotations
 from dataclasses    import dataclass
 import logging
 import re
-from typing         import TYPE_CHECKING, Any, NewType, Optional, TypeAlias, cast
+from typing         import Any, NewType, Optional, TypeAlias, cast
 from collections.abc import Callable
 
 from parsec import ParseError, generate, many, regex, string
@@ -63,7 +63,7 @@ ModelSpecificDict: TypeAlias = dict[ParamName, "'AMIParameter' | 'ModelSpecificD
 __all__ = [  # ruff: ignore=RUF022
     "ParamName", "ParamValue", "Parameters", "ParamValues",
     "AmiName", "AmiAtom", "AmiNode", "AmiNodeParser", "AmiParser",
-    "ami_parse", "AMIParamConfigurator", "make_param_traits", "trait_name_part"]
+    "ami_parse"]
 
 
 def _walk_params(params: Parameters, prefix: list[str]) -> list[tuple[list[str], AMIParameter]]:
@@ -373,18 +373,3 @@ def parse_ami_param_defs(file_contents: str) -> tuple[ParseErrMsg, dict[str, Any
                      }
          }
     )
-
-
-# Moved to ``.configurator``, which imports this module; still importable from here (e.g. - PyBERT's
-# ``from pyibisami.ami.parser import AMIParamConfigurator``), loaded on first use.
-_MOVED = ("AMIParamConfigurator", "make_param_traits", "trait_name_part")
-
-if TYPE_CHECKING:
-    from .configurator import AMIParamConfigurator, make_param_traits, trait_name_part
-
-
-def __getattr__(name: str) -> Any:
-    if name in _MOVED:
-        from . import configurator  # pylint: disable=import-outside-toplevel,cyclic-import
-        return getattr(configurator, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

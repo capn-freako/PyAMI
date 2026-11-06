@@ -2,8 +2,9 @@ import logging
 import platform
 
 import pytest
-from traits.api import TraitError
+from pyibisami.events import InvalidValueError
 
+from pyibisami.ibis.analog import Pin
 from pyibisami.ibis.file import RX_MODEL_TYPES, TX_MODEL_TYPES, IBISModel
 from pyibisami.testing.ami_test_config import run_ami_test_config
 
@@ -26,31 +27,24 @@ def test_alerts_are_logged_and_fired(ibis_test_file, caplog):
     assert [rec.levelno for rec in caplog.records if "Model `example_tx`" in rec.getMessage()] == [logging.INFO]
 
     fired = []
-    model.observe(lambda event: fired.append(event.new), "alert")
-    model._mod_changed(model.mod)  # pylint: disable=protected-access
+    model.alert.connect(fired.append)
+    model._announce_model()  # pylint: disable=protected-access
     assert len(fired) == 1 and "Model `example_tx`" in fired[0]
 
 
-def test_show_alerts_pops_up_once(ibis_test_file, monkeypatch):
-    pytest.importorskip("traitsui")
-    from pyibisami.gui import ibis as gui_ibis
-
-    shown = []
-    monkeypatch.setattr(gui_ibis, "message", lambda msg, title: shown.append(msg))
-    model = IBISModel(ibis_test_file)
-    gui_ibis.show_alerts(model)
-    gui_ibis.show_alerts(model)
-    model._mod_changed(model.mod)  # pylint: disable=protected-access
-    assert len(shown) == 1
+def test_pin_table(ibis_test_file):
+    """``Component.pin_table`` gives each ``[Pin]`` row as a ``Pin``, keyed as in ``Component.pins``."""
+    comp = IBISModel(ibis_test_file).component
+    table = comp.pin_table
+    assert [pin.key for pin in table] == list(comp.pins)
+    assert all(pin.model == comp.pins[pin.key][0] for pin in table)
 
 
-def test_component_pin_selection(ibis_test_file):
-    """``Component.pin`` defaults to the first pin, and follows the selected pin."""
-    comp = IBISModel(ibis_test_file).comp_
-    first, last = list(comp.pins)[0], list(comp.pins)[-1]
-    assert comp.pin == comp.pins[first]
-    comp._pin = last  # pylint: disable=protected-access  # The trait the Component view edits.
-    assert comp.pin == comp.pins[last]
+def test_selected_objects_know_their_names(ibis_test_file):
+    """``component``, ``pin`` and ``model`` give the selected names with dot access."""
+    ibis = IBISModel(ibis_test_file)
+    assert (ibis.component.name, ibis.pin.key, ibis.model.name) == (ibis.component_name, ibis.pin_name, ibis.model_name)
+    assert all(name == comp.name for name, comp in ibis.components.items())
 
 
 MIXED_IBIS = r"""[IBIS Ver]   5.1
@@ -190,10 +184,10 @@ def test_pin_selection_skips_modelless_pins(mixed_ibis_file):
     """
     model = IBISModel(mixed_ibis_file)
     assert "10(Circ)" not in model.get_pins()
-    assert model.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
-    assert model.pin == "4(Tx_P)" and model.mod == "example_tx"
-    model.pin = "5(Rx_P)"
-    assert model.mod == "example_rx"
+    assert model.pin_choices == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
+    assert model.pin_name == "4(Tx_P)" and model.model_name == "example_tx"
+    model.pin_name = "5(Rx_P)"
+    assert model.model_name == "example_rx"
 
 
 def test_get_pins_qualified_mixed(mixed_ibis_file):
@@ -217,15 +211,15 @@ def test_get_pins_qualified_mixed_selector(tmp_path, entries):
     assert ibis.get_pins_qualified(True) == ["4(Tx_P)", "6(IO_P)", "8(OE_P)", "11(Sel_P)"]
     assert ibis.get_pins_qualified(False) == ["5(Rx_P)", "6(IO_P)", "11(Sel_P)"]
     for is_tx, model_types in ((True, TX_MODEL_TYPES), (False, RX_MODEL_TYPES)):
-        assert ibis.get_pins_qualified(is_tx) == IBISModel(str(ibis_file), model_types=model_types).pins
+        assert ibis.get_pins_qualified(is_tx) == IBISModel(str(ibis_file), model_types=model_types).pin_choices
 
 
 def test_model_selector_skips_undefined_models(mixed_ibis_file):
     """A model selector entry naming an undefined model is dropped, rather than crashing selection."""
     model = IBISModel(mixed_ibis_file)
     assert model.get_model_names("sel_bad") == ["example_tx"]
-    model.pin = "11(Sel_P)"
-    assert model.models == ["example_tx"]
+    model.pin_name = "11(Sel_P)"
+    assert model.model_choices == ["example_tx"]
     assert model.model.mtype.lower() == "output"
 
 
@@ -251,9 +245,9 @@ def test_unusable_component_not_selectable(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
         model = IBISModel(str(ibis_file))
     assert "Broken" in caplog.text
-    assert model.comp == "Mixed" and model.pin == "4(Tx_P)"
-    with pytest.raises(TraitError):
-        model.comp = "Broken"
+    assert model.component_name == "Mixed" and model.pin_name == "4(Tx_P)"
+    with pytest.raises(InvalidValueError):
+        model.component_name = "Broken"
     assert model.get_pins_qualified(True, comp_name="Broken") == []
 
 
@@ -268,14 +262,14 @@ def test_no_usable_component(tmp_path):
 
 
 def test_pin_follows_the_selection(tmp_path):
-    """``pin_``/``pin_rlcs`` used to stay at the first pin (a cached property that was never refreshed)."""
+    """``pin`` used to stay at the first pin (a cached property that was never refreshed)."""
     ibis_file = tmp_path / "mixed.ibs"
     ibis_file.write_text(MIXED_IBIS, encoding="utf-8")
     ibis = IBISModel(str(ibis_file))
-    for pin in ibis.pins:
-        ibis.pin = pin
-        assert ibis.pin_ == ibis.comp_.pins[pin]
-        assert ibis.pin_rlcs is ibis.pin_[1]
+    for pin in ibis.pin_choices:
+        ibis.pin_name = pin
+        assert ibis.pin == Pin.from_entry(pin, ibis.component.pins[pin])
+        assert ibis.pin.key == pin
 
 
 def test_parse_failure_reports_the_reason(tmp_path):
@@ -301,11 +295,11 @@ def test_model_types_restrict_pins_and_models(tmp_path, model_types, pins):
     ibis_file.write_text(MIXED_IBIS.replace("no_such_model   Undefined model", "example_rx      Rx model"),
                          encoding="utf-8")
     ibis = IBISModel(str(ibis_file), model_types=model_types)
-    assert ibis.pins == pins
+    assert ibis.pin_choices == pins
     allowed = {mtype.lower() for mtype in model_types}
     for pin in pins:
-        ibis.pin = pin
-        assert ibis.models and all(ibis.get_model(name).mtype.lower() in allowed for name in ibis.models)
+        ibis.pin_name = pin
+        assert ibis.model_choices and all(ibis.get_model(name).mtype.lower() in allowed for name in ibis.model_choices)
         assert ibis.model.mtype.lower() in allowed
 
 
@@ -317,9 +311,9 @@ def test_model_types_skip_components(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
         ibis = IBISModel(str(ibis_file), model_types=TX_MODEL_TYPES)
     assert "RxOnly" in caplog.text
-    assert ibis.comps == ["Mixed"] and ibis.comp == "Mixed"
-    with pytest.raises(TraitError):
-        ibis.comp = "RxOnly"
+    assert ibis.component_choices == ["Mixed"] and ibis.component_name == "Mixed"
+    with pytest.raises(InvalidValueError):
+        ibis.component_name = "RxOnly"
     with pytest.raises(ValueError, match=r"Mixed.*Model_types found: \['3-state', 'I/O', 'Input', 'Output'"):
         IBISModel(str(ibis_file), model_types={"Series"})
 
@@ -331,30 +325,30 @@ def test_model_types_changed_after_loading(tmp_path):
                          encoding="utf-8")
     ibis = IBISModel(str(ibis_file))
     fired = []
-    ibis.observe(lambda event: fired.append(event.new), "alert")
-    ibis.comp = "Mixed"
-    ibis.pin = "5(Rx_P)"
+    ibis.alert.connect(fired.append)
+    ibis.component_name = "Mixed"
+    ibis.pin_name = "5(Rx_P)"
 
     ibis.model_types = TX_MODEL_TYPES  # Rx pin no longer offered: move to the first Tx one.
-    assert ibis.comps == ["Mixed"] and ibis.pin == "4(Tx_P)" and ibis.mod == "example_tx"
+    assert ibis.component_choices == ["Mixed"] and ibis.pin_name == "4(Tx_P)" and ibis.model_name == "example_tx"
     assert "example_tx" in fired[-1]
 
-    ibis.pin = "6(IO_P)"
+    ibis.pin_name = "6(IO_P)"
     ibis.model_types = RX_MODEL_TYPES  # I/O pin still offered: keep it.
-    assert ibis.comps == ["RxOnly", "Mixed"] and ibis.comp == "Mixed" and ibis.pin == "6(IO_P)"
+    assert ibis.component_choices == ["RxOnly", "Mixed"] and ibis.component_name == "Mixed" and ibis.pin_name == "6(IO_P)"
 
     ibis.model_types = {"Series"}  # Nothing to offer: undo the change, keep the selection, and say so.
-    assert ibis.comps == ["RxOnly", "Mixed"] and ibis.pin == "6(IO_P)" and ibis.mod == "example_io"
+    assert ibis.component_choices == ["RxOnly", "Mixed"] and ibis.pin_name == "6(IO_P)" and ibis.model_name == "example_io"
     assert "No component" in fired[-1]
     assert ibis.model_types == RX_MODEL_TYPES
-    ibis.pin = "5(Rx_P)"  # Later selections still work (they used to hit the empty filter).
-    assert ibis.mod == "example_rx"
-    ibis.comp = "RxOnly"
-    assert ibis.pins == ["1(Rx_Q)"] and ibis.mod == "example_rx"
+    ibis.pin_name = "5(Rx_P)"  # Later selections still work (they used to hit the empty filter).
+    assert ibis.model_name == "example_rx"
+    ibis.component_name = "RxOnly"
+    assert ibis.pin_choices == ["1(Rx_Q)"] and ibis.model_name == "example_rx"
 
     ibis.model_types = None
-    ibis.comp = "Mixed"
-    assert ibis.pins == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
+    ibis.component_name = "Mixed"
+    assert ibis.pin_choices == ["4(Tx_P)", "5(Rx_P)", "6(IO_P)", "8(OE_P)", "9(Term)", "11(Sel_P)"]
 
 
 SAME_PIN_COMPONENT = BROKEN_COMPONENT.replace("Broken", "Second").replace("1      Mystery            no_such_model",
@@ -373,12 +367,12 @@ def test_model_types_change_drops_the_component(tmp_path):
     ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", comp_a + comp_b + "[Component]    Mixed"),
                          encoding="utf-8")
     ibis = IBISModel(str(ibis_file))
-    ibis.comp = "B"
-    ibis.pin = "2(T)"
+    ibis.component_name = "B"
+    ibis.pin_name = "2(T)"
     fired = []
-    ibis.observe(lambda event: fired.append(event.new), "alert")
+    ibis.alert.connect(fired.append)
     ibis.model_types = {"Input", "Output"}
-    assert (ibis.comp, ibis.pin, ibis.mod) == ("A", "1(S)", "example_rx")
+    assert (ibis.component_name, ibis.pin_name, ibis.model_name) == ("A", "1(S)", "example_rx")
     assert len(fired) == 1  # One move, one notice.
 
 
@@ -388,22 +382,22 @@ def test_component_change_with_same_pin_name(tmp_path):
     ibis_file.write_text(MIXED_IBIS.replace("[Model]   example_tx", SAME_PIN_COMPONENT + "[Model]   example_tx", 1),
                          encoding="utf-8")
     ibis = IBISModel(str(ibis_file))
-    assert (ibis.comp, ibis.pin, ibis.mod) == ("Mixed", "4(Tx_P)", "example_tx")
-    ibis.comp = "Second"
-    assert (ibis.pin, ibis.models, ibis.mod) == ("4(Tx_P)", ["example_rx"], "example_rx")
+    assert (ibis.component_name, ibis.pin_name, ibis.model_name) == ("Mixed", "4(Tx_P)", "example_tx")
+    ibis.component_name = "Second"
+    assert (ibis.pin_name, ibis.model_choices, ibis.model_name) == ("4(Tx_P)", ["example_rx"], "example_rx")
 
 
 @pytest.mark.parametrize("model_types", ["Output", 5])
 def test_model_types_must_be_a_collection(ibis_test_file, model_types):
     """A single string would be read one character at a time; it's rejected, like a non-collection."""
-    with pytest.raises(TraitError):
+    with pytest.raises(InvalidValueError):
         IBISModel(ibis_test_file, model_types=model_types)
 
 
 def test_model_types_from_a_generator(mixed_ibis_file):
     """``model_types`` is read once, so a generator works for every pin."""
     ibis = IBISModel(mixed_ibis_file, model_types=(t for t in ("Output", "I/O")))
-    assert ibis.pins == ["4(Tx_P)", "6(IO_P)", "11(Sel_P)"]
+    assert ibis.pin_choices == ["4(Tx_P)", "6(IO_P)", "11(Sel_P)"]
     assert ibis.model_types == {"output", "i/o"}
 
 
@@ -425,13 +419,13 @@ def _set_platform(monkeypatch, system, bits):
 ])
 def test_model_executable_for_platform(ibis_test_file, monkeypatch, system, bits, files):
     """``Model`` resolves its own executable for the running platform, without going through ``IBISModel.mod``."""
-    model = IBISModel(ibis_test_file).model_dict["models"]["example_tx"]
+    model = IBISModel(ibis_test_file).get_model("example_tx")
     _set_platform(monkeypatch, system, bits)
     assert (model.dll_file, model.ami_file) == files
 
 
 def test_model_without_algorithmic_model_has_no_executable(mixed_ibis_file):
-    model = IBISModel(mixed_ibis_file).model_dict["models"]["example_rx"]
+    model = IBISModel(mixed_ibis_file).get_model("example_rx")
     assert (model.dll_file, model.ami_file) == ("", "")
 
 
@@ -449,16 +443,16 @@ def test_ibis_model_executable_follows_selected_model(tmp_path, monkeypatch, cap
     ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", TX_ALGO_MODEL, 1), encoding="utf-8")
     caplog.set_level(logging.INFO, logger="pyibisami.ibis.file")  # For the whole test (notices follow selection).
     ibis = IBISModel(str(ibis_file))
-    assert ibis.mod == "example_tx"
+    assert ibis.model_name == "example_tx"
     assert (ibis.dll_file, ibis.ami_file) == ("example_tx_x86_amd64.so", "example_tx.ami")
     assert ibis.dll_path == tmp_path / "example_tx_x86_amd64.so" and ibis.ami_path == tmp_path / "example_tx.ami"
     assert "has an AMI executable for this platform: example_tx_x86_amd64.so" in caplog.text
-    ibis.pin = "5(Rx_P)"
-    assert ibis.mod == "example_rx"
+    ibis.pin_name = "5(Rx_P)"
+    assert ibis.model_name == "example_rx"
     assert (ibis.dll_file, ibis.ami_file) == (ibis.model.dll_file, ibis.model.ami_file) == ("", "")
     assert ibis.dll_path is None and ibis.ami_path is None
     _set_platform(monkeypatch, "Windows", "64bit")
-    ibis.pin = "4(Tx_P)"
+    ibis.pin_name = "4(Tx_P)"
     assert ibis.dll_file == ""
     assert "but no executable for this platform: Windows-64bit" in caplog.text
 
@@ -481,7 +475,7 @@ def _io_ibis_file(tmp_path, algo_model):
 
 def test_io_model_with_both_directions(tmp_path, monkeypatch):
     """An ``I/O`` model's Tx and Rx files are both reachable; the direction is the caller's choice."""
-    model = IBISModel(_io_ibis_file(tmp_path, IO_BOTH_ALGO_MODEL)).model_dict["models"]["example_io"]
+    model = IBISModel(_io_ibis_file(tmp_path, IO_BOTH_ALGO_MODEL)).get_model("example_io")
     assert model.is_io
     assert [ex.direction for ex in model.ami_executables] == ["tx", "rx", "tx"]
     assert model.executables[1] == (("linux", "64"), ["io_rx.so", "io_rx.ami"])  # Shape used by Executable_index.
@@ -506,7 +500,7 @@ def test_io_model_with_both_directions(tmp_path, monkeypatch):
 def test_io_model_with_one_direction(tmp_path, monkeypatch, keyword, tx_files, rx_files):
     algo_model = ("Model_type   I/O\n[Algorithmic Model]\n"
                   f"{keyword} linux_gcc4.1.2_64  io.so  io.ami\n[End Algorithmic Model]\n")
-    model = IBISModel(_io_ibis_file(tmp_path, algo_model)).model_dict["models"]["example_io"]
+    model = IBISModel(_io_ibis_file(tmp_path, algo_model)).get_model("example_io")
     _set_platform(monkeypatch, "Linux", "64bit")
     assert model.get_ami_files() == ("io.so", "io.ami")
     assert model.get_ami_files(is_tx=True) == tx_files
@@ -525,7 +519,7 @@ def test_non_io_model_direction_follows_model_type(  # pylint: disable=too-many-
                   "Executable linux_gcc4.1.2_64  m.so  m.ami\n[End Algorithmic Model]\n")
     ibis_file = tmp_path / "non_io.ibs"
     ibis_file.write_text(MIXED_IBIS.replace(f"Model_type   {model_type}\n", algo_model, 1), encoding="utf-8")
-    model = IBISModel(str(ibis_file)).model_dict["models"][model_name]
+    model = IBISModel(str(ibis_file)).get_model(model_name)
     _set_platform(monkeypatch, "Linux", "64bit")
     assert not model.is_io
     assert model.get_ami_files() == files_none
@@ -538,8 +532,8 @@ def test_ibis_model_ambiguous_io_direction_warns_once(tmp_path, monkeypatch, cap
     _set_platform(monkeypatch, "Linux", "64bit")
     ibis = IBISModel(_io_ibis_file(tmp_path, IO_BOTH_ALGO_MODEL))
     with caplog.at_level(logging.WARNING, logger="pyibisami.ibis.file"):
-        ibis.pin = "6(IO_P)"
-        assert ibis.mod == "example_io"
+        ibis.pin_name = "6(IO_P)"
+        assert ibis.model_name == "example_io"
         assert (ibis.dll_file, ibis.ami_file) == ("io_tx.so", "io_tx.ami")
         assert ibis.dll_path == tmp_path / "io_tx.so"
     warnings = [rec for rec in caplog.records if "get_ami_files(is_tx)" in rec.getMessage()]
@@ -562,7 +556,7 @@ def test_executables_for_other_oses_are_kept_but_not_selected(tmp_path, monkeypa
     """``Executable`` lines for OSes other than Linux/Windows used to fail the whole file."""
     ibis_file = tmp_path / "other_os.ibs"
     ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", OTHER_OS_ALGO_MODEL, 1), encoding="utf-8")
-    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    model = IBISModel(str(ibis_file)).get_model("example_tx")
     assert [os_name for ((os_name, _), _) in model.executables] == ["solaris5.10", "hp-ux", "windows"]
     assert model.executables[2] == (("windows", "64"), ["tx.dll", "tx.ami"])  # What ``Executable_index 3`` reads.
     assert model.ami_files == {"32-bit": {"lin": [], "win": []}, "64-bit": {"lin": [], "win": ["tx.dll", "tx.ami"]}}
@@ -582,7 +576,7 @@ def test_executable_os_field_may_carry_a_version(tmp_path, monkeypatch):
                   "Executable Linux2.6_gcc4.1.2_64  tx.so  tx.ami\n[End Algorithmic Model]\n")
     ibis_file = tmp_path / "os_version.ibs"
     ibis_file.write_text(MIXED_IBIS.replace("Model_type   Output\n", algo_model, 1), encoding="utf-8")
-    model = IBISModel(str(ibis_file)).model_dict["models"]["example_tx"]
+    model = IBISModel(str(ibis_file)).get_model("example_tx")
     _set_platform(monkeypatch, "Linux", "64bit")
     assert model.executables == [(("linux", "64"), ["tx.so", "tx.ami"])]
     assert model.dll_file == "tx.so"

@@ -12,8 +12,8 @@ BLOCKER = textwrap.dedent("""
     import importlib.abc, sys
 
     BLOCKED = {
-        "chaco", "enable", "kiwisolver", "pyface", "traitsui",  # gui
-        "PyQt5", "PyQt6", "PySide6",                            # Qt bindings
+        "chaco", "enable", "kiwisolver", "pyface", "traits", "traitsui",  # Removed in 11.0: must stay unused.
+        "PyQt5", "PyQt6", "PySide6", "shiboken6",                         # gui (Qt bindings)
         "matplotlib", "reportlab", "scipy",                     # report
         "jupyter", "nbformat", "papermill",                     # notebook
     }
@@ -46,6 +46,8 @@ def test_core_modules_import():
         import pyibisami.ami.configurator
         import pyibisami.ami.parser
         import pyibisami.common
+        import pyibisami.events
+        import pyibisami.ibis.analog
         import pyibisami.ibis.file
         import pyibisami.ibis.iv
         import pyibisami.ibis.model
@@ -69,13 +71,13 @@ def test_ibis_model_headless(ibis_test_file):
         model = ibis.model
         assert abs(model.zout - 50.0) < 1e-9, model.zout
         assert set(model.iv_data.curves) == {"pulldown", "pullup"}
-        assert ibis.comp_.pins
+        assert ibis.component.pins
         try:
-            model.plot_iv
+            ibis.open_gui()
         except ImportError as err:
             assert "pyibis-ami[gui]" in str(err), err
         else:
-            raise AssertionError("`plot_iv` should need the `gui` extra.")
+            raise AssertionError("`open_gui()` should need the `gui` extra.")
     """, str(ibis_test_file))
 
 

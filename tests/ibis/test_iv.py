@@ -44,11 +44,22 @@ def test_impedance_at_table_edges():
 
 
 def test_ground_referenced():
+    """Only the voltages move (``Vpin = Vcc - Vtable``); currents keep their IBIS sense (positive into the pin)."""
     pullup = IVCurve.from_table("pullup", PULLUP).ground_referenced(1.8)
     np.testing.assert_allclose(pullup.v, [3.6, 1.8, 0.0, -1.8])
-    np.testing.assert_allclose(pullup.i_typ, [-10.0, 0.0, 0.036, 10.0])
+    np.testing.assert_allclose(pullup.i_typ, [10.0, 0.0, -0.036, -10.0])
     pulldown = IVCurve.from_table("pulldown", PULLDOWN)
     assert pulldown.ground_referenced(1.8) is pulldown
+
+
+def test_series_use_each_corners_supply():
+    """Each Vcc-relative column is relative to its own corner's supply, so all corners line up in pin voltage."""
+    iv = IVData.from_model_dict({"pulldown": PULLDOWN, "pullup": PULLUP}, [1.8, 1.62, 1.98])
+    assert (iv.supply("typ"), iv.supply("min"), iv.supply("max")) == (1.8, 1.62, 1.98)
+    pu = {s.corner: s for s in iv.series() if s.side == "up"}
+    np.testing.assert_allclose(pu["min"].v, 1.62 - np.array([-1.8, 0.0, 1.8, 3.6]))
+    np.testing.assert_allclose(pu["max"].v, 1.98 - np.array([-1.8, 0.0, 1.8, 3.6]))
+    assert IVData.from_model_dict({"pulldown": PULLDOWN}, 1.8).supply("max") == 1.8  # Only typ given.
 
 
 def test_driver_series_exclude_clamps():
@@ -83,45 +94,25 @@ def test_model_iv_data(tx_model):
 
 
 
-def test_model_display_traits_hold_raw_values(tx_model):
-    """The viewer's read-only model traits hold the raw IBIS values (numbers, typ/min/max lists),
-    and accept new ones of the same kind (they used to be ``String`` traits)."""
+def test_model_display_values_are_raw_and_read_only(tx_model):
+    """The model's display values are the raw IBIS values (numbers, typ/min/max lists), read-only."""
     assert tx_model.vmeas == pytest.approx(0.5)
     assert tx_model.vrange == pytest.approx([1.8, 1.62, 1.98])
     assert tx_model.slew > 0
-    tx_model.vmeas = 0.6
-    tx_model.trange = [27.0, 0.0, 100.0]
-    assert tx_model.vmeas == pytest.approx(0.6)
+    assert tx_model.model_type == "Output"
+    with pytest.raises(AttributeError):
+        tx_model.vmeas = 0.6
 
 
-def test_gui_views_build(ibis_test_file):
-    """Every IBIS view must resolve against the traits its object exposes."""
-    pytest.importorskip("chaco")
-    from chaco.api import Plot
-
-    ibis = IBISModel(ibis_test_file)
-    model = ibis.model
-    assert isinstance(model.plot_iv, Plot)
-    assert model.plot_iv is model.plot_iv  # Built once.
-    assert sorted(model.plot_iv.plots) == sorted(s.label for s in model.iv_data.series())
-    for obj in (ibis, ibis.comp_, model):
-        view = obj.default_traits_view()
-        names = [item.name for item in _items(view.content) if item.name]
-        assert names and all(obj.trait(name) is not None for name in names), names
-
-
-def test_gui_input_model_view_builds():
-    """An Input model's view (clamp curves; ``zin`` instead of ``zout``/``slew``) resolves, too."""
-    pytest.importorskip("chaco")
+def test_input_model_has_zin_only():
+    """An Input model has clamp curves and ``zin``, but no ``zout``/``slew``."""
     from pyibisami.ibis.model import Model
 
     iv = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]
     model = Model({"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1], "gnd_clamp": iv, "power_clamp": iv})
     assert model.zin == pytest.approx(25.0)  # Two 50 Ohm clamps, in parallel.
-    assert sorted(model.plot_iv.plots) == sorted(s.label for s in model.iv_data.series())
-    names = [item.name for item in _items(model.default_traits_view().content) if item.name]
-    assert "zin" in names and "zout" not in names
-    assert all(model.trait(name) is not None for name in names), names
+    assert set(model.iv_data.curves) == {"gnd_clamp", "power_clamp"}
+    assert model.zout is None and model.slew is None
 
 
 CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]  # 50 Ohms at Vmeas.
@@ -186,19 +177,6 @@ def test_output_still_requires_driver_data():
         _model("I/O", pulldown=PULLDOWN, ramp=RAMP)
 
 
-def test_gui_io_model_view_shows_both_impedances():
-    pytest.importorskip("chaco")
+def test_io_model_has_both_impedances():
     model = _model("I/O", pulldown=PULLDOWN, pullup=PULLUP, ramp=RAMP, gnd_clamp=CLAMP_50, power_clamp=CLAMP_50)
-    names = [item.name for item in _items(model.default_traits_view().content) if item.name]
-    assert {"zout", "slew", "zin"} <= set(names)
-    assert all(model.trait(name) is not None for name in names), names
-
-
-def _items(group):
-    from traitsui.api import Group
-
-    for elem in group.content:
-        if isinstance(elem, Group):
-            yield from _items(elem)
-        else:
-            yield elem
+    assert None not in (model.zout, model.slew, model.zin)

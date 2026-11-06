@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
 import numpy as np
@@ -33,13 +33,18 @@ OPEN_CIRCUIT_Z = 1e7  # Used in place of infinite impedance (Ohms).
 
 @dataclass(frozen=True)
 class IVCurve:
-    """One IBIS I-V table, with voltages/currents as written in the file."""
+    """One IBIS I-V table, with voltages/currents as written in the file.
+
+    Where a row gives ``typ NA NA``, ``i_min``/``i_max`` hold the typical value and ``na_min``/``na_max`` mark the row.
+    """
 
     keyword: IVKeyword
     v: NDArray[np.float64]
     i_typ: NDArray[np.float64]
     i_min: NDArray[np.float64]
     i_max: NDArray[np.float64]
+    na_min: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
+    na_max: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     @classmethod
     def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[float]]]) -> IVCurve:
@@ -64,7 +69,14 @@ class IVCurve:
         i_typ = np.array([cs[0] for cs in currents], dtype=float)
         i_min = np.array([cs[1] if len(cs) > 1 else cs[0] for cs in currents], dtype=float)
         i_max = np.array([cs[2] if len(cs) > 2 else cs[0] for cs in currents], dtype=float)
-        return cls(keyword, v, i_typ, i_min, i_max)
+        na_min = np.array([len(cs) < 2 for cs in currents])
+        na_max = np.array([len(cs) < 3 for cs in currents])
+        return cls(keyword, v, i_typ, i_min, i_max, na_min, na_max)
+
+    def has_corner(self, corner: IVCorner) -> bool:
+        "Whether the table has data of its own for a corner (typ always does; ``NA`` columns don't)."
+        na = {"typ": None, "min": self.na_min, "max": self.na_max}[corner]
+        return na is None or not (len(na) and bool(np.all(na)))
 
     @property
     def vdd_relative(self) -> bool:
@@ -105,9 +117,19 @@ class IVCurve:
             return OPEN_CIRCUIT_Z
         return float(abs((vs[ix] - vs[ix - 1]) / di))
 
+    def pin_voltage(self, vdd: float) -> NDArray[np.float64]:
+        """The table's voltages as pin voltages (relative to ground).
+
+        ``[Pullup]``/``[POWER Clamp]`` voltages are ``Vcc - Vpin`` (IBIS 8.0 Section 6.1); give the supply of the
+        corner being drawn (``[Voltage Range]`` typ, min or max), since each column is relative to its own.
+        """
+        return vdd - self.v if self.vdd_relative else self.v
+
     def ground_referenced(self, vdd: float) -> IVCurve:
         """
-        Re-reference a power-rail-relative curve to ground, flipping current sense.
+        Re-reference a power-rail-relative curve to ground (``pin_voltage(vdd)``), for one supply voltage.
+
+        Currents keep their IBIS sense: positive into the pin, in every table.
 
         Args:
             vdd: Power rail voltage.
@@ -118,7 +140,7 @@ class IVCurve:
         """
         if not self.vdd_relative:
             return self
-        return replace(self, v=vdd - self.v, i_typ=-self.i_typ, i_min=-self.i_min, i_max=-self.i_max)
+        return replace(self, v=self.pin_voltage(vdd))
 
 
 @dataclass(frozen=True)
@@ -134,21 +156,26 @@ class IVSeries:
 
 @dataclass(frozen=True)
 class IVData:
-    """All I-V curves of one IBIS ``[Model]``."""
+    """All I-V curves of one IBIS ``[Model]``.
+
+    ``vdd`` is the typical supply (``[Voltage Range]`` typ); ``vdd_min``/``vdd_max`` its min and max (``None``: typ).
+    """
 
     curves: Mapping[IVKeyword, IVCurve]
     vdd: float
+    vdd_min: Optional[float] = None
+    vdd_max: Optional[float] = None
 
     @classmethod
     def from_model_dict(
-        cls, sub_dict: Mapping[str, object], vdd: float, required: Sequence[IVKeyword] = IV_KEYWORDS
+        cls, sub_dict: Mapping[str, object], vdd: float | Sequence[float], required: Sequence[IVKeyword] = IV_KEYWORDS
     ) -> IVData:
         """
         Collect every I-V table found in a parsed ``[Model]`` dictionary.
 
         Args:
             sub_dict: Parsed ``[Model]`` sub-keywords.
-            vdd: Typical power rail voltage (i.e. - ``[Voltage Range]`` typ).
+            vdd: The power rail voltage: ``[Voltage Range]`` as ``[typ, min, max]`` (or ``[typ]``), or just typ.
             required: Keywords whose tables must be valid, if present.
                 Any other invalid table is skipped, with a warning.
 
@@ -165,7 +192,13 @@ class IVData:
                 if kw in required:
                     raise
                 logger.warning("Ignoring unusable I-V table: %s", err)
-        return cls(curves, vdd)
+        supplies = [float(v) for v in vdd] if isinstance(vdd, Sequence) else [float(vdd)]
+        return cls(curves, supplies[0], *(supplies[1:3] if len(supplies) >= 3 else (None, None)))
+
+    def supply(self, corner: IVCorner = "typ") -> float:
+        "The supply voltage of a corner: ``vdd``, ``vdd_min`` or ``vdd_max`` (typ where not given)."
+        value = {"typ": self.vdd, "min": self.vdd_min, "max": self.vdd_max}[corner]
+        return self.vdd if value is None else value
 
     @property
     def is_driver(self) -> bool:
@@ -189,21 +222,24 @@ class IVData:
 
     def series(self) -> list[IVSeries]:
         """
-        Ground-referenced traces, ready to draw on common axes.
+        Traces against pin voltage, ready to draw on common axes.
 
+        ``[Pullup]``/``[POWER Clamp]`` voltages (``Vcc - Vpin``) are turned into pin voltages with each corner's own
+        supply (``supply(corner)``); currents keep their IBIS sense (positive into the pin).
         Drivers show their pull-down/up curves; inputs, their clamp curves.
-        Labels are ``PD-Typ``, ``PU-Max``, etc.
+        Labels are ``PD-Typ``, ``PU-Max``, etc. A min/max corner that's ``NA`` throughout is left out.
         """
         plotted: tuple[IVKeyword, IVKeyword] = ("pulldown", "pullup") if self.is_driver else ("gnd_clamp", "power_clamp")
         rslt = []
         for curve in (self.curves[kw] for kw in plotted if kw in self.curves):
-            gnd_ref = curve.ground_referenced(self.vdd)
             prefix = "PU" if curve.side == "up" else "PD"
             for corner in ("typ", "min", "max"):
+                if not curve.has_corner(corner):  # type: ignore[arg-type]
+                    continue
                 rslt.append(IVSeries(
                     label=f"{prefix}-{corner.capitalize()}",
-                    v=gnd_ref.v,
-                    i=gnd_ref.current(corner),  # type: ignore[arg-type]
+                    v=curve.pin_voltage(self.supply(corner)),  # type: ignore[arg-type]
+                    i=curve.current(corner),  # type: ignore[arg-type]
                     side=curve.side,
                     corner=corner,  # type: ignore[arg-type]
                 ))

@@ -432,7 +432,22 @@ def ramp() -> GenParser[dict[str, Any]]:
     return rslt
 
 
-# ToDo: Implement: rising_waveform, falling_waveform, and composite_current.
+# [Rising Waveform], [Falling Waveform] (IBIS 8.0 Section 6.1, p.107-108).
+fixture_name: Parser = lexeme(regex(r"(?i)[RLCV]_(fixture(_min|_max)?|dut)\b")).parsecmap(str.lower)
+fixture_param: Parser = fixture_name + (lexeme(string("=")) >> number)
+vt_line: Parser = (number + number + count(number | na, 2)).parsecmap(
+    lambda r: (r[0][0], r[0][1], r[1][0], r[1][1])) << ignore
+
+
+@generate("V-T waveform")
+def vt_waveform() -> GenParser[dict[str, Any]]:
+    "Parse a waveform's fixture subparameters and V-T table."
+    params = yield many(fixture_param)
+    rows = yield many1(vt_line)
+    return {"params": dict(params), "rows": rows}
+
+
+# ToDo: Implement composite_current.
 Model_keywords: dict[str, Parser] = {
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
@@ -442,8 +457,8 @@ Model_keywords: dict[str, Parser] = {
     "temperature_range": typminmax,
     "gnd_clamp": many1(vi_line),
     "power_clamp": many1(vi_line),
-    "rising_waveform": skip_keyword,
-    "falling_waveform": skip_keyword,
+    "rising_waveform": vt_waveform,
+    "falling_waveform": vt_waveform,
     "composite_current": skip_keyword,
 }
 
@@ -455,8 +470,11 @@ def model():
     logger.debug("Parsing model: %s...", nm)
     res = yield many1(node(Model_keywords, IBIS_keywords))
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
+    sub_dict = dict(res)
+    # A model may have several waveform tables (IBIS 8.0 p.107); ``dict()`` would keep only the last one.
+    sub_dict["waveforms"] = [(kw.split("_")[0], val) for kw, val in res if kw in ("rising_waveform", "falling_waveform")]
     try:
-        theModel = Model(dict(res), name=nm)
+        theModel = Model(sub_dict, name=nm)
     except LookupError as le:
         return fail_with(f"[Model] {nm}: {le!s}")
     return {nm: theModel}
@@ -540,12 +558,12 @@ def comp():
     logger.debug("Parsing component: %s", nm)
     res = yield many1(node(Component_keywords, IBIS_keywords))
     try:
-        Component(dict(res))
+        the_comp = Component(dict(res), name=nm)
     except LookupError as le:
         return fail_with(f"[Component] {nm}: {le!s}")
     except Exception as err:  # pylint: disable=broad-exception-caught
         return fail_with(f"[Component] {nm}: {err!s}")
-    return {nm: Component(dict(res))}
+    return {nm: the_comp}
 
 
 @generate("[Model Selector]")
