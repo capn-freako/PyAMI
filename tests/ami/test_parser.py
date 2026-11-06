@@ -559,6 +559,7 @@ class TestFormats:
         ("(Usage Out) (Type Float) (Corner 1 2 3)", "Corner is not allowed with Usage Out"),
         ("(usage in) (Type Float) (Range 0.5 0 1)", "Missing 'Usage' tag"),  # Case sensitive (p.236).
         ("(usage In) (type Float) (Value 1)", "Missing 'Usage' and 'Type' tags"),  # Not an (empty) branch.
+        ("(Usage In) (Type Float) (Increment 5 10 0 1)", "no legal values"),  # min > max (p.241).
     ])
     def test_bad_parameter_is_skipped(self, param, reason):
         """Only the bad parameter is dropped, with a warning naming it; the rest of the file loads."""

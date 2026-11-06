@@ -180,7 +180,20 @@ def typminmax() -> GenParser[list[float]]:
     return [typ] + [typ if val is None else val for val in minmax]
 
 
-vi_line: Parser = (number + typminmax) << ignore
+@generate("I-V currents")
+def iv_currents() -> GenParser[list[Optional[float]]]:
+    """Parse an I-V row's typ/min/max currents, keeping each ``NA`` min/max as ``None``.
+
+    Unlike ``typminmax``, ``NA`` doesn't stand for the typical value here: I-V tables mark missing data per cell
+    (IBIS 8.0 Section 6.1, p.88). ``typ NA NA`` gives ``[typ]``.
+    """
+    typ = yield number
+    minmax = yield optional(count(number | na, 2), [])
+    yield ignore
+    return [typ] if minmax in ([], [None, None]) else [typ, *minmax]
+
+
+vi_line: Parser = (number + iv_currents) << ignore
 
 
 @generate("ratio")

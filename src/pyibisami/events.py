@@ -66,4 +66,5 @@ class Signal:
                 logger.exception("Error in callback %r", callback)
 
     def __len__(self) -> int:
-        return len(self._callbacks)
+        with self._lock:
+            return len(self._callbacks)

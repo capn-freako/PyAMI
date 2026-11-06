@@ -21,7 +21,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout, QWidget
 
-from ..ibis.iv import IVData, IVSide
+from ..ibis.iv import IVData, IVKeyword
 from ..ibis.vt import VTDirection, VTWaveform
 
 __all__ = ["IVPlot", "VTPlot"]
@@ -83,41 +83,43 @@ class _PlotWidget(QWidget):
         self.canvas.draw_idle()
 
 
-class IVPlot(_PlotWidget):
-    """One side of a model's I-V curves (``IVData.series()``, ground-referenced): ``down`` is the pulldown (or
-    GND clamp), ``up`` the pullup (or POWER clamp). Typ solid, min dashed, max dotted; ``NA`` corners aren't drawn."""
+_IV_TITLES: dict[IVKeyword, str] = {
+    "pulldown": "Pulldown", "pullup": "Pullup", "gnd_clamp": "GND Clamp", "power_clamp": "POWER Clamp"}
 
-    def __init__(self, iv_data: Optional[IVData] = None, side: IVSide = "down",
+
+class IVPlot(_PlotWidget):
+    """One of a model's I-V tables (``pulldown``, ``pullup``, ``gnd_clamp`` or ``power_clamp``), against pin voltage
+    (``IVCurve.at()``). Typ solid, min dashed, max dotted; ``NA`` cells aren't drawn."""
+
+    def __init__(self, iv_data: Optional[IVData] = None, keyword: IVKeyword = "pulldown",
                  parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.side = side
+        self.keyword = keyword
         self.set_data(iv_data)
 
     @property
     def title(self) -> str:
-        "``Pulldown``/``Pullup``, or ``GND Clamp``/``POWER Clamp`` for a model without drivers."
-        driver = self.iv_data is None or self.iv_data.is_driver
-        if self.side == "down":
-            return "Pulldown" if driver else "GND Clamp"
-        return "Pullup" if driver else "POWER Clamp"
+        "The table's keyword, e.g. ``Pulldown`` or ``GND Clamp``."
+        return _IV_TITLES[self.keyword]
 
     @property
     def has_data(self) -> bool:
-        return self.iv_data is not None and any(t.side == self.side for t in self.iv_data.series())
+        return self.iv_data is not None and self.keyword in self.iv_data.curves
 
     def set_data(self, iv_data: Optional[IVData]) -> None:
-        "Show these curves' side (``None``: none)."
+        "Show this table of these curves (``None``: none)."
         self.iv_data = iv_data
         self._redraw()
 
     def _redraw(self) -> None:
         self.axes.clear()
         corners = self._corners()
-        if self.iv_data is not None:
-            for trace in self.iv_data.series():
-                if trace.side == self.side and trace.corner in corners:
-                    self.axes.plot(trace.v, trace.i, _CORNER_STYLES[trace.corner], color=_SIDE_COLORS[self.side],
-                                   label=trace.corner)
+        if self.iv_data is not None and self.keyword in self.iv_data.curves:
+            curve = self.iv_data.curves[self.keyword]
+            for corner in ("typ", "min", "max"):
+                if corner in corners and curve.has_corner(corner):  # type: ignore[arg-type]
+                    v, i = curve.at(corner, self.iv_data.supply(corner))  # type: ignore[arg-type]
+                    self.axes.plot(v, i, _CORNER_STYLES[corner], color=_SIDE_COLORS[curve.side], label=corner)
         if self.iv_data is not None and self.axes.get_lines():
             self._draw_rails(self.iv_data, corners)
         v_label = self.iv_data.v_label if self.iv_data else "V (V)"

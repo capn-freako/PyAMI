@@ -4,12 +4,13 @@ import json
 import threading
 
 import pytest
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLineEdit, QSpinBox, QWidget
 
 from pyibisami.ami.configurator import AMIParamConfigurator
 from pyibisami.gui import AmiParamEditor, IbisBrowser, IbisSelector, IVPlot, VTPlot, ibis as gui_ibis
 from pyibisami.gui.ami_config import load_preset, save_preset
 from pyibisami.gui.app import MainWindow
+from pyibisami.gui.dialogs import edit_ami_params
 from pyibisami.ibis.file import IBISModel
 
 AMI = """(m
@@ -25,7 +26,8 @@ AMI = """(m
     (en (Usage In) (Type Boolean) (Value True))
     (name (Usage In) (Type String) (Value "x"))
     (pvt (Usage In) (Type Float) (Corner 1.0 0.5 2.0))
-    (dfe (-1 (Usage In) (Type Tap) (Range 0.0 -0.5 0.5)))))
+    (dfe (-1 (Usage In) (Type Tap) (Range 0.0 -0.5 0.5)))
+    (delay (Usage In) (Type Float) (Range 2e-12 1e-12 3e-12))))
 """
 
 
@@ -43,8 +45,8 @@ def editor(qtbot, cfg):
 
 def test_one_editor_per_settable_parameter(editor, cfg):
     kinds = {path[-1]: type(editor.editor(path)) for path, _ in cfg.iter_settable()}
-    assert kinds == {"gain": QDoubleSpinBox, "taps": QSpinBox, "mode": QComboBox, "step": QComboBox,
-                     "en": QCheckBox, "name": QLineEdit, "-1": QDoubleSpinBox}
+    assert kinds == {"gain": QLineEdit, "taps": QSpinBox, "mode": QComboBox, "step": QComboBox,
+                     "en": QCheckBox, "name": QLineEdit, "-1": QLineEdit, "delay": QLineEdit}
     mode = editor.editor(("Model_Specific", "mode"))
     assert [mode.itemText(i) for i in range(mode.count())] == ["Off (0)", "On (1)"]
 
@@ -56,6 +58,20 @@ def test_widget_edit_sets_value(editor, cfg):
     assert cfg.fetch_param_val(["Model_Specific", "mode"]) == 1
     editor.editor(("Model_Specific", "en")).setChecked(False)
     assert cfg.fetch_param_val(["Model_Specific", "en"]) is False
+
+
+def test_tiny_float_range_edited_exactly(editor, cfg):
+    """A Float Range in seconds (IBIS 8.0 p.269 example) is shown and set exactly; leaving it unchanged sets nothing."""
+    path = ("Model_Specific", "delay")
+    box = editor.editor(path)
+    assert box.text() == "2e-12"
+    changes = []
+    cfg.values_changed.connect(lambda *args: changes.append(args))
+    box.editingFinished.emit()
+    assert not changes
+    box.setText("2.5e-12")
+    box.editingFinished.emit()
+    assert cfg.fetch_param_val(list(path)) == 2.5e-12
 
 
 def test_illegal_value_reported_and_reverted(editor, cfg):
@@ -182,7 +198,7 @@ def test_vt_tabs_and_corner_toggles(qtbot, ibis_test_file):
 def test_iv_plot_marks_rails(qtbot, ibis_test_file):
     """A Vcc line per shown corner, in its line style; none in the legend or ``shown_labels``."""
     iv = IBISModel(ibis_test_file).model.iv_data
-    plot = IVPlot(iv, side="up")
+    plot = IVPlot(iv, keyword="pullup")
     qtbot.addWidget(plot)
     vcc_lines = {str(line.get_label()): line for line in plot.axes.get_lines() if str(line.get_label()).startswith("_vcc")}
     assert {name: line.get_xdata()[0] for name, line in vcc_lines.items()} == pytest.approx(
@@ -206,7 +222,59 @@ def test_show_alerts_pops_up_once(qtbot, ibis_test_file, monkeypatch):
     gui_ibis.show_alerts(ibis)
     gui_ibis.show_alerts(ibis)
     ibis._announce_model()  # pylint: disable=protected-access
+    assert not shown  # Queued: never inside the change that fired it.
     qtbot.waitUntil(lambda: len(shown) == 1)
+
+
+def test_show_alerts_follows_the_latest_parent(qtbot, ibis_test_file, monkeypatch):
+    """A repeat call moves the pop-ups to the new parent; a destroyed parent is forgotten, not used."""
+    parents = []
+    monkeypatch.setattr(gui_ibis.QMessageBox, "information", lambda parent, title, msg: parents.append(parent))
+    ibis = IBISModel(ibis_test_file)
+    first, second = QWidget(), QWidget()
+    gui_ibis.show_alerts(ibis, first)
+    gui_ibis.show_alerts(ibis, second)
+    ibis._announce_model()  # pylint: disable=protected-access
+    qtbot.waitUntil(lambda: parents == [second])
+    second.deleteLater()
+    qtbot.waitUntil(lambda: gui_ibis._POPUPS[ibis].parent_widget is None)  # pylint: disable=protected-access
+    first.deleteLater()
+
+
+def test_dialog_freed_after_closing(qtbot, monkeypatch, cfg):
+    """A dialog with a parent is deleted after ``exec()``, so it stops listening to the configurator."""
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    assert edit_ami_params(cfg, parent)
+    qtbot.waitUntil(lambda: not parent.findChildren(QDialog))
+    assert not len(cfg.values_changed)
+
+
+def test_load_preset_rejects_other_json(tmp_path, cfg):
+    file = tmp_path / "not_a_preset.json"
+    file.write_text(json.dumps({"values": [1, 2]}), encoding="utf-8")
+    with pytest.raises(TypeError, match="Not an AMI preset"):
+        load_preset(cfg, file)
+
+
+CLAMPS = """
+[GND Clamp]
+  -1.8   -0.1   NA   NA
+   0.0    0.0   NA   NA
+[POWER Clamp]
+  -1.8    0.1   NA   NA
+   0.0    0.0   NA   NA
+"""
+
+
+def test_driver_clamp_tabs(qtbot, ibis_test_file):
+    """A driver's clamp tables get their own tabs (they used to be shown only for receivers)."""
+    text = ibis_test_file.read_text(encoding="utf-8").replace("[Ramp]", CLAMPS + "[Ramp]", 1)
+    browser = IbisBrowser(IBISModel.from_text(text))
+    qtbot.addWidget(browser)
+    assert browser.visible_tabs() == ["Pulldown", "Pullup", "GND Clamp", "POWER Clamp"]
+    assert browser.gnd_clamp_plot.shown_labels == ["typ"]
 
 
 def test_app_opens_ibis_and_ami(qtbot, ibis_test_file, ami_test_file, monkeypatch):

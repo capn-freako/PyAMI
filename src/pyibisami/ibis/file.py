@@ -72,8 +72,11 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
     Signals (``pyibisami.events.Signal``):
 
     - ``selection_changed(component_name, pin_name, model_name)``, after any change of the selection.
+    - ``choices_changed()``, after any change of ``component_choices``, ``pin_choices`` or ``model_choices``
+      (e.g. - a ``model_types`` change that keeps the selection).
     - ``alert(msg)``, with each user-facing notice (e.g. - whether the selected model has an AMI
-      executable for this platform); also logged. See ``pyibisami.gui.show_alerts()``.
+      executable for this platform); also logged. See ``pyibisami.gui.show_alerts()``. The first model's is fired
+      while loading, before anyone can connect: ``last_alert`` keeps the latest.
     """
 
     def __init__(
@@ -130,6 +133,8 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
         "Parse ``text`` and make the initial selection."
         self.alert = Signal()
         self.selection_changed = Signal()
+        self.choices_changed = Signal()
+        self._last_alert: Optional[str] = None
         self._model_types = _model_types(model_types)
         self._ibis_dir = ibis_dir
 
@@ -233,6 +238,11 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
     def date(self) -> str:
         "The ``[Date]`` (``(n/a)`` if absent)."
         return self._date
+
+    @property
+    def last_alert(self) -> Optional[str]:
+        "The latest ``alert`` message (e.g. - the first model's, fired while loading); ``None`` if none yet."
+        return self._last_alert
 
     @property
     def ibis_parsing_errors(self) -> str:
@@ -365,14 +375,13 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
             self._model_types = old
             self._notify(f"{msg} Keeping the previous model_types and selection.")
             return
-        self._component_choices = comps
         # A pin is kept only with its component, and a model only with its pin.
         component = self._component_name if self._component_name in comps else comps[0]
         pins = self._selectable_pins(self._components[component])
         pin = self._pin_name if component == self._component_name and self._pin_name in pins else pins[0]
         models = self._selectable_model_names(self._pin_model(component, pin))
         model = self._model_name if pin == self._pin_name and self._model_name in models else models[0]
-        self._commit((component, pins, pin, models, model))
+        self._commit((component, pins, pin, models, model), component_choices=comps)
 
     @property
     def component_choices(self) -> list[str]:
@@ -460,14 +469,19 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
         "The selected ``Model``."
         return self._models[self._model_name]
 
-    def _commit(self, selection: Selection) -> None:
-        "Store a checked selection; announce it (and a newly selected model) if it changed."
+    def _commit(self, selection: Selection, component_choices: Optional[list[str]] = None) -> None:
+        "Store a checked selection (and new component choices); announce what changed."
         component, pins, pin, models, model = selection
         old = (self._component_name, self._pin_name, self._model_name)
+        old_choices = (self._component_choices, self._pin_choices, self._model_choices)
+        if component_choices is not None:
+            self._component_choices = component_choices
         self._component_name, self._pin_choices, self._pin_name = component, pins, pin
         self._model_choices, self._model_name = models, model
         if model != old[2]:
             self._announce_model()
+        if (self._component_choices, pins, models) != old_choices:
+            self.choices_changed.emit()
         if (component, pin, model) != old:
             self.selection_changed.emit(component, pin, model)
 
@@ -508,6 +522,7 @@ class IBISModel:  # pylint: disable=too-many-instance-attributes,too-many-public
     def _notify(self, msg: str) -> None:
         "Log a user-facing notice and fire it through ``alert``."
         logger.info(msg)
+        self._last_alert = msg
         self.alert.emit(msg)
 
     def _announce_model(self) -> None:

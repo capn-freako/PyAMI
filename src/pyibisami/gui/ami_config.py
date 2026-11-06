@@ -17,7 +17,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -63,8 +62,14 @@ def load_preset(cfg: AMIParamConfigurator, file: str | Path) -> list[str]:
     Returns:
         One message per entry that was skipped (unknown path, illegal value), plus one if the preset is for
         another model.
+
+    Raises:
+        ValueError: The file isn't JSON.
+        TypeError: It isn't a preset (a JSON object with a ``values`` object).
     """
     data = json.loads(Path(file).read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("values", {}), dict):
+        raise TypeError("Not an AMI preset: expected a JSON object with a 'values' object.")
     notes = []
     if data.get("root_name") != cfg.root_name:
         notes.append(f"Preset is for model {data.get('root_name')!r}, not {cfg.root_name!r}.")
@@ -189,15 +194,11 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
             editor = QSpinBox()
             editor.setRange(int(param.pmin), int(param.pmax))
             editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.value()))
-        elif param.pformat == "Range":
-            editor = QDoubleSpinBox()
-            editor.setDecimals(6)
-            editor.setRange(float(param.pmin), float(param.pmax))
-            editor.setSingleStep((float(param.pmax) - float(param.pmin)) / 100 or 0.1)
-            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.value()))
-        else:  # Value
+        else:  # Value, or a Float/UI/Tap Range: typed, so any magnitude (e.g. - 2e-12 s; IBIS 8.0 p.239) stays exact.
             editor = QLineEdit()
-            editor.editingFinished.connect(lambda p=path, box=editor: self._set(p, box.text()))
+            if param.pformat == "Range":
+                editor.setPlaceholderText(f"{param.pmin:g} to {param.pmax:g}")
+            editor.editingFinished.connect(lambda p=path, box=editor: self._set_text(p, box.text()))
         return editor
 
     # Core -> widgets.
@@ -213,7 +214,7 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
                     editor.setChecked(bool(value))
                 elif isinstance(editor, QComboBox):
                     editor.setCurrentIndex(max(editor.findData(value), 0))
-                elif isinstance(editor, (QSpinBox, QDoubleSpinBox)):
+                elif isinstance(editor, QSpinBox):
                     editor.setValue(value)
                 elif isinstance(editor, QLineEdit):
                     editor.setText(str(value))
@@ -236,6 +237,11 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
         else:
             self._report("")
 
+    def _set_text(self, path: ParamPath, text: str) -> None:
+        "Set a typed value; leaving the box with the shown text unchanged sets nothing."
+        if text != str(self._cfg.current_values()[path]):
+            self._set(path, text)
+
     def _set_corner(self, corner: str) -> None:
         self._cfg.sim_corner = corner
 
@@ -254,7 +260,7 @@ class AmiParamEditor(QWidget):  # pylint: disable=too-many-instance-attributes
         if file:
             try:
                 notes = load_preset(self._cfg, file)
-            except (OSError, ValueError) as err:
+            except (OSError, ValueError, TypeError) as err:
                 self._report(f"Couldn't load {file}: {err}", error=True)
                 return
             self._report("\n".join(notes) or f"Loaded {file}.", error=bool(notes))

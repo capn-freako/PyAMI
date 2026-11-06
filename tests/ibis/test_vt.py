@@ -87,6 +87,16 @@ def test_bad_tables_rejected(rows, match):
         VTWaveform.from_table("rising", {"r_fixture": 50, "v_fixture": 0}, rows)
 
 
+def test_iv_na_cells_left_out_of_their_corner():
+    """``NA`` marks one cell (IBIS 8.0 p.88): that row is left out of that corner's trace, not drawn at typ."""
+    curve = IVCurve.from_table("pulldown", [(0.0, [0.0, None, 0.0]), (0.5, [0.01, 0.008, None]), (1.0, [0.02, 0.016, 0.024])])
+    assert list(curve.na_min) == [True, False, False] and list(curve.na_max) == [False, True, False]
+    assert curve.i_min[0] == 0.0  # Calculations still get a number.
+    v, i = curve.at("min", 1.8)
+    assert list(v) == [0.5, 1.0] and list(i) == [0.008, 0.016]
+    assert len(curve.at("typ", 1.8)[0]) == 3
+
+
 def test_iv_na_columns_left_out_of_series():
     """``typ NA NA`` rows draw one trace, not three identical ones."""
     curve = IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.0, [0.02])])

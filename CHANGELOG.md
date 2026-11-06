@@ -44,10 +44,16 @@ For help porting code from v10.x, see
   `AMIParameter.validate()`, `is_settable`, `choices`, `initial_value`.
 - `IBISModel.from_text()`, `component_names`, `model_names`, `components`, `model_selectors`, `file_name` etc.;
   `Component.pin_table`; `Model.name`, `model_type` and its other keyword values, as read-only properties.
-- `IVCurve.na_min`/`na_max`; `NA` min/max columns aren't plotted.
+- `IVCurve.na_min`/`na_max` (per cell; IBIS 8.0 p.88) and `IVCurve.at()`; `NA` min/max currents aren't plotted.
+- `IBISModel.choices_changed` (the choice lists changed, e.g. - by `model_types`, with the selection kept) and
+  `IBISModel.last_alert` (the latest alert; the first model's fires while loading, before anyone can connect).
+- `IVPlot(keyword=...)` shows one I-V table; `IbisBrowser` has a tab for each of Pulldown, Pullup, GND Clamp,
+  POWER Clamp, Rising and Falling that the model has.
 
 ### Fixed
 
+- An `Increment`/`Steps` parameter with max < min is skipped with a warning; it no longer stops the `.ami` file
+  loading.
 - I-V plots (`IVData.series()`, `IVCurve.ground_referenced()`): `[Pullup]`/`[POWER Clamp]` currents are no longer
   negated (IBIS currents are positive into the pin in every table), and each corner's Vcc-relative voltages are
   converted with that corner's `[Voltage Range]` (min/max curves were shifted by the typ-min/max supply difference).

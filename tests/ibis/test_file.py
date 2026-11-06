@@ -710,3 +710,24 @@ def test_io_diff_model_executable_directions(tmp_path, monkeypatch):
     assert model.get_ami_files(is_tx=True) == ("diff.so", "diff_tx.ami")
     assert model.get_ami_files(is_tx=False) == ("diff.so", "diff_rx.ami")
     assert ibis.ibis_parsing_errors == "Success!"
+
+
+def test_choices_changed_without_selection_change(tmp_path):
+    """A ``model_types`` change that keeps the selection still tells listeners the choice lists changed."""
+    ibis_file = tmp_path / "rx_only_first.ibs"
+    ibis_file.write_text(MIXED_IBIS.replace("[Component]    Mixed", RX_ONLY_COMPONENT + "[Component]    Mixed"),
+                         encoding="utf-8")
+    ibis = IBISModel(str(ibis_file), model_types=TX_MODEL_TYPES)
+    ibis.pin_name = "6(IO_P)"
+    selections, choices = [], []
+    ibis.selection_changed.connect(lambda *args: selections.append(args))
+    ibis.choices_changed.connect(lambda: choices.append(ibis.component_choices))
+    ibis.model_types = RX_MODEL_TYPES  # The I/O pin stays selected; RxOnly is offered now.
+    assert not selections
+    assert choices == [["RxOnly", "Mixed"]]
+
+
+def test_last_alert_keeps_the_loading_notice(ibis_test_file):
+    """The first model's alert fires while loading, before anyone can connect; ``last_alert`` keeps it."""
+    ibis = IBISModel(ibis_test_file)
+    assert ibis.last_alert is not None and ibis.model_name in ibis.last_alert

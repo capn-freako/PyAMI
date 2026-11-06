@@ -37,7 +37,11 @@ def _run(title: str, content: QWidget, parent: Optional[QWidget]) -> bool:
     layout.addWidget(content)
     layout.addWidget(buttons)
     dialog.resize(900, 600)
-    return dialog.exec() == QDialog.DialogCode.Accepted
+    try:
+        return dialog.exec() == QDialog.DialogCode.Accepted
+    finally:
+        # A parent would otherwise keep the dialog (and its widgets, still listening to the core object) for good.
+        dialog.deleteLater()
 
 
 def edit_ami_params(cfg: AMIParamConfigurator, parent: Optional[QWidget] = None) -> bool:

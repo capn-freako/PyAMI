@@ -48,8 +48,17 @@ Every application needs these. None of the old names are kept as aliases, so eac
   ``signal``, ``model``, ``r_pin``, ``l_pin``, ``c_pin``).
 - ``ibis.model_dict``: ``ibis.model_names``, ``get_model()``, ``components``, ``model_selectors``.
 - ``ibis.get_models()``: ``ibis.get_model_names()``. ``Component.pin``: ``ibis.pin``, or ``Component.pin_table``.
-- ``Model.plot_iv`` (Chaco): ``pyibisami.gui.IVPlot(model.iv_data)``.
+- ``Model.plot_iv`` (Chaco): ``pyibisami.gui.IVPlot(model.iv_data, keyword="pulldown")`` (one tab per table:
+  ``pulldown``, ``pullup``, ``gnd_clamp``, ``power_clamp``).
 - ``Model`` display values (``vmeas``, ``vrange``, ...) are read-only properties.
+
+Changes that don't fail loudly (check your code for them):
+
+- ``IVCurve.ground_referenced()`` no longer negates ``[Pullup]``/``[POWER Clamp]`` currents: every table keeps the
+  IBIS sense (positive into the pin). Code that flipped them back, or relied on the flip, now gets the other sign.
+  ``IVData.series()`` converts each corner with that corner's ``[Voltage Range]``, and leaves out ``NA`` cells.
+- An ``IBISModel`` fires the first model's ``alert`` while loading, before you can connect: read ``last_alert``.
+  A ``model_types`` change that keeps the selection fires ``choices_changed``, not ``selection_changed``.
 
 New in 11.0: ``Model.waveforms``/``rising``/``falling`` (``[Rising Waveform]``/``[Falling Waveform]``; see
 ``pyibisami.ibis.vt``), ``IVCurve.na_min``/``na_max``, ``IBISModel.from_text()``, and the `pyibisami-gui` viewer.
@@ -100,11 +109,13 @@ validates), and the core's ``Signal`` refreshes the traits. A flag stops the two
         def __init__(self, ibis: IBISModel, **kwargs):
             super().__init__(ibis=ibis, **kwargs)
             self._pull()
-            self._disconnect = ibis.selection_changed.connect(lambda *_: self._pull())
+            self._disconnects = [ibis.selection_changed.connect(lambda *_: self._pull()),
+                                 ibis.choices_changed.connect(self._pull)]
 
         def close(self) -> None:
             "Stop following the ``IBISModel`` (or it keeps this adapter alive)."
-            self._disconnect()
+            for disconnect in self._disconnects:
+                disconnect()
 
         def _pull(self) -> None:  # core -> traits
             self._syncing = True
@@ -177,7 +188,7 @@ Points to get right:
   adapter is discarded.
 - **Display names vs. model names**: trait names come from ``display_name()`` (``tx_tap_pre1``), but the paths
   sent to ``set_param_val()`` and to the model keep the ``.ami`` file's names (``-1``).
-- **Check the payloads** before relying on them: ``selection_changed(component, pin, model)``,
+- **Check the payloads** before relying on them: ``selection_changed(component, pin, model)``, ``choices_changed()``,
   ``values_changed(path, old, new)``, ``sim_corner_changed(old, new)``, ``alert(msg)``.
 
 From v9.x to v10.0

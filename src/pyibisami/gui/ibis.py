@@ -179,7 +179,7 @@ class IbisSelector(QWidget):
         layout.addWidget(header)
         layout.addLayout(form)
 
-        self._bridge = SignalBridge(self, ibis.selection_changed)
+        self._bridge = SignalBridge(self, ibis.selection_changed, ibis.choices_changed)
         self._bridge.changed.connect(self.refresh)
         self.refresh()
 
@@ -217,8 +217,7 @@ class IbisSelector(QWidget):
 
 class IbisBrowser(QSplitter):
     """An ``IbisSelector`` with the selected pin's and model's information below it, beside a tab for each of the
-    model's plots: Pulldown, Pullup (or the clamps, for a receiver), Rising and Falling. Tabs with nothing to show are
-    hidden.
+    model's plots: Pulldown, Pullup, GND Clamp, POWER Clamp, Rising and Falling. Tabs with nothing to show are hidden.
 
     Applications may add tabs to ``tabs`` (and hide them with ``show_tab()``).
     """
@@ -234,11 +233,14 @@ class IbisBrowser(QSplitter):
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(self.selector)
         left_layout.addWidget(info_area, 1)
-        self.pulldown_plot = IVPlot(side="down")
-        self.pullup_plot = IVPlot(side="up")
+        self.pulldown_plot = IVPlot(keyword="pulldown")
+        self.pullup_plot = IVPlot(keyword="pullup")
+        self.gnd_clamp_plot = IVPlot(keyword="gnd_clamp")
+        self.power_clamp_plot = IVPlot(keyword="power_clamp")
         self.rising_plot = VTPlot(direction="rising")
         self.falling_plot = VTPlot(direction="falling")
-        self.plots: list[IVPlot | VTPlot] = [self.pulldown_plot, self.pullup_plot, self.rising_plot, self.falling_plot]
+        self.plots: list[IVPlot | VTPlot] = [self.pulldown_plot, self.pullup_plot, self.gnd_clamp_plot,
+                                             self.power_clamp_plot, self.rising_plot, self.falling_plot]
         self.tabs = QTabWidget()
         for plot in self.plots:
             self.tabs.addTab(plot, plot.title)
@@ -272,22 +274,25 @@ class IbisBrowser(QSplitter):
         self._shown = (model, pin)
         self.info.set_model(model, pin, ibis.dll_path)
         if new_model:
-            self.pulldown_plot.set_data(model.iv_data)
-            self.pullup_plot.set_data(model.iv_data)
-            self.rising_plot.set_waveforms(model.waveforms)
-            self.falling_plot.set_waveforms(model.waveforms)
             for plot in self.plots:
-                self.tabs.setTabText(self.tabs.indexOf(plot), plot.title)
+                if isinstance(plot, IVPlot):
+                    plot.set_data(model.iv_data)
+                else:
+                    plot.set_waveforms(model.waveforms)
                 self.show_tab(plot, plot.has_data)
 
 
 class _AlertRelay(QObject):
-    "Re-emits an ``IBISModel``'s ``alert`` s as a Qt signal (delivered on the receiver's thread)."
+    """Shows an ``IBISModel``'s ``alert`` s in message boxes, on the GUI thread.
+
+    Queued, so a message box (and its event loop) never opens in the middle of the change that fired the alert.
+    """
 
     message = Signal(str)
 
-    def __init__(self, parent: Optional[QObject], ibis: IBISModel) -> None:
-        super().__init__(parent)
+    def __init__(self, ibis: IBISModel) -> None:
+        super().__init__(None)
+        self.parent_widget: Optional[QWidget] = None
         emit = self.message.emit
 
         def relay(msg: str) -> None:
@@ -298,18 +303,32 @@ class _AlertRelay(QObject):
 
         disconnect = ibis.alert.connect(relay)
         self.destroyed.connect(lambda *_: disconnect())
+        self.message.connect(self._show, Qt.ConnectionType.QueuedConnection)
+
+    def set_parent_widget(self, parent: Optional[QWidget]) -> None:
+        "Center the message boxes on ``parent`` (forgotten when it's destroyed)."
+        self.parent_widget = parent
+        if parent is not None:
+            parent.destroyed.connect(lambda *_, gone=parent: self._forget(gone))
+
+    def _forget(self, gone: QWidget) -> None:
+        if self.parent_widget is gone:
+            self.parent_widget = None
+
+    def _show(self, msg: str) -> None:
+        QMessageBox.information(self.parent_widget, "IBIS model", msg)
 
 
 _POPUPS: weakref.WeakKeyDictionary[IBISModel, _AlertRelay] = weakref.WeakKeyDictionary()
 
 
 def show_alerts(ibis: IBISModel, parent: Optional[QWidget] = None) -> None:
-    """Show each later ``alert`` of ``ibis`` in a message box. Calling it again for the same model does nothing.
+    """Show each later ``alert`` of ``ibis`` in a message box, over ``parent``.
 
-    Needs a ``QApplication``.
+    Calling it again for the same model only changes the parent. Alerts fired before (e.g. - the first model's, while
+    loading) aren't shown; ``ibis.last_alert`` has the latest. Needs a ``QApplication``.
     """
-    if ibis in _POPUPS:
-        return
-    relay = _AlertRelay(None, ibis)  # Kept alive by ``_POPUPS``, as long as ``ibis`` is.
-    relay.message.connect(lambda msg: QMessageBox.information(parent, "IBIS model", msg))
-    _POPUPS[ibis] = relay
+    relay = _POPUPS.get(ibis)
+    if relay is None:
+        relay = _POPUPS[ibis] = _AlertRelay(ibis)  # Kept alive by ``_POPUPS``, as long as ``ibis`` is.
+    relay.set_parent_widget(parent)

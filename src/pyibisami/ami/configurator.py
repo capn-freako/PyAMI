@@ -132,14 +132,25 @@ class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-
 
         Note: 'branch_names' should *not* begin with 'root_name'.
         """
-        param_dict: Any = self.ami_param_defs
+        try:
+            node = self._lookup(branch_names)
+        except ValueError:
+            return None
+        return node if isinstance(node, AMIParameter) else None
+
+    def _lookup(self, branch_names) -> Any:
+        """The node (parameter or group) at ``branch_names`` in ``ami_param_defs``.
+
+        Raises:
+            ValueError: There's none; the message lists the keys available where the search failed.
+        """
+        node: Any = self.ami_param_defs
         for branch_name in branch_names:
-            if not isinstance(param_dict, dict) or branch_name not in param_dict:
-                return None
-            param_dict = param_dict[branch_name]
-        if isinstance(param_dict, AMIParameter):
-            return param_dict
-        return None
+            if not isinstance(node, dict) or branch_name not in node:
+                keys = node.keys() if isinstance(node, dict) else []
+                raise ValueError(f"Failed parameter tree search looking for: {branch_name}; available keys: {keys}")
+            node = node[branch_name]
+        return node
 
     def fetch_param_val(self, branch_names):
         """Returns the value of the parameter found by traversing
@@ -192,14 +203,7 @@ class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-
                (e.g. - Reserved ones) set ``pvalue``, unchecked.
         """
 
-        param_dict: Any = self.ami_param_defs
-        for branch_name in branch_names:
-            if not isinstance(param_dict, dict) or branch_name not in param_dict:
-                keys = param_dict.keys() if isinstance(param_dict, dict) else []
-                raise ValueError(
-                    f"Failed parameter tree search looking for: {branch_name}; available keys: {keys}"
-                )
-            param_dict = param_dict[branch_name]
+        param_dict = self._lookup(branch_names)
         if not isinstance(param_dict, AMIParameter):
             raise TypeError(f"{param_dict} is not of type: AMIParameter!")
         if param_dict.pformat == "Corner":
@@ -272,7 +276,8 @@ class AMIParamConfigurator:  # pylint: disable=too-many-instance-attributes,too-
         ``fetch_param_val()``/``set_param_val()`` (i.e. - they are rooted at
         ``"Model_Specific"``).
         """
-        return _walk_tunable_params(self._model_specific_dict, ["Model_Specific"])
+        return [(list(path), param)
+                for path, param in _walk_leaves(self._model_specific_dict, ("Model_Specific",), _is_sweepable)]
 
     def mk_tap_tuners(self) -> list[AmiParamTuner]:
         """Build a fresh list of `AmiParamTuner`s from this AMI model's tunable
@@ -423,13 +428,6 @@ def _is_sweepable(param: AMIParameter) -> bool:
     return False
 
 
-def _walk_tunable_params(
-    params: Parameters, prefix: list[str]
-) -> list[tuple[list[str], AMIParameter]]:
-    "Every sweepable (see `_is_sweepable`) leaf of a *Model Specific* parameter (sub)tree, with its path."
-    return [(list(path), param) for path, param in _walk_leaves(params, tuple(prefix), _is_sweepable)]
-
-
 def _walk_leaves(
     params: Parameters, prefix: ParamPath, keep: Callable[[AMIParameter], bool]
 ) -> Iterator[tuple[ParamPath, AMIParameter]]:
@@ -460,5 +458,5 @@ def display_name_part(name: str) -> str:
 
 def display_name(path: list[str] | ParamPath) -> str:
     "A parameter's flat display name: its path (less the ``Model_Specific`` root) as ``display_name_part`` s, ``_``-joined."
-    parts = path[1:] if path[:1] in (["Model_Specific"], ("Model_Specific",)) else path
+    parts = path[1:] if path and path[0] == "Model_Specific" else path
     return "_".join(map(display_name_part, parts))

@@ -18,7 +18,7 @@ from typing import Optional
 
 import click
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QTabWidget
+from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QTabWidget, QWidget
 
 from ..ami.configurator import AMIParamConfigurator
 from ..cli_logging import setup_cli_logging
@@ -104,8 +104,8 @@ class MainWindow(QMainWindow):
                 self._show_ami(path)
             else:
                 self._show_ibis(path)
-        except (OSError, ValueError, RuntimeError) as err:
-            logger.error("Couldn't open %s: %s", path, err)
+        except Exception as err:  # pylint: disable=broad-exception-caught  # Any failure: say why, keep the old file.
+            logger.error("Couldn't open %s: %s", path, err, exc_info=not isinstance(err, (OSError, ValueError)))
             QMessageBox.critical(self, "Couldn't open file", f"{path}:\n\n{err}")
             return False
         self.setWindowTitle(f"PyIBIS-AMI: {path.name}")
@@ -161,23 +161,28 @@ class MainWindow(QMainWindow):
         "Show the selected model's AMI parameters and the warnings."
         if self.ibis is None or self.browser is None:
             return
-        ami_errors: list[str] = []
         ami_path = self.ibis.ami_path
         self.ami_path = ami_path
         self._update_actions()
-        widget: QLabel | AmiParamEditor = QLabel()
+        cfg: Optional[AMIParamConfigurator] = None
+        ami_errors: list[str] = []
         if ami_path is not None:
             try:
                 if ami_path not in self._configurators:
                     self._configurators[ami_path] = AMIParamConfigurator(ami_path.read_text(encoding="utf-8"))
                 cfg = self._configurators[ami_path]
-                widget = AmiParamEditor(cfg) if ami_path != self._ami_shown else widget
                 ami_errors = cfg.ami_parsing_errors
             except (OSError, ValueError, RuntimeError) as err:
-                widget = QLabel(f"Couldn't load {ami_path}:\n{err}")
                 ami_errors = [str(err)]
-        tabs = self.browser.tabs
         if ami_path is None or ami_path != self._ami_shown:  # Keep the editor (and its scroll) if it's the same file.
+            widget: QWidget
+            if cfg is not None:
+                widget = AmiParamEditor(cfg)
+            elif ami_path is not None:
+                widget = QLabel(f"Couldn't load {ami_path}:\n{ami_errors[0]}")
+            else:
+                widget = QLabel()
+            tabs = self.browser.tabs
             current = tabs.currentIndex()
             old = tabs.widget(self._ami_tab_index)
             tabs.removeTab(self._ami_tab_index)

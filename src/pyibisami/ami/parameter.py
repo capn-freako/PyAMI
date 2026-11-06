@@ -394,6 +394,8 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
                 raise AMIParamError(f"{param_format} has more than {MAX_DISCRETE_VALUES} values.\n")
             n_lo, n_hi = math.ceil((pmin - typ) / delta - 1e-9), math.floor((pmax - typ) / delta + 1e-9)
             values = [typ + n * delta for n in range(n_lo, n_hi + 1)]
+            if not values:  # Only when max < min, which the spec forbids (IBIS 8.0 p.241).
+                raise AMIParamError(f"{param_format} has no legal values in [{pmin}, {pmax}].\n")
             self._values = ([round(v) for v in values] if param_type == "Integer"
                             else [float(f"{v:.12g}") for v in values])  # Drop float noise (0.30000000000000004).
         default = self._typed_default(param_type)
@@ -442,7 +444,10 @@ class AMIParameter:  # pylint: disable=too-many-instance-attributes,too-few-publ
 
     @property
     def choices(self) -> Optional[list]:
-        "The legal values of a List, Increment or Steps parameter, in order (each once); ``None`` for other formats."
+        """The legal values of a List, Increment or Steps parameter, in order; ``None`` for other formats.
+
+        A List may repeat a value (IBIS 8.0 p.241); so does this.
+        """
         if self.pformat == "List":
             return list(self.pvalue)
         if self.pformat in ("Increment", "Steps"):

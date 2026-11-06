@@ -35,7 +35,8 @@ OPEN_CIRCUIT_Z = 1e7  # Used in place of infinite impedance (Ohms).
 class IVCurve:
     """One IBIS I-V table, with voltages/currents as written in the file.
 
-    Where a row gives ``typ NA NA``, ``i_min``/``i_max`` hold the typical value and ``na_min``/``na_max`` mark the row.
+    Where a min or max current is ``NA`` (per cell; IBIS 8.0 p.88), ``i_min``/``i_max`` hold the typical value, so
+    calculations still have a number, and ``na_min``/``na_max`` mark the cell; drawing leaves those rows out.
     """
 
     keyword: IVKeyword
@@ -47,14 +48,14 @@ class IVCurve:
     na_max: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     @classmethod
-    def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[float]]]) -> IVCurve:
+    def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[Optional[float]]]]) -> IVCurve:
         """
         Build from parsed I-V table rows.
 
         Args:
             keyword: The IBIS keyword the table was found under.
-            rows: ``(voltage, [i_typ, i_min, i_max])`` rows.
-                Missing (i.e. - "NA") min/max currents default to the typical value.
+            rows: ``(voltage, [i_typ, i_min, i_max])`` rows; min/max may be ``None`` (``NA``) or left off.
+                Missing (i.e. - "NA") min/max currents default to the typical value, marked in ``na_min``/``na_max``.
 
         Raises:
             ValueError: If there are fewer than two rows.
@@ -66,17 +67,26 @@ class IVCurve:
             currents = [list(row[1]) for row in rows]
         except Exception as exc:
             raise ValueError(f"[{keyword}]: Malformed I-V table: {rows}") from exc
+        na_min = np.array([len(cs) < 2 or cs[1] is None for cs in currents])
+        na_max = np.array([len(cs) < 3 or cs[2] is None for cs in currents])
         i_typ = np.array([cs[0] for cs in currents], dtype=float)
-        i_min = np.array([cs[1] if len(cs) > 1 else cs[0] for cs in currents], dtype=float)
-        i_max = np.array([cs[2] if len(cs) > 2 else cs[0] for cs in currents], dtype=float)
-        na_min = np.array([len(cs) < 2 for cs in currents])
-        na_max = np.array([len(cs) < 3 for cs in currents])
+        i_min = np.array([cs[0] if na else cs[1] for cs, na in zip(currents, na_min)], dtype=float)
+        i_max = np.array([cs[0] if na else cs[2] for cs, na in zip(currents, na_max)], dtype=float)
         return cls(keyword, v, i_typ, i_min, i_max, na_min, na_max)
+
+    def _na(self, corner: IVCorner) -> NDArray[np.bool_]:
+        "Which rows are ``NA`` for a corner (none, for typ)."
+        na = {"typ": None, "min": self.na_min, "max": self.na_max}[corner]
+        return np.zeros(len(self.v), dtype=bool) if na is None or not len(na) else na
 
     def has_corner(self, corner: IVCorner) -> bool:
         "Whether the table has data of its own for a corner (typ always does; ``NA`` columns don't)."
-        na = {"typ": None, "min": self.na_min, "max": self.na_max}[corner]
-        return na is None or not (len(na) and bool(np.all(na)))
+        return corner == "typ" or not bool(np.all(self._na(corner)))
+
+    def at(self, corner: IVCorner, vdd: float) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        "``(pin voltage, current)`` for a corner, given its supply, leaving out the corner's ``NA`` rows."
+        keep = ~self._na(corner)
+        return self.pin_voltage(vdd)[keep], self.current(corner)[keep]
 
     @property
     def vdd_relative(self) -> bool:
@@ -227,7 +237,8 @@ class IVData:
         ``[Pullup]``/``[POWER Clamp]`` voltages (``Vcc - Vpin``) are turned into pin voltages with each corner's own
         supply (``supply(corner)``); currents keep their IBIS sense (positive into the pin).
         Drivers show their pull-down/up curves; inputs, their clamp curves.
-        Labels are ``PD-Typ``, ``PU-Max``, etc. A min/max corner that's ``NA`` throughout is left out.
+        Labels are ``PD-Typ``, ``PU-Max``, etc. A min/max corner's ``NA`` rows are left out (the whole trace, if
+        it's ``NA`` throughout).
         """
         plotted: tuple[IVKeyword, IVKeyword] = ("pulldown", "pullup") if self.is_driver else ("gnd_clamp", "power_clamp")
         rslt = []
@@ -236,10 +247,11 @@ class IVData:
             for corner in ("typ", "min", "max"):
                 if not curve.has_corner(corner):  # type: ignore[arg-type]
                     continue
+                v, i = curve.at(corner, self.supply(corner))  # type: ignore[arg-type]
                 rslt.append(IVSeries(
                     label=f"{prefix}-{corner.capitalize()}",
-                    v=curve.pin_voltage(self.supply(corner)),  # type: ignore[arg-type]
-                    i=curve.current(corner),  # type: ignore[arg-type]
+                    v=v,
+                    i=i,
                     side=curve.side,
                     corner=corner,  # type: ignore[arg-type]
                 ))
