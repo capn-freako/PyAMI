@@ -621,7 +621,7 @@ Executable linux_gcc4.1.2_64  sub.so  sub.ami
      "example_tx: Executable_Tx/Executable_Rx are not permitted for Model_type Output"),
     ("Model_type   Output\n", _algo("Output", "Executable linux_gcc_64  tx.so  tx_params.txt"),
      "example_tx: AMI parameter files must have the extension .ami: tx_params.txt"),
-    ("", "", "example_rx: Vinl and Vinh must be defined for Model_type Input"),  # ``MIXED_IBIS`` as is.
+    ("", "", "example_rx: Vinl and Vinh missing (required for Model_type Input"),  # ``MIXED_IBIS`` as is.
 ])
 def test_spec_violations_warn_but_load(tmp_path, caplog, old, new, expected):
     """IBIS rules on ``[Algorithmic Model]`` use and receiver thresholds are reported, but don't stop loading."""
