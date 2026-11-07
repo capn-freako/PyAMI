@@ -370,34 +370,33 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         execs = self._ami_executables
         directions = {ex.direction for ex in execs}
         problems = []
-        if self.is_ami and mtype in _NO_ALGO_MODEL_TYPES:
-            problems.append(f"[Algorithmic Model] is not permitted for Model_type {self._mtype} "
-                            "(IBIS 8.0 Section 10.1, p.213)")
-        if self.is_io:
+        # Messages stay short; the spec references are in the comments and docstring.
+        if self.is_ami and mtype in _NO_ALGO_MODEL_TYPES:  # Section 10.1, p.213.
+            problems.append(f"[Algorithmic Model] is not permitted for Model_type {self._mtype}")
+        if self.is_io:  # Section 10.1, p.214, Table 47.
             if None in directions:
                 problem = f"Executable is prohibited for Model_type {self._mtype}; use Executable_Tx/Executable_Rx"
                 if not directions & {"tx", "rx"}:
                     problem += " (at least one is required)"
-                problems.append(problem + " (IBIS 8.0 Section 10.1, p.214, Table 47)")
+                problems.append(problem)
             tx_amis = {ex.ami for ex in execs if ex.direction == "tx"}
             shared = tx_amis & {ex.ami for ex in execs if ex.direction == "rx"}
             if shared:
                 problems.append(f"Executable_Tx and Executable_Rx must name different .ami files; both use "
-                                f"{', '.join(sorted(shared))} (IBIS 8.0 Section 10.1, p.214)")
+                                f"{', '.join(sorted(shared))}")
         elif directions & {"tx", "rx"}:
             problems.append(f"Executable_Tx/Executable_Rx are not permitted for Model_type {self._mtype}; "
-                            "use Executable (IBIS 8.0 Section 10.1, p.214, Table 47)")
+                            "use Executable")
         bad_ext = sorted({ex.ami for ex in execs if not ex.ami.lower().endswith(".ami")})
-        if bad_ext:
-            problems.append(f"AMI parameter files must have the extension .ami: {', '.join(bad_ext)} "
-                            "(IBIS 8.0 Section 10.1, p.214)")
+        if bad_ext:  # Section 10.1, p.214.
+            problems.append(f"AMI parameter files must have the extension .ami: {', '.join(bad_ext)}")
+        # Section 6.1, Table 1, p.62 (spec defaults Vinl = 0.8 V, Vinh = 2.0 V); a [Diff Pin]'s vdiff supersedes
+        # them (Section 5, p.55).
         if mtype in _VINL_VINH_TYPES:
             missing = [kw for kw in ("Vinl", "Vinh") if kw.lower() not in self._subDict]
             if missing:
-                problems.append(f"{' and '.join(missing)} must be defined for Model_type {self._mtype}; "
-                                "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62); "
-                                "not needed if the model is only used through [Diff Pin], whose vdiff supersedes them "
-                                "(Section 5, p.55)")
+                problems.append(f"{' and '.join(missing)} missing (required for Model_type {self._mtype} "
+                                "unless only used through [Diff Pin])")
         return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property

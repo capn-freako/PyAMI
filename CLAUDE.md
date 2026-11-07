@@ -88,6 +88,8 @@ Hooks: on every file change, `make lint && make type-check` run automatically. T
 
 **Logging & CLI output**: the library only logs (module loggers under `pyibisami`; it never configures logging or prints). CLIs call `setup_cli_logging(debug)` and accept `-d/--debug`; a command's results go to stdout via `click.echo()`, progress/diagnostics go through logging to stderr; failures raise `click.ClickException` (exit 1).
 
+**Warning/error text**: short and useful to the user: what's wrong and what it affects. No spec citations (section, table, page) in messages; put those in a code comment next to the check.
+
 **Parsec parsers**: use `@generate` + `yield`. The `ignore` combinator is always safe to call (matches zero or more whitespace/comment tokens). `word(p) = ignore >> p`. Keyword-keyed blocks use `keyword("name") >> parser`.
 
 **AMIModelInitializer construction**: always pass `bit_time=c_double(...)` and `sample_interval=c_double(...)` as keyword args, not positional. Set `channel_response` via the property setter after construction.

@@ -651,14 +651,14 @@ def _preprocess(text: str) -> tuple[str, list[str]]:
                 if match.group(1) in _COMMENT_CHARS:
                     char = match.group(1)
                 else:
-                    warnings.append(
+                    warnings.append(  # Section 4, p.32.
                         f"Line {n + 1}: [Comment Char] needs one of {''.join(sorted(_COMMENT_CHARS))} followed by "
-                        f"'_char'; got '{body.strip()}'; keeping '{char}' (IBIS 8.0 Section 4, p.32).")
+                        f"'_char'; got '{body.strip()}'; keeping '{char}'.")
     ends = [n for n, line in enumerate(lines) if _END_LINE.match(line)]
     if ends:
         tail = [n for n in range(ends[0] + 1, len(lines)) if re.sub(r"\|.*", "", lines[n]).strip()]
-        if tail:
-            warnings.append(f"Line {tail[0] + 1}: text after [End] ignored (IBIS 8.0 Section 4, p.34).")
+        if tail:  # Section 4, p.34.
+            warnings.append(f"Line {tail[0] + 1}: text after [End] ignored.")
             lines = lines[:ends[0] + 1]
     return "".join(lines), warnings
 
@@ -710,9 +710,9 @@ def parse_ibis_file(
             components.update(val)
         elif kw == "model_selector":
             model_selectors.update(val)
-        elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel], where it's skipped.
+        elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel] (Section 10.1, p.213).
             warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
-                            "permitted; ignored (IBIS 8.0 Section 10.1, p.213).")
+                            "permitted; ignored.")
         else:
             kw_dict.update({kw: val})
     for mdl in models.values():
