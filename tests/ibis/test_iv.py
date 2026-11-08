@@ -22,6 +22,38 @@ def test_missing_min_max_default_to_typ():
     np.testing.assert_array_equal(curve.i_max, curve.i_typ)
 
 
+def test_na_currents_are_interpolated():
+    """A missing (``NA``) current is interpolated in its own column; ``NA`` typical currents are allowed in
+    all but the first and last rows (IBIS 8.0 Section 6.1, p.91). A min/max column with no values on both
+    sides of a gap falls back to the typical value, as before."""
+    curve = IVCurve.from_table("pulldown", [
+        (0.0, [0.0, 0.0, 0.0]),
+        (0.9, [None, 0.02, None]),  # As some DRAM vendors' tables have it: only I(min) measured here.
+        (1.8, [0.036, 0.04, 0.032]),
+        (2.7, [0.05, None, None]),  # Past the last min/max values: the typical value.
+    ])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036, 0.05])
+    np.testing.assert_allclose(curve.i_min, [0.0, 0.02, 0.04, 0.05])
+    np.testing.assert_allclose(curve.i_max, [0.0, 0.016, 0.032, 0.05])
+    assert curve.impedance(0.5) == pytest.approx(50.0)
+
+
+def test_na_currents_with_decreasing_voltages():
+    curve = IVCurve.from_table("pullup", [(1.8, [-0.036, -0.04, -0.032]), (0.9, [None, None, -0.016]), (0.0, [0.0, 0.0, 0.0])])
+    np.testing.assert_allclose(curve.i_typ, [-0.036, -0.018, 0.0])
+    np.testing.assert_allclose(curve.i_min, [-0.04, -0.02, 0.0])
+    np.testing.assert_allclose(curve.i_max, [-0.032, -0.016, 0.0])
+
+
+@pytest.mark.parametrize("rows", [
+    [(0.0, [None]), (0.9, [0.018]), (1.8, [0.036])],
+    [(0.0, [0.0]), (0.9, [0.018]), (1.8, [None, 0.04, 0.03])],
+])
+def test_na_typical_current_in_first_or_last_row(rows):
+    with pytest.raises(ValueError, match="first and last rows"):
+        IVCurve.from_table("pulldown", rows)
+
+
 def test_too_few_points():
     with pytest.raises(ValueError, match="Insufficient"):
         IVCurve.from_table("pullup", [(0.0, [0.0, 0.0, 0.0])])

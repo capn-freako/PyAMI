@@ -50,6 +50,16 @@ def _parse_edited(ibis_test_file, *edits):
     return parse_ibis_file(text)
 
 
+def test_na_typical_current_in_iv_table(ibis_test_file):
+    """An I-V row may give ``NA`` for its typical current, except the first and last rows (IBIS 8.0 Section 6.1,
+    p.91). Such a file used to fail to parse."""
+    row = "0.00     0.000e+00     0.000e+00     0.000e+00\n"
+    status, ibis_dict = _parse_edited(ibis_test_file, (row, row + "0.90     NA            NA            NA\n"))
+    assert status == "Success!"
+    pulldown = ibis_dict["models"]["example_tx"].iv_data.curves["pulldown"]
+    assert pulldown.i_typ[2] == pytest.approx(0.018)  # Halfway between 0 A (0 V) and 36 mA (1.8 V).
+
+
 def test_signal_names_with_punctuation(ibis_test_file):
     """Data-book signal names (IBIS 8.0 Section 5, p.36) like ``TX+`` and ``DQ<0>`` used to fail the whole file."""
     status, ibis_dict = _parse_edited(ibis_test_file, ("1p     Tx_1_P", "1p     TX+"), ("1n     Tx_1_N", "1n     DQ<0>"))
