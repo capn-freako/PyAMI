@@ -184,6 +184,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         self._mtype = maybe("model_type")
         self._ccomp = maybe("c_comp")
+        if self._ccomp is None:  # IBIS 5.0+ split C_comp: the parts are in parallel, so they add up.
+            parts = [maybe(f"c_comp_{kw}") for kw in ("pullup", "pulldown", "power_clamp", "gnd_clamp")]
+            parts = [part for part in parts if part is not None]
+            if parts:
+                self._ccomp = [sum(part[n] if n < len(part) else part[0] for part in parts) for n in range(3)]
         self._cref = maybe("cref")
         self._vref = maybe("vref")
         self._vmeas = maybe("vmeas")
@@ -191,6 +196,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._trange = maybe("temperature_range")
         self._vrange = maybe("voltage_range")
         self._ramp = maybe("ramp")
+        self._add_submodel = maybe("add_submodel") or []
+        # Receiver operating point for the input impedance: ``Vmeas``,
+        # else the threshold midpoint (``Vinl`` + ``Vinh``) / 2.
+        vinl, vinh = maybe("vinl"), maybe("vinh")
+        self._vin_op = self._vmeas
+        if self._vin_op is None and isinstance(vinl, float) and isinstance(vinh, float):
+            self._vin_op = (vinl + vinh) / 2
 
         # Check for the required keywords.
         if not self._mtype:
@@ -271,7 +283,35 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             if self._ramp:
                 self._slew = (self._ramp["rising"][0] + self._ramp["falling"][0]) / 2e9  # (V/ns)
         if mtype in _RECEIVER_TYPES:
-            self._zin = _clamp_impedance(curves, self._vmeas)
+            self._zin = _clamp_impedance(curves, self._vin_op)
+
+    def apply_submodels(self, submodels: Mapping[str, dict]) -> list[str]:
+        """Put the clamps of the ``Dynamic_clamp`` submodels that ``[Add Submodel]`` adds in ``Non-Driving``
+        or ``All`` mode in parallel with the receiver input impedance (e.g. - DRAM ODT, IBIS 8.0 Section 6.3).
+
+        Returns:
+            Warnings, e.g. - for a submodel that isn't in the file.
+        """
+        warnings: list[str] = []
+        if self._zin is None:
+            return warnings
+        conductance = 0.0
+        for sub_name, mode in self._add_submodel:
+            sub = submodels.get(sub_name)
+            if sub is None:
+                warnings.append(f"[Model] {self._name}: [Add Submodel] {sub_name} has no [Submodel]; ignored.")
+                continue
+            if mode.lower() == "driving" or str(sub.get("submodel_type", "")).lower() != "dynamic_clamp":
+                continue
+            for curve in IVData.from_model_dict(sub, self._vrange[0], required=()).curves.values():
+                try:
+                    conductance += 1 / curve.impedance(self._vin_op)
+                except ValueError:  # Vmeas off the table: the clamp is off there.
+                    pass
+        if conductance:
+            self._zin = 1 / (1 / self._zin + conductance)
+            self.add_trait("zin", Float(self._zin))
+        return warnings
 
     def __str__(self):
         res = "Model Type:\t" + self._mtype + "\n"
@@ -337,7 +377,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
     @property
     def zin(self) -> Optional[float]:
-        """The receiver input impedance (Ohms), from the ``[GND Clamp]``/``[POWER Clamp]`` curves at ``Vmeas``.
+        """The receiver input impedance (Ohms), from the ``[GND Clamp]``/``[POWER Clamp]`` curves, and those of any
+        ``Dynamic_clamp`` ``[Add Submodel]`` (ODT), at ``Vmeas`` (else at (``Vinl`` + ``Vinh``) / 2).
 
         Both clamps act in parallel; a missing one counts as ``NO_CLAMP_Z``. Set for ``Input`` and the
         ``I/O`` types; ``None`` for other ``Model_type`` s, or ones not supported yet (``*_ECL``, ``*_diff``).
