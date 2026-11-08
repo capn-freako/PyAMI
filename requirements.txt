@@ -14,7 +14,7 @@ numpy==2.5.1 ; python_full_version >= '3.12'
     # via pyibis-ami
 parsec==3.17
     # via pyibis-ami
-setuptools==83.0.0
+setuptools==84.1.0
     # via parsec
 traits==7.1.0
     # via pyibis-ami
