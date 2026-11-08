@@ -445,7 +445,23 @@ Model_keywords: dict[str, Parser] = {
     "rising_waveform": skip_keyword,
     "falling_waveform": skip_keyword,
     "composite_current": skip_keyword,
+    # ``[Add Submodel]`` rows: submodel name and mode (IBIS 8.0 Section 6.3).
+    "add_submodel": many1(token + lexeme(regex(r"(?i)(Non-Driving|Driving|All)\b"))),
 }
+
+# ``[Submodel]`` I-V tables used for the receiver input impedance (``Dynamic_clamp`` ODT, IBIS 8.0 Section 6.3).
+Submodel_keywords: dict[str, Parser] = {
+    "gnd_clamp": many1(vi_line),
+    "power_clamp": many1(vi_line),
+}
+
+
+@generate("[Submodel]")
+def submodel():
+    "Parse [Submodel]."
+    nm = yield token << ignore
+    res = yield many(node(Submodel_keywords, IBIS_keywords))
+    return {nm: dict(res)}
 
 
 @generate("[Model]")
@@ -591,6 +607,7 @@ IBIS_kywrd_parsers.update(
         "date": rest_line,
         "component": comp,
         "model_selector": modsel,
+        "submodel": submodel,
     }
 )
 
@@ -703,6 +720,7 @@ def parse_ibis_file(
     components = {}
     models = {}
     model_selectors = {}
+    submodels = {}
     for kw, val in nodes:
         if kw == "model":
             models.update(val)
@@ -710,12 +728,20 @@ def parse_ibis_file(
             components.update(val)
         elif kw == "model_selector":
             model_selectors.update(val)
+        elif kw == "submodel":
+            submodels.update(val)
+            if any("algorithmic_model" in sub for sub in val.values()):
+                warnings.append(
+                    "[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
+                    "permitted; ignored (IBIS 8.0 Section 10.1, p.213)."
+                )
         elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel], where it's skipped.
             warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
                             "permitted; ignored (IBIS 8.0 Section 10.1, p.213).")
         else:
             kw_dict.update({kw: val})
     for mdl in models.values():
+        warnings.extend(mdl.apply_submodels(submodels))
         warnings.extend(mdl.spec_warnings)
     for warning in warnings:
         logger.warning("%s", warning)
@@ -724,6 +750,7 @@ def parse_ibis_file(
             "components": components,
             "models": models,
             "model_selectors": model_selectors,
+            "submodels": submodels,
             "warnings": warnings,
         }
     )

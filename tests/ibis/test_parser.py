@@ -202,3 +202,52 @@ def test_file_ends_at_first_end(ibis_test_file):
     status, ibis_dict = _parse_edited(ibis_test_file, ("[END]\n", "[END]\njunk\n[End]\n"))
     assert status == "Success!"
     assert len(ibis_dict["warnings"]) == 1 and "after [End]" in ibis_dict["warnings"][0]
+
+
+ODT_IBIS = """[IBIS Ver]   5.1
+[File Name]  odt.ibs
+[File Rev]   v0.1
+
+[Model]        dq_in_odt
+Model_type     Input
+Vinl = 85.0mV
+Vinh = 165.0mV
+C_comp_power_clamp   0.2pF   0.1pF   0.3pF
+C_comp_gnd_clamp     0.2pF   0.1pF   0.3pF
+[Voltage Range]      0.5V    0.47V   0.57V
+[Add Submodel]
+odt50          Non-Driving
+drv_only       Driving
+[GND Clamp]
+ -0.5   0.0   0.0   0.0
+  1.0   0.0   0.0   0.0
+[POWER Clamp]
+ -0.5   0.0   0.0   0.0
+  1.0   0.0   0.0   0.0
+
+[Submodel]     odt50
+Submodel_type  Dynamic_clamp
+[GND Clamp]
+ -0.5  -10.0m  -10.0m  -10.0m
+  1.0   20.0m   20.0m   20.0m
+
+[Submodel]     drv_only
+Submodel_type  Dynamic_clamp
+[GND Clamp]
+ -0.5  -500.0m  -500.0m  -500.0m
+  1.0   1000.0m  1000.0m  1000.0m
+
+[END]
+"""
+
+
+def test_dynamic_clamp_submodel_odt_sets_zin():
+    """A ``Non-Driving`` ``Dynamic_clamp`` submodel (DRAM ODT) is in parallel with the input; a ``Driving`` one is not.
+    Split ``C_comp_*`` values add up to ``C_comp``."""
+    status_string, ibis_dictionary = parse_ibis_file(ODT_IBIS)
+    assert status_string == "Success!"
+    model = ibis_dictionary["models"]["dq_in_odt"]
+    assert model.zin == pytest.approx(50.0, rel=1e-3)
+    assert model.ccomp == pytest.approx([0.4e-12, 0.2e-12, 0.6e-12])
+    no_odt = parse_ibis_file(ODT_IBIS.replace("odt50          Non-Driving", "odt50          Driving"))[1]
+    assert no_odt["models"]["dq_in_odt"].zin > 1e6
