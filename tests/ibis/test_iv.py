@@ -24,8 +24,8 @@ def test_missing_min_max_default_to_typ():
 
 def test_na_currents_are_interpolated():
     """A missing (``NA``) current is interpolated in its own column; ``NA`` typical currents are allowed in
-    all but the first and last rows (IBIS 8.0 Section 6.1, p.91). A min/max column with no values on both
-    sides of a gap falls back to the typical value, as before."""
+    all but the first and last voltage points (IBIS 8.0 Section 6.1, p.91). A min/max column with no values
+    on both sides of a gap falls back to the typical value, as before."""
     curve = IVCurve.from_table("pulldown", [
         (0.0, [0.0, 0.0, 0.0]),
         (0.9, [None, 0.02, None]),  # As some DRAM vendors' tables have it: only I(min) measured here.
@@ -40,9 +40,10 @@ def test_na_currents_are_interpolated():
 
 def test_na_currents_with_decreasing_voltages():
     curve = IVCurve.from_table("pullup", [(1.8, [-0.036, -0.04, -0.032]), (0.9, [None, None, -0.016]), (0.0, [0.0, 0.0, 0.0])])
-    np.testing.assert_allclose(curve.i_typ, [-0.036, -0.018, 0.0])
-    np.testing.assert_allclose(curve.i_min, [-0.04, -0.02, 0.0])
-    np.testing.assert_allclose(curve.i_max, [-0.032, -0.016, 0.0])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])  # Sorted by voltage.
+    np.testing.assert_allclose(curve.i_typ, [0.0, -0.018, -0.036])
+    np.testing.assert_allclose(curve.i_min, [0.0, -0.02, -0.04])
+    np.testing.assert_allclose(curve.i_max, [0.0, -0.016, -0.032])
 
 
 @pytest.mark.parametrize("rows", [
@@ -50,8 +51,31 @@ def test_na_currents_with_decreasing_voltages():
     [(0.0, [0.0]), (0.9, [0.018]), (1.8, [None, 0.04, 0.03])],
 ])
 def test_na_typical_current_in_first_or_last_row(rows):
-    with pytest.raises(ValueError, match="first and last rows"):
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
         IVCurve.from_table("pulldown", rows)
+
+
+def test_unsorted_table_is_sorted_and_filled():
+    """Rows not in voltage order are sorted, so an ``NA`` between two values is filled (no ``nan`` left)."""
+    curve = IVCurve.from_table("pulldown", [(0.9, [None]), (1.8, [0.036]), (0.0, [0.0])])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036])
+
+
+def test_na_typical_current_at_highest_voltage_of_unsorted_table():
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
+        IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [None]), (0.9, [0.018])])
+
+
+def test_unusable_required_iv_table_is_a_lookup_error():
+    """``Model`` reports an unusable required I-V table like a missing one, so the parser catches it."""
+    with pytest.raises(LookupError, match="Unusable I-V table"):
+        _model("Output", pulldown=[(0.0, [None]), (1.8, [0.036])], pullup=PULLUP, ramp=RAMP)
+
+
+def test_impedance_of_decreasing_table():
+    """A table written in decreasing voltage order gives the same impedance as the increasing one."""
+    assert IVCurve.from_table("pulldown", PULLDOWN[::-1]).impedance(0.5) == pytest.approx(50.0)
 
 
 def test_too_few_points():

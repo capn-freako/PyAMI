@@ -51,13 +51,23 @@ def _parse_edited(ibis_test_file, *edits):
 
 
 def test_na_typical_current_in_iv_table(ibis_test_file):
-    """An I-V row may give ``NA`` for its typical current, except the first and last rows (IBIS 8.0 Section 6.1,
-    p.91). Such a file used to fail to parse."""
+    """An I-V row may give ``NA`` for its typical current, except at the first and last voltage points
+    (IBIS 8.0 Section 6.1, p.91). Such a file used to fail to parse."""
     row = "0.00     0.000e+00     0.000e+00     0.000e+00\n"
     status, ibis_dict = _parse_edited(ibis_test_file, (row, row + "0.90     NA            NA            NA\n"))
     assert status == "Success!"
     pulldown = ibis_dict["models"]["example_tx"].iv_data.curves["pulldown"]
     assert pulldown.i_typ[2] == pytest.approx(0.018)  # Halfway between 0 A (0 V) and 36 mA (1.8 V).
+
+
+def test_unusable_required_iv_table_is_a_parse_failure(ibis_test_file):
+    """An ``Output`` model's ``[Pulldown]`` with ``NA`` at its lowest voltage gives a parse-failure status
+    (as a missing ``[Ramp]`` does), not a ``ValueError`` out of ``parse_ibis_file()``."""
+    row = "-1.80    -1.000e+01    -1.000e+01    -1.000e+01\n0.00     0.000e+00"
+    na_row = "-1.80    NA            NA            NA\n0.00     0.000e+00"
+    status, ibis_dict = _parse_edited(ibis_test_file, (row, na_row))
+    assert status != "Success!" and ibis_dict == {}
+    assert " at line " in status
 
 
 def test_signal_names_with_punctuation(ibis_test_file):
