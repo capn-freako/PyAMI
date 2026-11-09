@@ -31,6 +31,18 @@ VDD_RELATIVE: tuple[IVKeyword, ...] = ("pullup", "power_clamp")
 OPEN_CIRCUIT_Z = 1e7  # Used in place of infinite impedance (Ohms).
 
 
+def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64], default: NDArray[np.float64]) -> NDArray[np.float64]:
+    "``i`` with its gaps (``nan``) interpolated, in ``v``, between its own values; ``default`` where they don't span."
+    known = ~np.isnan(i)
+    filled = np.where(known, i, default)
+    if known.sum() >= 2:
+        order = np.argsort(v[known])  # ``np.interp()`` needs increasing voltages.
+        v_known, i_known = v[known][order], i[known][order]
+        inside = ~known & (v >= v_known[0]) & (v <= v_known[-1])
+        filled[inside] = np.interp(v[inside], v_known, i_known)
+    return filled
+
+
 @dataclass(frozen=True)
 class IVCurve:
     """One IBIS I-V table, with voltages/currents as written in the file."""
@@ -49,10 +61,12 @@ class IVCurve:
         Args:
             keyword: The IBIS keyword the table was found under.
             rows: ``(voltage, [i_typ, i_min, i_max])`` rows.
-                Missing (i.e. - "NA") min/max currents default to the typical value.
+                A missing (i.e. - "NA", ``None``) current is interpolated linearly, in voltage, from the
+                values its own column has on both sides of it; else, a min/max one is the typical value.
+                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91).
 
         Raises:
-            ValueError: If there are fewer than two rows.
+            ValueError: If there are fewer than two rows, or the first or last row has no typical current.
         """
         if len(rows) < 2:
             raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
@@ -61,10 +75,16 @@ class IVCurve:
             currents = [list(row[1]) for row in rows]
         except Exception as exc:
             raise ValueError(f"[{keyword}]: Malformed I-V table: {rows}") from exc
-        i_typ = np.array([cs[0] for cs in currents], dtype=float)
-        i_min = np.array([cs[1] if len(cs) > 1 else cs[0] for cs in currents], dtype=float)
-        i_max = np.array([cs[2] if len(cs) > 2 else cs[0] for cs in currents], dtype=float)
-        return cls(keyword, v, i_typ, i_min, i_max)
+
+        def column(col: int) -> NDArray[np.float64]:
+            return np.array([cs[col] if len(cs) > col and cs[col] is not None else np.nan for cs in currents],
+                            dtype=float)
+
+        i_typ = column(0)
+        if np.isnan(i_typ[0]) or np.isnan(i_typ[-1]):
+            raise ValueError(f"[{keyword}]: The first and last rows need a typical current (not NA).")
+        i_typ = _fill_na(v, i_typ, i_typ)  # Every gap has values on both sides.
+        return cls(keyword, v, i_typ, _fill_na(v, column(1), i_typ), _fill_na(v, column(2), i_typ))
 
     @property
     def vdd_relative(self) -> bool:
