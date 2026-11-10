@@ -67,13 +67,12 @@ Core = everything except `gui/` and `report/` (and the extras-backed `tools/`).
   tuner `branch_names`); display names (`display_name()`: taps `-1`/`0`/`1` → `pre1`/`post0`/`post1`) are for
   showing only.
 - `NA` means "use typ" in `typminmax` (e.g. `[Voltage Range]`), but "no data" in I-V and V-T table cells; those are
-  kept per cell and left out of plots.
+  kept per cell and left out of plots (I-V calculations use values interpolated within the column).
 - A bad `.ami` parameter is skipped with a `Skipped parameter …` warning; the rest of the file still loads. IBIS spec
   violations that don't stop loading go to `Model.spec_warnings` / `IBISModel.ibis_parsing_errors`.
 - `Signal` callbacks run on the emitting thread (e.g. an optimizer). Widgets never act in a core callback: they
   listen through `gui.bridge.SignalBridge` and re-read the core object on the GUI thread.
-- Known spec gaps: `[Voltage Range]` is required (the `[… Reference]` keywords aren't read), and `NA` in an I-V typ
-  column fails the parse.
+- Known spec gap: `[Voltage Range]` is required (the `[… Reference]` keywords aren't read).
 
 ## Key patterns
 

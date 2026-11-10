@@ -31,12 +31,25 @@ VDD_RELATIVE: tuple[IVKeyword, ...] = ("pullup", "power_clamp")
 OPEN_CIRCUIT_Z = 1e7  # Used in place of infinite impedance (Ohms).
 
 
+def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64], default: NDArray[np.float64]) -> NDArray[np.float64]:
+    "``i`` with its gaps (``nan``) interpolated, in ``v``, between its own values; ``default`` where they don't span."
+    known = ~np.isnan(i)
+    filled = np.where(known, i, default)
+    if known.sum() >= 2:
+        order = np.argsort(v[known])  # ``np.interp()`` needs increasing voltages.
+        v_known, i_known = v[known][order], i[known][order]
+        inside = ~known & (v >= v_known[0]) & (v <= v_known[-1])
+        filled[inside] = np.interp(v[inside], v_known, i_known)
+    return filled
+
+
 @dataclass(frozen=True)
 class IVCurve:
     """One IBIS I-V table, with voltages/currents as written in the file.
 
-    Where a min or max current is ``NA`` (per cell; IBIS 8.0 p.88), ``i_min``/``i_max`` hold the typical value, so
-    calculations still have a number, and ``na_min``/``na_max`` mark the cell; drawing leaves those rows out.
+    ``NA`` marks missing data per cell. ``na_typ``/``na_min``/``na_max`` mark those cells, and drawing leaves them out;
+    for calculations, each holds a number: interpolated in voltage from its own column, else (min/max past the
+    column's last values) the typical current.
     """
 
     keyword: IVKeyword
@@ -46,6 +59,7 @@ class IVCurve:
     i_max: NDArray[np.float64]
     na_min: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
     na_max: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
+    na_typ: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     @classmethod
     def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[Optional[float]]]]) -> IVCurve:
@@ -54,11 +68,11 @@ class IVCurve:
 
         Args:
             keyword: The IBIS keyword the table was found under.
-            rows: ``(voltage, [i_typ, i_min, i_max])`` rows; min/max may be ``None`` (``NA``) or left off.
-                Missing (i.e. - "NA") min/max currents default to the typical value, marked in ``na_min``/``na_max``.
+            rows: ``(voltage, [i_typ, i_min, i_max])`` rows; any current may be ``None`` (``NA``), and min/max
+                may be left off. The typical current may be ``NA`` in all but the first and last rows.
 
         Raises:
-            ValueError: If there are fewer than two rows.
+            ValueError: If there are fewer than two rows, or the first or last row has no typical current.
         """
         if len(rows) < 2:
             raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
@@ -67,17 +81,23 @@ class IVCurve:
             currents = [list(row[1]) for row in rows]
         except Exception as exc:
             raise ValueError(f"[{keyword}]: Malformed I-V table: {rows}") from exc
-        na_min = np.array([len(cs) < 2 or cs[1] is None for cs in currents])
-        na_max = np.array([len(cs) < 3 or cs[2] is None for cs in currents])
-        i_typ = np.array([cs[0] for cs in currents], dtype=float)
-        i_min = np.array([cs[0] if na else cs[1] for cs, na in zip(currents, na_min)], dtype=float)
-        i_max = np.array([cs[0] if na else cs[2] for cs, na in zip(currents, na_max)], dtype=float)
-        return cls(keyword, v, i_typ, i_min, i_max, na_min, na_max)
+
+        def column(col: int) -> NDArray[np.float64]:
+            return np.array([cs[col] if len(cs) > col and cs[col] is not None else np.nan for cs in currents],
+                            dtype=float)
+
+        i_typ, i_min, i_max = column(0), column(1), column(2)
+        # Typ may be NA except at the ends (IBIS 8.0 Section 6.1, p.91), so its gaps always have values on both sides.
+        if np.isnan(i_typ[0]) or np.isnan(i_typ[-1]):
+            raise ValueError(f"[{keyword}]: The first and last rows need a typical current (not NA).")
+        na_typ, na_min, na_max = np.isnan(i_typ), np.isnan(i_min), np.isnan(i_max)
+        i_typ = _fill_na(v, i_typ, i_typ)
+        return cls(keyword, v, i_typ, _fill_na(v, i_min, i_typ), _fill_na(v, i_max, i_typ), na_min, na_max, na_typ)
 
     def _na(self, corner: IVCorner) -> NDArray[np.bool_]:
-        "Which rows are ``NA`` for a corner (none, for typ)."
-        na = {"typ": None, "min": self.na_min, "max": self.na_max}[corner]
-        return np.zeros(len(self.v), dtype=bool) if na is None or not len(na) else na
+        "Which rows are ``NA`` for a corner."
+        na = {"typ": self.na_typ, "min": self.na_min, "max": self.na_max}[corner]
+        return na if len(na) else np.zeros(len(self.v), dtype=bool)
 
     def has_corner(self, corner: IVCorner) -> bool:
         "Whether the table has data of its own for a corner (typ always does; ``NA`` columns don't)."

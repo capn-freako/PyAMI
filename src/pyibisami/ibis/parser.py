@@ -182,15 +182,15 @@ def typminmax() -> GenParser[list[float]]:
 
 @generate("I-V currents")
 def iv_currents() -> GenParser[list[Optional[float]]]:
-    """Parse an I-V row's typ/min/max currents, keeping each ``NA`` min/max as ``None``.
+    """Parse an I-V row's typ/min/max currents, keeping each ``NA`` as ``None``.
 
     Unlike ``typminmax``, ``NA`` doesn't stand for the typical value here: I-V tables mark missing data per cell
-    (IBIS 8.0 Section 6.1, p.88). ``typ NA NA`` gives ``[typ]``.
+    (IBIS 8.0 Section 6.1, p.88-91). ``IVCurve.from_table()`` decides what's allowed and what each gap holds.
     """
-    typ = yield number
-    minmax = yield optional(count(number | na, 2), [])
-    yield ignore
-    return [typ] if minmax in ([], [None, None]) else [typ, *minmax]
+    typ = yield number | na
+    minmax = yield optional(count(number | na, 2), [None, None])
+    yield ignore  # So that ``iv_currents`` behaves as a lexeme.
+    return [typ] + minmax
 
 
 vi_line: Parser = (number + iv_currents) << ignore
@@ -473,7 +473,23 @@ Model_keywords: dict[str, Parser] = {
     "rising_waveform": vt_waveform,
     "falling_waveform": vt_waveform,
     "composite_current": skip_keyword,
+    # ``[Add Submodel]`` rows: submodel name and mode (IBIS 8.0 Section 6.3).
+    "add_submodel": many1(token + lexeme(regex(r"(?i)(Non-Driving|Driving|All)\b"))),
 }
+
+# ``[Submodel]`` I-V tables used for the receiver input impedance (``Dynamic_clamp`` ODT, IBIS 8.0 Section 6.3).
+Submodel_keywords: dict[str, Parser] = {
+    "gnd_clamp": many1(vi_line),
+    "power_clamp": many1(vi_line),
+}
+
+
+@generate("[Submodel]")
+def submodel():
+    "Parse [Submodel]."
+    nm = yield token << ignore
+    res = yield many(node(Submodel_keywords, IBIS_keywords))
+    return {nm: dict(res)}
 
 
 @generate("[Model]")
@@ -622,6 +638,7 @@ IBIS_kywrd_parsers.update(
         "date": rest_line,
         "component": comp,
         "model_selector": modsel,
+        "submodel": submodel,
     }
 )
 
@@ -734,6 +751,7 @@ def parse_ibis_file(
     components = {}
     models = {}
     model_selectors = {}
+    submodels = {}
     for kw, val in nodes:
         if kw == "model":
             models.update(val)
@@ -741,12 +759,19 @@ def parse_ibis_file(
             components.update(val)
         elif kw == "model_selector":
             model_selectors.update(val)
-        elif kw == "algorithmic_model":  # Not inside a [Model]; e.g. - under [Submodel] (Section 10.1, p.213).
+        elif kw == "submodel":
+            submodels.update(val)
+            # [Algorithmic Model] isn't permitted under [Submodel] (IBIS 8.0 Section 10.1, p.213).
+            if any("algorithmic_model" in sub for sub in val.values()):
+                warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is "
+                                "not permitted; ignored.")
+        elif kw == "algorithmic_model":  # Not inside a [Model] (IBIS 8.0 Section 10.1, p.213).
             warnings.append("[Algorithmic Model] found outside a [Model] (e.g. - under [Submodel]), where it is not "
                             "permitted; ignored.")
         else:
             kw_dict.update({kw: val})
     for mdl in models.values():
+        warnings.extend(mdl.apply_submodels(submodels))
         warnings.extend(mdl.spec_warnings)
     for warning in warnings:
         logger.warning("%s", warning)
@@ -755,6 +780,7 @@ def parse_ibis_file(
             "components": components,
             "models": models,
             "model_selectors": model_selectors,
+            "submodels": submodels,
             "warnings": warnings,
         }
     )
