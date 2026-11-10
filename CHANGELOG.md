@@ -21,6 +21,7 @@ For help porting code from v10.x, see
   re-export of `AMIParamConfigurator`, calling instances to open a GUI, `get_init()` opening a GUI,
   `IBISModel.observe()`, `model_dict`, `get_models()`, `comp_`, `pin_`, `pin_rlcs`, `Component.pin`,
   `Model.plot_iv`, and the Traits/UI views.
+- Python 3.10 support (past end of life). Python 3.11-3.14 are supported.
 
 ### Changed (breaking)
 

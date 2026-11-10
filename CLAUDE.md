@@ -16,7 +16,7 @@ uv run pytest tests/ami/test_model.py
 # Run a single test by name
 uv run pytest tests/ami/test_model.py::TestClass::test_name -k "test_name"
 
-# Run tests across all supported Python versions (3.10, 3.11, 3.12, 3.13)
+# Run tests across all supported Python versions (3.11 through 3.14)
 make test
 
 # Run the core-only (no extras) import tests, in an isolated core-only install
