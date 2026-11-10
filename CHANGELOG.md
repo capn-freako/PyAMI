@@ -45,7 +45,8 @@ For help porting code from v10.x, see
   `AMIParameter.validate()`, `is_settable`, `choices`, `initial_value`.
 - `IBISModel.from_text()`, `component_names`, `model_names`, `components`, `model_selectors`, `file_name` etc.;
   `Component.pin_table`; `Model.name`, `model_type` and its other keyword values, as read-only properties.
-- `IVCurve.na_min`/`na_max` (per cell; IBIS 8.0 p.88) and `IVCurve.at()`; `NA` min/max currents aren't plotted.
+- `IVCurve.na_typ`/`na_min`/`na_max` (per cell; IBIS 8.0 p.88) and `IVCurve.at()`; `NA` currents aren't plotted
+  (calculations still use the values 10.0.2 fills in).
 - `IBISModel.choices_changed` (the choice lists changed, e.g. - by `model_types`, with the selection kept) and
   `IBISModel.last_alert` (the latest alert; the first model's fires while loading, before anyone can connect).
 - `IVPlot(keyword=...)` shows one I-V table; `IbisBrowser` has a tab for each of Pulldown, Pullup, GND Clamp,
@@ -58,6 +59,28 @@ For help porting code from v10.x, see
 - I-V plots (`IVData.series()`, `IVCurve.ground_referenced()`): `[Pullup]`/`[POWER Clamp]` currents are no longer
   negated (IBIS currents are positive into the pin in every table), and each corner's Vcc-relative voltages are
   converted with that corner's `[Voltage Range]` (min/max curves were shifted by the typ-min/max supply difference).
+
+## [10.0.2] - 9 Nov 2026 [Fixed I/V Table "N/A" Parsing](https://github.com/capn-freako/PyAMI/releases/tag/v10.0.2)
+
+### Fixed
+
+- I-V tables may give `NA` for any current, including the typical one in all but the first and last rows
+  (IBIS 8.0 Section 6.1, p.91). Such files used to fail to parse. A missing current is interpolated in voltage
+  within its own column; a min/max one past the column's last values is the typical current.
+
+## [10.0.1] - 8 Nov 2026 [Fixed broken [Submodel] support](https://github.com/capn-freako/PyAMI/releases/tag/v10.0.1)
+
+### Added
+
+- `[Submodel]` is parsed; `parse_ibis_file()` returns the submodels under `submodels`.
+- `Dynamic_clamp` submodels that a receiver's `[Add Submodel]` adds in `Non-Driving` or `All` mode (e.g. - DRAM ODT)
+  are in parallel with its input clamps in `Model.zin` (IBIS 8.0 Section 6.3).
+- Split `C_comp` (`C_comp_pullup`, `C_comp_pulldown`, `C_comp_power_clamp`, `C_comp_gnd_clamp`; IBIS 5.0+):
+  when there's no plain `C_comp`, `Model.c_comp` is their sum.
+
+### Changed
+
+- `Model.zin` is taken at `Vmeas` or, if there's none, at (`Vinl` + `Vinh`) / 2.
 
 ## [10.0.0] - 19 Oct 2026 [IBIS v8.0 Compliance](https://github.com/capn-freako/PyAMI/releases/tag/v10.0.0)
 

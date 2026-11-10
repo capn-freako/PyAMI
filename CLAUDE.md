@@ -100,3 +100,6 @@ When compacting, always preserve: the list of modified files, current test statu
 
 - Never commit to master directly
 - Commit messages: conventional commits format
+- User-visible changes (API, behavior, CLI, dependencies, supported Python versions) get a `CHANGELOG.md` entry in
+  the same change. If it's unclear which release it belongs to (the `Unreleased` section or a patch release),
+  ask the user before writing it.
