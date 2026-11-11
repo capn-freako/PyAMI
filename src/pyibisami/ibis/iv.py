@@ -61,9 +61,11 @@ class IVCurve:
         Args:
             keyword: The IBIS keyword the table was found under.
             rows: ``(voltage, [i_typ, i_min, i_max])`` rows.
-                A missing (i.e. - "NA", ``None``) current is interpolated linearly, in voltage, from the
-                values its own column has on both sides of it; else, a min/max one is the typical value.
-                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91).
+                A missing (i.e. - "NA", ``None``) min/max current is that row's typical current, as for any other
+                typ/min/max value (IBIS 8.0 Section 6.1, p.67 and p.80).
+                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91);
+                it's then interpolated linearly, in voltage, from its own column, as is a min/max current also
+                missing from such a row.
 
         Raises:
             ValueError: If there are fewer than two rows, or the first or last row has no typical current.
@@ -80,11 +82,16 @@ class IVCurve:
             return np.array([cs[col] if len(cs) > col and cs[col] is not None else np.nan for cs in currents],
                             dtype=float)
 
-        i_typ = column(0)
-        if np.isnan(i_typ[0]) or np.isnan(i_typ[-1]):
+        given_typ = column(0)
+        if np.isnan(given_typ[0]) or np.isnan(given_typ[-1]):
             raise ValueError(f"[{keyword}]: The first and last rows need a typical current (not NA).")
-        i_typ = _fill_na(v, i_typ, i_typ)  # Every gap has values on both sides.
-        return cls(keyword, v, i_typ, _fill_na(v, column(1), i_typ), _fill_na(v, column(2), i_typ))
+        i_typ = _fill_na(v, given_typ, given_typ)  # Every gap has values on both sides.
+
+        def corner(col: int) -> NDArray[np.float64]:
+            i = column(col)
+            return _fill_na(v, np.where(np.isnan(i), given_typ, i), i_typ)
+
+        return cls(keyword, v, i_typ, corner(1), corner(2))
 
     @property
     def vdd_relative(self) -> bool:
@@ -116,7 +123,7 @@ class IVCurve:
             ValueError: If ``vmeas`` is outside the table's voltages (the table says nothing there).
         """
         vs, ivals = self.v, self.current(corner)
-        vthresh = vmeas if vmeas else max(vs) / 2
+        vthresh = vmeas if vmeas is not None else max(vs) / 2
         if not min(vs) <= vthresh <= max(vs):
             raise ValueError(f"[{self.keyword}]: {vthresh:g} V is outside the table ({min(vs):g} to {max(vs):g} V).")
         ix = max(int(np.where(vs >= vthresh)[0][0]), 1)  # At the first table voltage, use the first segment.

@@ -23,9 +23,9 @@ def test_missing_min_max_default_to_typ():
 
 
 def test_na_currents_are_interpolated():
-    """A missing (``NA``) current is interpolated in its own column; ``NA`` typical currents are allowed in
-    all but the first and last rows (IBIS 8.0 Section 6.1, p.91). A min/max column with no values on both
-    sides of a gap falls back to the typical value, as before."""
+    """A missing (``NA``) typical current is interpolated in its own column, as is a min/max current in the
+    same row; ``NA`` typical currents are allowed in all but the first and last rows (IBIS 8.0 Section 6.1,
+    p.91). A min/max current missing beside a typical one is that typical value."""
     curve = IVCurve.from_table("pulldown", [
         (0.0, [0.0, 0.0, 0.0]),
         (0.9, [None, 0.02, None]),  # As some DRAM vendors' tables have it: only I(min) measured here.
@@ -43,6 +43,13 @@ def test_na_currents_with_decreasing_voltages():
     np.testing.assert_allclose(curve.i_typ, [-0.036, -0.018, 0.0])
     np.testing.assert_allclose(curve.i_min, [-0.04, -0.02, 0.0])
     np.testing.assert_allclose(curve.i_max, [-0.032, -0.016, 0.0])
+
+
+def test_na_min_max_beside_a_typical_current_is_that_typical_value():
+    """``typ NA NA`` means the typical value (IBIS 8.0 Section 6.1, p.67 and p.80), not an interpolation."""
+    curve = IVCurve.from_table("pulldown", [(0.0, [0.0, 0.0, 0.0]), (1.0, [0.03, None, None]), (2.0, [0.03, 0.01, 0.05])])
+    np.testing.assert_allclose(curve.i_min, [0.0, 0.03, 0.01])
+    np.testing.assert_allclose(curve.i_max, [0.0, 0.03, 0.05])
 
 
 @pytest.mark.parametrize("rows", [
@@ -73,6 +80,13 @@ def test_impedance_at_table_edges():
     assert curve.impedance(-1.8) == pytest.approx(0.18)  # 1.8 V / 10 A.
     with pytest.raises(ValueError, match="outside the table"):
         curve.impedance(4.0)
+
+
+def test_impedance_at_zero_volts():
+    """0 V is a measurement point like any other, not "no ``vmeas`` given"."""
+    curve = IVCurve.from_table("gnd_clamp", [(-1.0, [-0.02, -0.02, -0.02]), (0.0, [0.0, 0.0, 0.0]), (1.0, [0.1, 0.1, 0.1])])
+    assert curve.impedance(0.0) == pytest.approx(50.0)  # The segment ending at 0 V.
+    assert curve.impedance() == pytest.approx(10.0)  # Half the max. table voltage: the 0 to 1 V segment.
 
 
 def test_ground_referenced():

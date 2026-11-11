@@ -180,19 +180,24 @@ def typminmax() -> GenParser[list[float]]:
     return [typ] + [typ if val is None else val for val in minmax]
 
 
-@generate("I-V currents")
-def iv_currents() -> GenParser[list[Optional[float]]]:
-    """Parse the Typ/Min/Max currents of an I-V table row.
+@Parser
+def vi_line(text: Sequence[Any], index: int) -> Value:
+    """Parse one I-V table row into ``(voltage, [i_typ, i_min, i_max])``.
 
-    Any of them may be ``NA`` (``None``); ``IVCurve.from_table()`` fills those in (IBIS 8.0 Section 6.1, p.91).
+    A row is one line: ``number`` skips newlines, so reading it column by column would let a short row take its
+    missing currents from the next one. Any current may be ``NA``, or left off the end (``None``);
+    ``IVCurve.from_table()`` fills those in (IBIS 8.0 Section 6.1, p.91).
     """
-    typ = yield number | na
-    minmax = yield optional(count(number | na, 2), [None, None])
-    yield ignore  # So that ``iv_currents`` behaves as a lexeme.
-    return [typ] + minmax
-
-
-vi_line: Parser = (number + iv_currents) << ignore
+    line = rest_line(text, index)
+    columns = line.value.split()
+    if not 2 <= len(columns) <= 4:
+        return Value.failure(index, "I-V table row")
+    try:
+        voltage = number.parse_strict(columns[0])
+        currents = [None if column.upper() == "NA" else number.parse_strict(column) for column in columns[1:]]
+    except ParseError:
+        return Value.failure(index, "I-V table row")
+    return Value.success(line.index, (voltage, currents + [None] * (4 - len(columns))))
 
 
 @generate("ratio")
@@ -485,8 +490,8 @@ def model():
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
         theModel = Model(dict(res), name=nm)
-    except LookupError as le:
-        return fail_with(f"[Model] {nm}: {le!s}")
+    except (LookupError, ValueError) as err:  # ``ValueError``: an unusable required I-V table.
+        return fail_with(f"[Model] {nm}: {err!s}")
     return {nm: theModel}
 
 
