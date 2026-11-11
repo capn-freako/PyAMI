@@ -17,7 +17,7 @@ from typing import NamedTuple, Optional
 
 from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
 
-from .iv import IVData, IVKeyword, typ_value
+from .iv import IVData, IVKeyword, given_references, reference_voltage, typ_value
 
 logger = logging.getLogger(__name__)
 
@@ -216,26 +216,35 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         # Check for the required keywords.
         if not self._mtype:
             raise LookupError("Missing Model_type!")
+        # The power rail: ``[Voltage Range]``; else (IBIS 8.0 Section 6.1, which then requires the
+        # ``[... Reference]`` keywords instead) the ``[Pullup Reference]`` or ``[POWER Clamp Reference]``.
+        refs = given_references(subDict)
         vdd = typ_value(self._vrange)
         if vdd is None:
-            raise LookupError("Missing [Voltage Range]!")
+            vdd = refs.get("pullup", refs.get("power_clamp"))
+        if vdd is None:
+            raise LookupError("Missing [Voltage Range] (or [Pullup Reference]/[POWER Clamp Reference])!")
         self._vdd = vdd
+        self._iv_refs = refs  # For our submodels' tables, too.
 
         # Operating points (typical, ground-referenced pin voltages) at which every I-V curve's slope is taken.
-        # Output impedance: ``Vmeas``, else Vdd / 2.
-        # Input impedance: ``Vmeas``, else the threshold midpoint (``Vinl`` + ``Vinh``) / 2, else Vdd / 2.
+        # Output impedance: ``Vmeas``, else midway between the pull-down and pull-up references (by default, Vdd / 2).
+        # Input impedance: ``Vmeas``, else the threshold midpoint (``Vinl`` + ``Vinh``) / 2,
+        # else midway between the clamps' references (by default, Vdd / 2).
+        def midway(low: IVKeyword, high: IVKeyword) -> float:
+            return (reference_voltage(low, refs, vdd) + reference_voltage(high, refs, vdd)) / 2
+
         vmeas, vinl, vinh = typ_value(self._vmeas), typ_value(maybe("vinl")), typ_value(maybe("vinh"))
-        self._vout_op = vmeas if vmeas is not None else vdd / 2
+        self._vout_op = vmeas if vmeas is not None else midway("pulldown", "pullup")
         if vmeas is not None:
             self._vin_op = vmeas
         elif vinl is not None and vinh is not None:
             self._vin_op = (vinl + vinh) / 2
         else:
-            self._vin_op = vdd / 2
+            self._vin_op = midway("gnd_clamp", "power_clamp")
 
         # Infer impedance and/or rise/fall time, as per model type.
         self._iv_data: Optional[IVData] = None
-        self._iv_refs: Mapping[IVKeyword, float] = {}
         self._zout: Optional[float] = None
         self._slew: Optional[float] = None
         self._zin: Optional[float] = None
@@ -295,7 +304,6 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             raise LookupError(f"Unusable I-V table: {err}") from err
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
-        self._iv_refs = iv_data.refs  # For our submodels' tables.
         if sides:
             missing = [_KEYWORD_NAMES[kw] for kw in sides if kw not in curves]
             if not self._ramp:

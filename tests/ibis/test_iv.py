@@ -309,6 +309,49 @@ def test_submodel_references(sub_ref, zin):
     assert model.zin == pytest.approx(zin, rel=1e-3)  # In parallel with NO_CLAMP_Z.
 
 
+def test_references_instead_of_voltage_range():
+    """IBIS allows the ``[... Reference]`` keywords in place of ``[Voltage Range]``; Vdd is then the pull-up's."""
+    from pyibisami.ibis.model import Model
+
+    refs = {"pullup_reference": [1.8], "pulldown_reference": [0.0], "power_clamp_reference": [1.8],
+            "gnd_clamp_reference": [0.0]}
+    model = Model({"model_type": "Open_source", "vmeas": 0.5, "pullup": PULLUP, "ramp": RAMP, **refs})
+    assert model.zout == pytest.approx(50.0)
+    assert model.iv_data.vdd == pytest.approx(1.8)
+    with pytest.raises(LookupError, match="Voltage Range"):
+        Model({"model_type": "Open_source", "pulldown_reference": [0.0], "pullup": PULLUP, "ramp": RAMP})
+
+
+# Table voltages: 50 Ohms below 1.2 V, 100 Ohms above.
+BENT_LOW = [(0.0, [0.0, 0.0, 0.0]), (1.2, [0.024, 0.024, 0.024]), (2.0, [0.032, 0.032, 0.032])]
+
+
+@pytest.mark.parametrize("model_type, tables, impedance", [
+    ("Open_drain", {"pulldown": BENT_LOW, "ramp": RAMP, "pulldown_reference": [-1.0], "pullup_reference": [1.0]},
+     "zout"),
+    ("Input", {"gnd_clamp": BENT_LOW, "gnd_clamp_reference": [-1.0], "power_clamp_reference": [1.0]}, "zin"),
+])
+def test_default_operating_point_is_midway_between_references(model_type, tables, impedance):
+    """Without Vmeas (or thresholds), the operating point is midway between the rails: 0 V (1 V on the table, 50 Ohms)
+    here, not Vdd / 2 = 0.5 V (1.5 V on the table, 100 Ohms)."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": model_type, "voltage_range": [1.0, 0.9, 1.1], **tables})
+    assert getattr(model, impedance) == pytest.approx(50.0)
+
+
+def test_repeated_voltage_keeps_the_row_with_a_typical_current():
+    """An ``NA`` typical current at a repeated lowest/highest voltage used to reject a usable table."""
+    curve = IVCurve.from_table("gnd_clamp", [(0.0, [None, None, None]), (0.0, [0.01, 0.01, 0.01]), (1.0, [0.02] * 3)])
+    np.testing.assert_allclose(curve.i_typ, [0.01, 0.02])
+
+
+def test_plot_voltage_span_is_the_references():
+    iv = IVData.from_model_dict({"pulldown": PULLDOWN, "pullup": PULLUP, "pulldown_reference": [-2.0]}, 1.8)
+    assert iv.rails == pytest.approx((-2.0, 1.8))
+    assert IVData.from_model_dict({"gnd_clamp": CLAMP}, 1.8).rails == pytest.approx((0.0, 1.8))
+
+
 @pytest.mark.parametrize("params, zin", [
     ({"vinl": [0.2, 0.15, 0.25], "vinh": [0.6, 0.55, 0.65]}, 50.0),  # Typ/min/max thresholds: their typical midpoint.
     ({"vinl": [0.6, 0.55, 0.65], "vinh": [1.0, 0.95, 1.05]}, 100.0),

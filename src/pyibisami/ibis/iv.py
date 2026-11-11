@@ -40,6 +40,24 @@ def typ_value(value: object) -> Optional[float]:
     return None
 
 
+def given_references(
+    sub_dict: Mapping[str, object], inherited: Optional[Mapping[IVKeyword, float]] = None
+) -> dict[IVKeyword, float]:
+    """The typical ``[Pullup Reference]``-style voltages a parsed ``[Model]`` (or ``[Submodel]``) gives
+    (IBIS 8.0 Section 6.1), over any ``inherited`` ones (e.g. - a ``[Submodel]``'s parent model's)."""
+    refs = dict(inherited or {})
+    for kw in IV_KEYWORDS:
+        ref = typ_value(sub_dict.get(f"{kw}_reference"))
+        if ref is not None:
+            refs[kw] = ref
+    return refs
+
+
+def reference_voltage(kw: IVKeyword, refs: Mapping[IVKeyword, float], vdd: float) -> float:
+    "The voltage ``kw``'s table is referenced to: its ``[... Reference]``; else, Vdd (pull-up/power) or 0 V."
+    return refs.get(kw, vdd if kw in VDD_RELATIVE else 0.0)
+
+
 def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64]) -> NDArray[np.float64]:
     """``i`` with its gaps (``nan``) interpolated linearly between its own values.
 
@@ -73,7 +91,8 @@ class IVCurve:
                 i.e. - those with the lowest and highest voltages;
                 it's then interpolated linearly, in voltage, from its own column, as is a min/max current also
                 missing from such a row.
-                Of rows repeating a voltage, only the first is kept (with a warning): a curve has one current there.
+                Of rows repeating a voltage, only one is kept (with a warning), as a curve has one current there:
+                the first with a typical current, else the first.
 
         Raises:
             ValueError: If there are fewer than two distinct voltages,
@@ -89,12 +108,16 @@ class IVCurve:
         order = np.argsort(v, kind="stable")  # ``impedance()`` and ``np.interp()`` need increasing voltages.
         v = v[order]
         currents = [currents[k] for k in order]
-        distinct = np.r_[True, np.diff(v) > 0]  # A zero-width segment would make ``impedance()`` 0 Ohms.
-        if not distinct.all():
-            logger.warning("[%s]: Repeated I-V table voltage(s) %s V; using the first row of each.",
-                           keyword, ", ".join(f"{x:g}" for x in np.unique(v[~distinct])))
-            v = v[distinct]
-            currents = [cs for cs, keep in zip(currents, distinct) if keep]
+        if len(np.unique(v)) < len(v):  # A zero-width segment would make ``impedance()`` 0 Ohms.
+            logger.warning("[%s]: Repeated I-V table voltage(s) %s V; keeping one row of each "
+                           "(the first with a typical current, if any).",
+                           keyword, ", ".join(f"{x:g}" for x in np.unique(v[1:][np.diff(v) == 0])))
+            kept = []
+            for volts in np.unique(v):
+                rows_here = np.flatnonzero(v == volts)  # In file order (the sort is stable).
+                kept.append(next((k for k in rows_here if currents[k] and currents[k][0] is not None), rows_here[0]))
+            v = v[kept]
+            currents = [currents[k] for k in kept]
             if len(v) < 2:
                 raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
 
@@ -212,11 +235,7 @@ class IVData:
         Raises:
             ValueError: If a ``required`` table is invalid.
         """
-        given_refs = dict(refs or {})
-        for kw in IV_KEYWORDS:  # ``[Pullup Reference]`` etc. (IBIS 8.0 Section 6.1).
-            ref = typ_value(sub_dict.get(f"{kw}_reference"))
-            if ref is not None:
-                given_refs[kw] = ref
+        given_refs = given_references(sub_dict, refs)
         curves: dict[IVKeyword, IVCurve] = {}
         for kw in IV_KEYWORDS:
             if kw not in sub_dict:
@@ -230,12 +249,19 @@ class IVData:
         return cls(curves, vdd, given_refs)
 
     def reference(self, kw: IVKeyword) -> float:
-        "The voltage ``kw``'s table is referenced to: its ``[... Reference]``; else, Vdd (pull-up/power) or 0 V."
-        return self.refs.get(kw, self.vdd if kw in VDD_RELATIVE else 0.0)
+        "The voltage ``kw``'s table is referenced to (see ``reference_voltage()``)."
+        return reference_voltage(kw, self.refs, self.vdd)
 
     def ground_referenced(self, kw: IVKeyword) -> IVCurve:
         "``kw``'s curve, its voltages pin voltages (see ``IVCurve.ground_referenced()``)."
         return self.curves[kw].ground_referenced(self.reference(kw))
+
+    @property
+    def rails(self) -> tuple[float, float]:
+        "The lower and upper references of the plotted curves (pull-down/up, or clamps): the plot's voltage span."
+        low: IVKeyword = "pulldown" if self.is_driver else "gnd_clamp"
+        high: IVKeyword = "pullup" if self.is_driver else "power_clamp"
+        return self.reference(low), self.reference(high)
 
     @property
     def is_driver(self) -> bool:
