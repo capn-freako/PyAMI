@@ -31,21 +31,18 @@ VDD_RELATIVE: tuple[IVKeyword, ...] = ("pullup", "power_clamp")
 OPEN_CIRCUIT_Z = 1e7  # Used in place of infinite impedance (Ohms).
 
 
-def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64], default: NDArray[np.float64]) -> NDArray[np.float64]:
-    "``i`` with its gaps (``nan``) interpolated, in ``v``, between its own values; ``default`` where they don't span."
+def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64]) -> NDArray[np.float64]:
+    """``i`` with its gaps (``nan``) interpolated linearly between its own values.
+
+    ``v`` must be increasing, with known currents at both ends, so that every gap lies between known values.
+    """
     known = ~np.isnan(i)
-    filled = np.where(known, i, default)
-    if known.sum() >= 2:
-        order = np.argsort(v[known])  # ``np.interp()`` needs increasing voltages.
-        v_known, i_known = v[known][order], i[known][order]
-        inside = ~known & (v >= v_known[0]) & (v <= v_known[-1])
-        filled[inside] = np.interp(v[inside], v_known, i_known)
-    return filled
+    return np.where(known, i, np.interp(v, v[known], i[known]))
 
 
 @dataclass(frozen=True)
 class IVCurve:
-    """One IBIS I-V table, with voltages/currents as written in the file."""
+    """One IBIS I-V table, its rows in increasing voltage (the file may list them in either order)."""
 
     keyword: IVKeyword
     v: NDArray[np.float64]
@@ -60,10 +57,11 @@ class IVCurve:
 
         Args:
             keyword: The IBIS keyword the table was found under.
-            rows: ``(voltage, [i_typ, i_min, i_max])`` rows.
+            rows: ``(voltage, [i_typ, i_min, i_max])`` rows, in any order; they're sorted by voltage.
                 A missing (i.e. - "NA", ``None``) min/max current is that row's typical current, as for any other
                 typ/min/max value (IBIS 8.0 Section 6.1, p.67 and p.80).
-                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91);
+                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91),
+                i.e. - those with the lowest and highest voltages;
                 it's then interpolated linearly, in voltage, from its own column, as is a min/max current also
                 missing from such a row.
 
@@ -77,6 +75,9 @@ class IVCurve:
             currents = [list(row[1]) for row in rows]
         except Exception as exc:
             raise ValueError(f"[{keyword}]: Malformed I-V table: {rows}") from exc
+        order = np.argsort(v, kind="stable")  # ``impedance()`` and ``np.interp()`` need increasing voltages.
+        v = v[order]
+        currents = [currents[k] for k in order]
 
         def column(col: int) -> NDArray[np.float64]:
             return np.array([cs[col] if len(cs) > col and cs[col] is not None else np.nan for cs in currents],
@@ -85,11 +86,11 @@ class IVCurve:
         given_typ = column(0)
         if np.isnan(given_typ[0]) or np.isnan(given_typ[-1]):
             raise ValueError(f"[{keyword}]: The first and last rows need a typical current (not NA).")
-        i_typ = _fill_na(v, given_typ, given_typ)  # Every gap has values on both sides.
+        i_typ = _fill_na(v, given_typ)
 
         def corner(col: int) -> NDArray[np.float64]:
             i = column(col)
-            return _fill_na(v, np.where(np.isnan(i), given_typ, i), i_typ)
+            return _fill_na(v, np.where(np.isnan(i), given_typ, i))  # Known wherever the typical current is given.
 
         return cls(keyword, v, i_typ, corner(1), corner(2))
 
@@ -140,12 +141,13 @@ class IVCurve:
             vdd: Power rail voltage.
 
         Returns:
-            A copy, plotted on the same axes as the ground-referenced curves;
+            A copy, plotted on the same axes as the ground-referenced curves, its rows still in increasing voltage;
             ``self`` for curves that are already ground-referenced.
         """
         if not self.vdd_relative:
             return self
-        return replace(self, v=vdd - self.v, i_typ=-self.i_typ, i_min=-self.i_min, i_max=-self.i_max)
+        return replace(self, v=(vdd - self.v)[::-1],
+                       i_typ=-self.i_typ[::-1], i_min=-self.i_min[::-1], i_max=-self.i_max[::-1])
 
 
 @dataclass(frozen=True)

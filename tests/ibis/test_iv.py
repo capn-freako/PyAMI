@@ -40,9 +40,24 @@ def test_na_currents_are_interpolated():
 
 def test_na_currents_with_decreasing_voltages():
     curve = IVCurve.from_table("pullup", [(1.8, [-0.036, -0.04, -0.032]), (0.9, [None, None, -0.016]), (0.0, [0.0, 0.0, 0.0])])
-    np.testing.assert_allclose(curve.i_typ, [-0.036, -0.018, 0.0])
-    np.testing.assert_allclose(curve.i_min, [-0.04, -0.02, 0.0])
-    np.testing.assert_allclose(curve.i_max, [-0.032, -0.016, 0.0])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])  # Sorted.
+    np.testing.assert_allclose(curve.i_typ, [0.0, -0.018, -0.036])
+    np.testing.assert_allclose(curve.i_min, [0.0, -0.02, -0.04])
+    np.testing.assert_allclose(curve.i_max, [0.0, -0.016, -0.032])
+
+
+def test_impedance_of_a_descending_nonlinear_table():
+    """``impedance()`` used to take the top segment of a table written in decreasing voltage, wherever ``vmeas`` was."""
+    rows = [(1.8, [0.1, 0.1, 0.1]), (0.9, [0.018, 0.018, 0.018]), (0.0, [0.0, 0.0, 0.0])]
+    assert IVCurve.from_table("pulldown", rows).impedance(0.5) == pytest.approx(50.0)  # 0.9 V / 18 mA.
+
+
+def test_unordered_rows():
+    """The first/last-row rule applies to the lowest/highest voltages; a ``nan`` used to survive here."""
+    curve = IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036])
+    with pytest.raises(ValueError, match="first and last rows"):
+        IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [None]), (0.9, [0.018])])
 
 
 def test_na_min_max_beside_a_typical_current_is_that_typical_value():
@@ -91,8 +106,9 @@ def test_impedance_at_zero_volts():
 
 def test_ground_referenced():
     pullup = IVCurve.from_table("pullup", PULLUP).ground_referenced(1.8)
-    np.testing.assert_allclose(pullup.v, [3.6, 1.8, 0.0, -1.8])
-    np.testing.assert_allclose(pullup.i_typ, [-10.0, 0.0, 0.036, 10.0])
+    np.testing.assert_allclose(pullup.v, [-1.8, 0.0, 1.8, 3.6])  # Still increasing, for ``impedance()``.
+    np.testing.assert_allclose(pullup.i_typ, [10.0, 0.036, 0.0, -10.0])
+    assert pullup.impedance(1.0) == pytest.approx(50.0)  # 1.8 V / 36 mA.
     pulldown = IVCurve.from_table("pulldown", PULLDOWN)
     assert pulldown.ground_referenced(1.8) is pulldown
 
