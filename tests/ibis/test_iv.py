@@ -186,7 +186,8 @@ def test_gui_input_model_view_builds():
     assert all(model.trait(name) is not None for name in names), names
 
 
-CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]  # 50 Ohms at Vmeas.
+# 50 Ohms at Vmeas (0.5 V), also as a ``[POWER Clamp]`` (rail-relative: 1.8 - 0.5 = 1.3 V).
+CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.9, (0.018, 0.0144, 0.0216)), (1.8, (0.036, 0.0288, 0.0432))]
 RAMP = {"rising": [2e9], "falling": [2e9], "load": 50}  # 2 V/ns.
 
 
@@ -239,6 +240,38 @@ def test_tables_that_dont_reach_vmeas(caplog):
         model = _model("Open_drain", name="short_pd", pulldown=PULLDOWN[:2], ramp=RAMP)  # Table ends at 0 V.
     assert model.zout is None and model.slew == pytest.approx(2.0)
     assert "short_pd" in caplog.text and "outside the table" in caplog.text
+
+
+def test_rail_relative_curves_are_read_at_the_pin_voltage():
+    """``[Pullup]``/``[POWER Clamp]`` voltages are Vdd - Vpin; they used to be read at Vpin itself."""
+    from pyibisami.ibis.model import Model
+
+    # Rail-relative: 100 Ohms from 0 to 1 V, then 50 Ohms; Vmeas = 0.5 V is 1.3 V rail-relative (Vdd = 1.8 V).
+    pullup = [(0.0, [0.0, 0.0, 0.0]), (1.0, [-0.01, -0.01, -0.01]), (1.8, [-0.026, -0.026, -0.026])]
+    assert _model("Open_source", pullup=pullup, ramp=RAMP).zout == pytest.approx(50.0)
+    # A VDDQ-terminated ODT (DDR4/5 POD) in [POWER Clamp]: Vdd = 1.2 V, Vmeas = 0.84 V, i.e. - 0.36 V rail-relative.
+    odt = [(0.0, [0.0, 0.0, 0.0]), (0.5, [-0.01, -0.01, -0.01]), (1.2, [-0.017, -0.017, -0.017])]  # 50, then 100 Ohms.
+    model = Model({"model_type": "Input", "voltage_range": [1.2, 1.14, 1.26], "vmeas": 0.84,
+                   "add_submodel": [("odt", "Non-Driving")]})
+    assert model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": odt}}) == []
+    assert model.zin == pytest.approx(50.0, rel=1e-3)  # In parallel with NO_CLAMP_Z.
+
+
+# 50 Ohms below 0.6 V, 100 Ohms above.
+BENT_CLAMP = [(0.0, [0.0, 0.0, 0.0]), (0.6, [0.012, 0.012, 0.012]), (2.0, [0.026, 0.026, 0.026])]
+
+
+@pytest.mark.parametrize("params, zin", [
+    ({"vinl": [0.2, 0.15, 0.25], "vinh": [0.6, 0.55, 0.65]}, 50.0),  # Typ/min/max thresholds: their typical midpoint.
+    ({"vinl": [0.6, 0.55, 0.65], "vinh": [1.0, 0.95, 1.05]}, 100.0),
+    ({"vmeas": [0.4, 0.3, 0.5]}, 50.0),  # A typ/min/max Vmeas: its typical value.
+    ({}, 50.0),  # Neither: Vdd / 2 (it used to be each table's own max. voltage / 2: 1 V here).
+])
+def test_input_operating_point(params, zin):
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1], "gnd_clamp": BENT_CLAMP, **params})
+    assert model.zin == pytest.approx(zin)
 
 
 def test_output_still_requires_driver_data():

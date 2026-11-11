@@ -59,15 +59,37 @@ _VINL_VINH_TYPES = {  # IBIS 8.0 Section 6.1, Table 1, p.62.
 }
 
 
-def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]) -> float:
-    """Input impedance of the clamps (in parallel, as both are always active).
+def _typ(value: object) -> Optional[float]:
+    "The typical value of a parsed number or typ/min/max list; ``None`` if it's neither."
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
 
-    ``NO_CLAMP_Z`` for a missing clamp, or one whose table doesn't reach ``vmeas``: clamp tables often cover only the
-    region where the clamp conducts (e.g. - a ``[POWER Clamp]`` from -Vcc to 0 V), so it's off there.
+
+def _impedance_at(curve: IVCurve, v_pin: float, vdd: float) -> float:
+    """Small-signal impedance of ``curve`` at the (ground-referenced) pin voltage ``v_pin``.
+
+    ``[Pullup]`` and ``[POWER Clamp]`` voltages are relative to the power rail (Vdd - Vpin), so those curves are
+    re-referenced to ground first.
+
+    Raises:
+        ValueError: If ``v_pin`` is outside the table.
+    """
+    return curve.ground_referenced(vdd).impedance(v_pin)
+
+
+def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], v_pin: float, vdd: float) -> float:
+    """Input impedance of the clamps (in parallel, as both are always active) at the pin voltage ``v_pin``.
+
+    ``NO_CLAMP_Z`` for a missing clamp, or one whose table doesn't reach ``v_pin``: clamp tables often cover only the
+    region where the clamp conducts (e.g. - a ``[POWER Clamp]`` from -Vdd to 0 V, i.e. - pin voltages above Vdd),
+    so it's off there.
     """
     def clamp_z(kw: IVKeyword) -> float:
         try:
-            return curves[kw].impedance(vmeas) if kw in curves else NO_CLAMP_Z
+            return _impedance_at(curves[kw], v_pin, vdd) if kw in curves else NO_CLAMP_Z
         except ValueError:
             return NO_CLAMP_Z
 
@@ -197,18 +219,26 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._vrange = maybe("voltage_range")
         self._ramp = maybe("ramp")
         self._add_submodel = maybe("add_submodel") or []
-        # Receiver operating point for the input impedance: ``Vmeas``,
-        # else the threshold midpoint (``Vinl`` + ``Vinh``) / 2.
-        vinl, vinh = maybe("vinl"), maybe("vinh")
-        self._vin_op = self._vmeas
-        if self._vin_op is None and isinstance(vinl, float) and isinstance(vinh, float):
-            self._vin_op = (vinl + vinh) / 2
 
         # Check for the required keywords.
         if not self._mtype:
             raise LookupError("Missing Model_type!")
-        if not self._vrange:
+        vdd = _typ(self._vrange)
+        if vdd is None:
             raise LookupError("Missing [Voltage Range]!")
+        self._vdd = vdd
+
+        # Operating points (typical, ground-referenced pin voltages) at which every I-V curve's slope is taken.
+        # Output impedance: ``Vmeas``, else Vdd / 2.
+        # Input impedance: ``Vmeas``, else the threshold midpoint (``Vinl`` + ``Vinh``) / 2, else Vdd / 2.
+        vmeas, vinl, vinh = _typ(self._vmeas), _typ(maybe("vinl")), _typ(maybe("vinh"))
+        self._vout_op = vmeas if vmeas is not None else vdd / 2
+        if vmeas is not None:
+            self._vin_op = vmeas
+        elif vinl is not None and vinh is not None:
+            self._vin_op = (vinl + vinh) / 2
+        else:
+            self._vin_op = vdd / 2
 
         # Infer impedance and/or rise/fall time, as per model type.
         self._iv_data: Optional[IVData] = None
@@ -265,7 +295,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             required = ("gnd_clamp", "power_clamp")
         elif strict:
             required = sides
-        iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=required)
+        iv_data = IVData.from_model_dict(subDict, self._vdd, required=required)
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
         if sides:
@@ -277,13 +307,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                name or "<unnamed>", self._mtype, ", ".join(missing))
             if all(kw in curves for kw in sides):
                 try:
-                    self._zout = sum(curves[kw].impedance(self._vmeas) for kw in sides) / len(sides)
+                    self._zout = sum(_impedance_at(curves[kw], self._vout_op, self._vdd) for kw in sides) / len(sides)
                 except ValueError as err:  # Vmeas off the table: no data there.
                     logger.warning("[Model] %s: %s Its output impedance is unknown.", name or "<unnamed>", err)
             if self._ramp:
                 self._slew = (self._ramp["rising"][0] + self._ramp["falling"][0]) / 2e9  # (V/ns)
         if mtype in _RECEIVER_TYPES:
-            self._zin = _clamp_impedance(curves, self._vin_op)
+            self._zin = _clamp_impedance(curves, self._vin_op, self._vdd)
 
     def apply_submodels(self, submodels: Mapping[str, dict]) -> list[str]:
         """Put the clamps of the ``Dynamic_clamp`` submodels that ``[Add Submodel]`` adds in ``Non-Driving``
@@ -303,10 +333,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 continue
             if mode.lower() == "driving" or str(sub.get("submodel_type", "")).lower() != "dynamic_clamp":
                 continue
-            for curve in IVData.from_model_dict(sub, self._vrange[0], required=()).curves.values():
+            for curve in IVData.from_model_dict(sub, self._vdd, required=()).curves.values():
                 try:
-                    conductance += 1 / curve.impedance(self._vin_op)
-                except ValueError:  # Vmeas off the table: the clamp is off there.
+                    conductance += 1 / _impedance_at(curve, self._vin_op, self._vdd)
+                except ValueError:  # The operating point is off the table: the clamp is off there.
                     pass
         if conductance:
             self._zin = 1 / (1 / self._zin + conductance)
