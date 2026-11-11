@@ -490,8 +490,8 @@ def model():
     logger.debug("[Model] %s contains: %s", nm, dict(res).keys())
     try:
         theModel = Model(dict(res), name=nm)
-    except (LookupError, ValueError) as err:  # ``ValueError``: an unusable required I-V table.
-        return fail_with(f"[Model] {nm}: {err!s}")
+    except LookupError as le:
+        return fail_with(f"[Model] {nm}: {le!s}")
     return {nm: theModel}
 
 

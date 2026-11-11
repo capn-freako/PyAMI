@@ -24,8 +24,8 @@ def test_missing_min_max_default_to_typ():
 
 def test_na_currents_are_interpolated():
     """A missing (``NA``) typical current is interpolated in its own column, as is a min/max current in the
-    same row; ``NA`` typical currents are allowed in all but the first and last rows (IBIS 8.0 Section 6.1,
-    p.91). A min/max current missing beside a typical one is that typical value."""
+    same row; ``NA`` typical currents are allowed at all but the lowest and highest voltages
+    (IBIS 8.0 Section 6.1, p.91). A min/max current missing beside a typical one is that typical value."""
     curve = IVCurve.from_table("pulldown", [
         (0.0, [0.0, 0.0, 0.0]),
         (0.9, [None, 0.02, None]),  # As some DRAM vendors' tables have it: only I(min) measured here.
@@ -56,7 +56,7 @@ def test_unordered_rows():
     """The first/last-row rule applies to the lowest/highest voltages; a ``nan`` used to survive here."""
     curve = IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])])
     np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036])
-    with pytest.raises(ValueError, match="first and last rows"):
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
         IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [None]), (0.9, [0.018])])
 
 
@@ -72,7 +72,7 @@ def test_na_min_max_beside_a_typical_current_is_that_typical_value():
     [(0.0, [0.0]), (0.9, [0.018]), (1.8, [None, 0.04, 0.03])],
 ])
 def test_na_typical_current_in_first_or_last_row(rows):
-    with pytest.raises(ValueError, match="first and last rows"):
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
         IVCurve.from_table("pulldown", rows)
 
 
@@ -272,6 +272,12 @@ def test_input_operating_point(params, zin):
 
     model = Model({"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1], "gnd_clamp": BENT_CLAMP, **params})
     assert model.zin == pytest.approx(zin)
+
+
+def test_unusable_required_iv_table_is_a_lookup_error():
+    """``Model`` reports an unusable required I-V table like a missing one, so the parser catches it."""
+    with pytest.raises(LookupError, match="Unusable I-V table"):
+        _model("Output", pulldown=[(0.0, [None]), (1.8, [0.036])], pullup=PULLUP, ramp=RAMP)
 
 
 def test_output_still_requires_driver_data():

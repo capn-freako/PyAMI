@@ -54,8 +54,8 @@ def _parse_edited(ibis_test_file, *edits):
 
 
 def test_na_typical_current_in_iv_table(ibis_test_file):
-    """An I-V row may give ``NA`` for its typical current, except the first and last rows (IBIS 8.0 Section 6.1,
-    p.91). Such a file used to fail to parse."""
+    """An I-V row may give ``NA`` for its typical current, except at the lowest and highest voltages
+    (IBIS 8.0 Section 6.1, p.91). Such a file used to fail to parse."""
     row = "0.00     0.000e+00     0.000e+00     0.000e+00\n"
     status, ibis_dict = _parse_edited(ibis_test_file, (row, row + "0.90     NA            NA            NA\n"))
     assert status == "Success!"

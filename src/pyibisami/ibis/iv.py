@@ -51,7 +51,7 @@ class IVCurve:
     i_max: NDArray[np.float64]
 
     @classmethod
-    def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[float]]]) -> IVCurve:
+    def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[Optional[float]]]]) -> IVCurve:
         """
         Build from parsed I-V table rows.
 
@@ -66,7 +66,7 @@ class IVCurve:
                 missing from such a row.
 
         Raises:
-            ValueError: If there are fewer than two rows, or the first or last row has no typical current.
+            ValueError: If there are fewer than two rows, or the lowest or highest voltage has no typical current.
         """
         if len(rows) < 2:
             raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
@@ -85,7 +85,7 @@ class IVCurve:
 
         given_typ = column(0)
         if np.isnan(given_typ[0]) or np.isnan(given_typ[-1]):
-            raise ValueError(f"[{keyword}]: The first and last rows need a typical current (not NA).")
+            raise ValueError(f"[{keyword}]: The lowest and highest voltages need a typical current (not NA).")
         i_typ = _fill_na(v, given_typ)
 
         def corner(col: int) -> NDArray[np.float64]:

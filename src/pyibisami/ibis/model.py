@@ -188,7 +188,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 Default: "" (unnamed)
 
         Raises:
-            LookupError: A required keyword is missing.
+            LookupError: A required keyword is missing, or a required I-V table is unusable.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -295,7 +295,10 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             required = ("gnd_clamp", "power_clamp")
         elif strict:
             required = sides
-        iv_data = IVData.from_model_dict(subDict, self._vdd, required=required)
+        try:
+            iv_data = IVData.from_model_dict(subDict, self._vdd, required=required)
+        except ValueError as err:  # So that the parser reports it, as for a missing table.
+            raise LookupError(f"Unusable I-V table: {err}") from err
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
         if sides:
