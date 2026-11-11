@@ -110,7 +110,22 @@ def test_ground_referenced():
     np.testing.assert_allclose(pullup.i_typ, [10.0, 0.036, 0.0, -10.0])
     assert pullup.impedance(1.0) == pytest.approx(50.0)  # 1.8 V / 36 mA.
     pulldown = IVCurve.from_table("pulldown", PULLDOWN)
-    assert pulldown.ground_referenced(1.8) is pulldown
+    assert pulldown.ground_referenced(0.0) is pulldown
+    # A ``[Pulldown Reference]`` of 0.2 V: Vpin = v + 0.2 V.
+    np.testing.assert_allclose(pulldown.ground_referenced(0.2).v, [-1.6, 0.2, 2.0, 3.8])
+
+
+def test_repeated_voltages(caplog):
+    """Only the first row of each voltage is kept; a zero-width segment used to make ``impedance()`` 0 Ohms."""
+    rows = [(0.0, [0.0, 0.0, 0.0]), (0.9, [0.009, 0.009, 0.009]), (0.9, [0.018, 0.018, 0.018]), (1.8, [0.027] * 3)]
+    with caplog.at_level("WARNING", logger="pyibisami.ibis.iv"):
+        curve = IVCurve.from_table("gnd_clamp", rows)
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.027])
+    assert curve.impedance(0.9) == pytest.approx(100.0)
+    assert "Repeated" in caplog.text and "0.9" in caplog.text
+    with pytest.raises(ValueError, match="Insufficient"):
+        IVCurve.from_table("gnd_clamp", [(0.5, [0.0]), (0.5, [0.01])])
 
 
 def test_driver_series_exclude_clamps():
@@ -259,6 +274,39 @@ def test_rail_relative_curves_are_read_at_the_pin_voltage():
 
 # 50 Ohms below 0.6 V, 100 Ohms above.
 BENT_CLAMP = [(0.0, [0.0, 0.0, 0.0]), (0.6, [0.012, 0.012, 0.012]), (2.0, [0.026, 0.026, 0.026])]
+
+
+def test_reference_keywords():
+    """``[Pullup Reference]`` etc. replace the default references (Vdd, or 0 V) of their tables."""
+    from pyibisami.ibis.model import Model
+
+    vrange = [1.8, 1.62, 1.98]
+    # Rail-relative: 100 Ohms from 0 to 1 V, then 50 Ohms. Vmeas = 0.6 V is 1.2 - 0.6 = 0.6 V rail-relative, not 1.2 V.
+    pullup = [(0.0, [0.0, 0.0, 0.0]), (1.0, [-0.01, -0.01, -0.01]), (1.8, [-0.026, -0.026, -0.026])]
+    model = Model({"model_type": "Open_source", "voltage_range": vrange, "vmeas": 0.6, "pullup": pullup, "ramp": RAMP,
+                   "pullup_reference": [1.2, 1.1, 1.3]})
+    assert model.zout == pytest.approx(100.0)
+    # [GND Clamp Reference] 0.3 V: Vpin = 0.8 V is 0.5 V on the table (50 Ohms), not 0.8 V (100 Ohms).
+    model = Model({"model_type": "Input", "voltage_range": vrange, "vmeas": 0.8, "gnd_clamp": BENT_CLAMP,
+                   "gnd_clamp_reference": [0.3]})
+    assert model.zin == pytest.approx(50.0)
+    # Plots use them, too.
+    iv = IVData.from_model_dict({"pullup": PULLUP, "pullup_reference": [1.2]}, 1.8)
+    np.testing.assert_allclose(iv.series()[0].v, [-2.4, -0.6, 1.2, 3.0])
+
+
+@pytest.mark.parametrize("sub_ref, zin", [
+    ({}, 50.0),  # The parent's [POWER Clamp Reference] (1.2 V): 1.2 - 0.84 = 0.36 V on the table.
+    ({"power_clamp_reference": [1.8]}, 100.0),  # Its own: 1.8 - 0.84 = 0.96 V on the table.
+])
+def test_submodel_references(sub_ref, zin):
+    from pyibisami.ibis.model import Model
+
+    odt = [(0.0, [0.0, 0.0, 0.0]), (0.5, [-0.01, -0.01, -0.01]), (1.8, [-0.023, -0.023, -0.023])]  # 50, then 100 Ohms.
+    model = Model({"model_type": "Input", "voltage_range": [1.8, 1.62, 1.98], "vmeas": 0.84,
+                   "power_clamp_reference": [1.2], "add_submodel": [("odt", "Non-Driving")]})
+    model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": odt, **sub_ref}})
+    assert model.zin == pytest.approx(zin, rel=1e-3)  # In parallel with NO_CLAMP_Z.
 
 
 @pytest.mark.parametrize("params, zin", [

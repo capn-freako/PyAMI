@@ -86,6 +86,15 @@ def test_na_typical_current_in_first_row_is_a_parse_failure(ibis_test_file):
     assert re.search(r"at line \d+, column \d+", status), status
 
 
+def test_iv_reference_keywords(ibis_test_file):
+    """``[Pulldown Reference]`` etc. are read (they used to be skipped), and set their tables' references."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("[Pulldown]\n", "[Pulldown Reference]  0.1V  0.05V  0.15V\n[Pulldown]\n"))
+    assert status == "Success!"
+    iv_data = ibis_dict["models"]["example_tx"].iv_data
+    assert iv_data.reference("pulldown") == pytest.approx(0.1)
+    assert iv_data.reference("pullup") == pytest.approx(1.8)  # Not given: [Voltage Range].
+
+
 def test_signal_names_with_punctuation(ibis_test_file):
     """Data-book signal names (IBIS 8.0 Section 5, p.36) like ``TX+`` and ``DQ<0>`` used to fail the whole file."""
     status, ibis_dict = _parse_edited(ibis_test_file, ("1p     Tx_1_P", "1p     TX+"), ("1n     Tx_1_N", "1n     DQ<0>"))

@@ -449,8 +449,15 @@ def ramp() -> GenParser[dict[str, Any]]:
     return rslt
 
 
+# ``[Pullup Reference]`` etc.: the voltage each I-V table is referenced to, if not the default
+# (``[Voltage Range]`` for ``[Pullup]``/``[POWER Clamp]``, 0 V for ``[Pulldown]``/``[GND Clamp]``; IBIS 8.0 Section 6.1).
+IV_reference_keywords: dict[str, Parser] = {
+    f"{kw}_reference": typminmax for kw in ("pulldown", "pullup", "gnd_clamp", "power_clamp")
+}
+
 # ToDo: Implement: rising_waveform, falling_waveform, and composite_current.
 Model_keywords: dict[str, Parser] = {
+    **IV_reference_keywords,
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
@@ -468,6 +475,7 @@ Model_keywords: dict[str, Parser] = {
 
 # ``[Submodel]`` I-V tables used for the receiver input impedance (``Dynamic_clamp`` ODT, IBIS 8.0 Section 6.3).
 Submodel_keywords: dict[str, Parser] = {
+    **IV_reference_keywords,  # Else, the parent [Model]'s.
     "gnd_clamp": many1(vi_line),
     "power_clamp": many1(vi_line),
 }
