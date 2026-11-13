@@ -53,11 +53,14 @@ def test_impedance_of_a_descending_nonlinear_table():
 
 
 def test_unordered_rows():
-    """The first/last-row rule applies to the lowest/highest voltages; a ``nan`` used to survive here."""
+    """The first/last-row rule applies to the rows as listed (a spec warning); the gaps are filled as long as the
+    lowest and highest voltages have a typical current (an error otherwise). A ``nan`` used to survive here."""
     curve = IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])])
     np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036])
+    assert len(curve.warnings) == 1 and "first and last rows" in curve.warnings[0]
     with pytest.raises(ValueError, match="lowest and highest voltages"):
         IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [None]), (0.9, [0.018])])
+    assert IVCurve.from_table("pulldown", PULLDOWN).warnings == ()
 
 
 def test_na_min_max_beside_a_typical_current_is_that_typical_value():
@@ -115,17 +118,36 @@ def test_ground_referenced():
     np.testing.assert_allclose(pulldown.ground_referenced(0.2).v, [-1.6, 0.2, 2.0, 3.8])
 
 
-def test_repeated_voltages(caplog):
-    """Only the first row of each voltage is kept; a zero-width segment used to make ``impedance()`` 0 Ohms."""
-    rows = [(0.0, [0.0, 0.0, 0.0]), (0.9, [0.009, 0.009, 0.009]), (0.9, [0.018, 0.018, 0.018]), (1.8, [0.027] * 3)]
-    with caplog.at_level("WARNING", logger="pyibisami.ibis.iv"):
-        curve = IVCurve.from_table("gnd_clamp", rows)
-    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])
-    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.027])
-    assert curve.impedance(0.9) == pytest.approx(100.0)
-    assert "Repeated" in caplog.text and "0.9" in caplog.text
+# A vertical step at 0.9 V (IBIS allows repeated voltages): 100 Ohms below it, 50 Ohms above.
+STEP = [(0.0, [0.0, 0.0, 0.0]), (0.9, [0.009, 0.009, 0.009]), (0.9, [0.018, 0.018, 0.018]), (1.8, [0.036] * 3)]
+
+
+def test_repeated_voltages_are_kept():
+    """Every row is kept (they used to be pruned to one per voltage), with no zero-width segment in ``impedance()``."""
+    curve = IVCurve.from_table("gnd_clamp", STEP)
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.018, 0.036])
+    assert curve.warnings == ()
+    assert curve.impedance(0.5) == pytest.approx(100.0)
+    assert curve.impedance(0.9) == pytest.approx(100.0)  # At the step: the segment leading up to it.
+    assert curve.impedance(1.2) == pytest.approx(50.0)  # Across the step's top row, not its bottom one.
     with pytest.raises(ValueError, match="Insufficient"):
         IVCurve.from_table("gnd_clamp", [(0.5, [0.0]), (0.5, [0.01])])
+
+
+@pytest.mark.parametrize("rows, vmeas, z", [
+    ([(0.0, [0.0]), (0.0, [0.01]), (1.0, [0.03])], 0.0, 50.0),  # A step at the lowest voltage: past it.
+    ([(0.0, [0.0]), (1.0, [0.02]), (1.0, [0.05])], 1.0, 50.0),  # At the highest voltage: the segment up to it.
+])
+def test_impedance_at_a_step_at_the_table_ends(rows, vmeas, z):
+    assert IVCurve.from_table("gnd_clamp", rows).impedance(vmeas) == pytest.approx(z)
+
+
+def test_decreasing_table_keeps_a_steps_rows_in_curve_order():
+    """A table listed in decreasing voltage gets the same curve as its increasing listing, step and all."""
+    curve = IVCurve.from_table("gnd_clamp", STEP[::-1])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.018, 0.036])
 
 
 def test_driver_series_exclude_clamps():
@@ -340,10 +362,42 @@ def test_default_operating_point_is_midway_between_references(model_type, tables
     assert getattr(model, impedance) == pytest.approx(50.0)
 
 
-def test_repeated_voltage_keeps_the_row_with_a_typical_current():
-    """An ``NA`` typical current at a repeated lowest/highest voltage used to reject a usable table."""
+def test_na_at_a_repeated_lowest_voltage():
+    """Another row at that voltage gives its typical current, so the table loads (an ``NA`` here used to reject a
+    usable table), with a spec warning (the first row, as listed, must give one)."""
     curve = IVCurve.from_table("gnd_clamp", [(0.0, [None, None, None]), (0.0, [0.01, 0.01, 0.01]), (1.0, [0.02] * 3)])
-    np.testing.assert_allclose(curve.i_typ, [0.01, 0.02])
+    np.testing.assert_allclose(curve.i_typ, [0.01, 0.01, 0.02])
+    assert len(curve.warnings) == 1
+
+
+def test_iv_data_impedance_is_at_the_pin_voltage():
+    iv = IVData.from_model_dict({"pullup": PULLUP, "pullup_reference": [1.2]}, 1.8)
+    assert iv.impedance("pullup", 0.2) == pytest.approx(50.0)  # 1.0 V on the table.
+    assert iv.impedance("pullup", 0.2, corner="min") == pytest.approx(45.0)
+    with pytest.raises(ValueError, match="outside the table"):
+        iv.impedance("pullup", 5.0)
+
+
+def test_iv_table_warnings_reach_spec_warnings():
+    """They used to go only to the console, never to ``Model.spec_warnings`` (so neither to PyBERT)."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "I/O", "voltage_range": [1.8, 1.7, 1.9], "pulldown": PULLDOWN, "pullup": PULLUP,
+                   "ramp": RAMP, "vinl": [0.6], "vinh": [1.2], "power_clamp": CLAMP,
+                   "gnd_clamp": [(0.0, [0.0])]}, name="io_buf")  # Unusable (one row), but not required here.
+    model2 = Model({"model_type": "Input", "voltage_range": [1.8], "vinl": [0.6], "vinh": [1.2],
+                    "gnd_clamp": [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])], "power_clamp": CLAMP}, name="in_buf")
+    assert any("io_buf: Ignoring unusable I-V table: [gnd_clamp]" in w for w in model.spec_warnings)
+    assert any("in_buf: [gnd_clamp]: The first and last rows" in w for w in model2.spec_warnings)
+
+
+def test_submodel_iv_table_warnings_are_returned():
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Input", "voltage_range": [1.8], "vinl": [0.6], "vinh": [1.2], "gnd_clamp": CLAMP,
+                   "add_submodel": [("odt", "Non-Driving")]}, name="rx")
+    warnings = model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": [(0.0, [0.0])]}})
+    assert warnings and "rx: [Submodel] odt: Ignoring unusable I-V table" in warnings[0]
 
 
 @pytest.mark.parametrize("sub_dict, vdd", [

@@ -93,7 +93,8 @@ class IVReferences:
 def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64]) -> NDArray[np.float64]:
     """``i`` with its gaps (``nan``) interpolated linearly between its own values.
 
-    ``v`` must be increasing, with known currents at both ends, so that every gap lies between known values.
+    ``v`` must be nondecreasing, with a known current at its lowest and highest voltages,
+    so that every gap lies between known values.
     """
     known = ~np.isnan(i)
     return np.where(known, i, np.interp(v, v[known], i[known]))
@@ -101,13 +102,18 @@ def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64]) -> NDArray[np.float
 
 @dataclass(frozen=True)
 class IVCurve:
-    """One IBIS I-V table, its rows in increasing voltage (the file may list them in either order)."""
+    """One IBIS I-V table, its rows in increasing voltage (the file may list them in either order).
+
+    A voltage may repeat: a vertical step (e.g. - a diode clamp at its knee), which IBIS allows.
+    """
 
     keyword: IVKeyword
     v: NDArray[np.float64]
     i_typ: NDArray[np.float64]
     i_min: NDArray[np.float64]
     i_max: NDArray[np.float64]
+    # IBIS spec rules the table breaks, which didn't stop it loading (see ``Model.spec_warnings``).
+    warnings: tuple[str, ...] = field(default=(), compare=False)
 
     @classmethod
     def from_table(cls, keyword: IVKeyword, rows: Sequence[tuple[float, Sequence[Optional[float]]]]) -> IVCurve:
@@ -119,16 +125,16 @@ class IVCurve:
             rows: ``(voltage, [i_typ, i_min, i_max])`` rows, in any order; they're sorted by voltage.
                 A missing (i.e. - "NA", ``None``) min/max current is that row's typical current, as for any other
                 typ/min/max value (IBIS 8.0 Section 6.1, p.67 and p.80).
-                The typical current may be missing in all but the first and last rows (IBIS 8.0 Section 6.1, p.91),
-                i.e. - those with the lowest and highest voltages;
+                The typical current may be missing in all but the first and last rows, as listed
+                (IBIS 8.0 Section 6.1, p.91; one missing there is reported in ``warnings``);
                 it's then interpolated linearly, in voltage, from its own column, as is a min/max current also
                 missing from such a row.
-                Of rows repeating a voltage, only one is kept (with a warning), as a curve has one current there:
-                the first with a typical current, else the first.
+                All rows are kept, including those repeating a voltage (a vertical step), in file order
+                (reversed, for a table listed in decreasing voltage).
 
         Raises:
             ValueError: If there are fewer than two distinct voltages,
-                or the lowest or highest voltage has no typical current.
+                or no row at the lowest or highest voltage has a typical current (so the gaps can't be filled).
         """
         if len(rows) < 2:
             raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
@@ -137,28 +143,25 @@ class IVCurve:
             currents = [list(row[1]) for row in rows]
         except Exception as exc:
             raise ValueError(f"[{keyword}]: Malformed I-V table: {rows}") from exc
-        order = np.argsort(v, kind="stable")  # ``impedance()`` and ``np.interp()`` need increasing voltages.
-        v = v[order]
-        currents = [currents[k] for k in order]
-        if len(np.unique(v)) < len(v):  # A zero-width segment would make ``impedance()`` 0 Ohms.
-            logger.warning("[%s]: Repeated I-V table voltage(s) %s V; keeping one row of each "
-                           "(the first with a typical current, if any).",
-                           keyword, ", ".join(f"{x:g}" for x in np.unique(v[1:][np.diff(v) == 0])))
-            kept = []
-            for volts in np.unique(v):
-                rows_here = np.flatnonzero(v == volts)  # In file order (the sort is stable).
-                kept.append(next((k for k in rows_here if currents[k] and currents[k][0] is not None), rows_here[0]))
-            v = v[kept]
-            currents = [currents[k] for k in kept]
-            if len(v) < 2:
-                raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
+        if len(np.unique(v)) < 2:
+            raise ValueError(f"[{keyword}]: Insufficient number of I-V data points!")
 
         def column(col: int) -> NDArray[np.float64]:
             return np.array([cs[col] if len(cs) > col and cs[col] is not None else np.nan for cs in currents],
                             dtype=float)
 
+        warnings: list[str] = []
         given_typ = column(0)
         if np.isnan(given_typ[0]) or np.isnan(given_typ[-1]):
+            warnings.append(f"[{keyword}]: The first and last rows of an I-V table must give a typical current, "
+                            "not NA (IBIS 8.0 Section 6.1, p.91)")
+        # Sort by voltage (``impedance()`` and ``np.interp()`` need it), keeping a vertical step's rows in curve order.
+        listed = np.arange(len(v)) if v[0] <= v[-1] else np.arange(len(v))[::-1]
+        order = listed[np.argsort(v[listed], kind="stable")]
+        v, given_typ = v[order], given_typ[order]
+        currents = [currents[k] for k in order]
+        known = ~np.isnan(given_typ)
+        if not (known[v == v[0]].any() and known[v == v[-1]].any()):
             raise ValueError(f"[{keyword}]: The lowest and highest voltages need a typical current (not NA).")
         i_typ = _fill_na(v, given_typ)
 
@@ -166,7 +169,7 @@ class IVCurve:
             i = column(col)
             return _fill_na(v, np.where(np.isnan(i), given_typ, i))  # Known wherever the typical current is given.
 
-        return cls(keyword, v, i_typ, corner(1), corner(2))
+        return cls(keyword, v, i_typ, corner(1), corner(2), tuple(warnings))
 
     @property
     def vdd_relative(self) -> bool:
@@ -186,6 +189,10 @@ class IVCurve:
         """
         Small-signal impedance, from the slope of the curve at ``vmeas``.
 
+        The slope is that of the segment from the last row below ``vmeas`` to the first row at or above it
+        (at the lowest voltage, the first segment), so a vertical step (a repeated voltage) never makes it 0 Ohms:
+        at a step's own voltage, the segment leading up to the step is used.
+
         Args:
             vmeas: Voltage at which to measure the slope.
                 Default: half the maximum table voltage.
@@ -201,11 +208,14 @@ class IVCurve:
         vthresh = vmeas if vmeas is not None else max(vs) / 2
         if not min(vs) <= vthresh <= max(vs):
             raise ValueError(f"[{self.keyword}]: {vthresh:g} V is outside the table ({min(vs):g} to {max(vs):g} V).")
-        ix = max(int(np.where(vs >= vthresh)[0][0]), 1)  # At the first table voltage, use the first segment.
-        di = ivals[ix] - ivals[ix - 1]
+        hi = int(np.searchsorted(vs, vthresh, side="left"))  # The first row at or above ``vthresh``.
+        if vs[hi] == vs[0]:  # At the lowest voltage: the first segment, past any rows repeating it.
+            hi = int(np.searchsorted(vs, vs[0], side="right"))
+        lo = hi - 1  # The last row below ``vs[hi]``: there are at least two distinct voltages.
+        di = ivals[hi] - ivals[lo]
         if di == 0:
             return OPEN_CIRCUIT_Z
-        return float(abs((vs[ix] - vs[ix - 1]) / di))
+        return float(abs((vs[hi] - vs[lo]) / di))
 
     def ground_referenced(self, ref: float) -> IVCurve:
         """
@@ -247,6 +257,9 @@ class IVData:
 
     curves: Mapping[IVKeyword, IVCurve]
     refs: IVReferences
+    # IBIS spec rules the tables break, which didn't stop the model loading (see ``Model.spec_warnings``):
+    # the curves' own ``warnings``, and unusable tables skipped.
+    warnings: tuple[str, ...] = field(default=(), compare=False)
 
     @classmethod
     def from_model_dict(
@@ -260,7 +273,7 @@ class IVData:
             refs: The model's references (see ``IVReferences.from_model_dict()``); or just its typical power rail
                 voltage, the references then being those ``sub_dict`` gives.
             required: Keywords whose tables must be valid, if present.
-                Any other invalid table is skipped, with a warning.
+                Any other invalid table is skipped, as reported in ``warnings``.
 
         Raises:
             ValueError: If a ``required`` table is invalid.
@@ -268,6 +281,7 @@ class IVData:
         if not isinstance(refs, IVReferences):
             refs = IVReferences.from_model_dict(sub_dict, parent=IVReferences(float(refs)))
         curves: dict[IVKeyword, IVCurve] = {}
+        warnings: list[str] = []
         for kw in IV_KEYWORDS:
             if kw not in sub_dict:
                 continue
@@ -276,8 +290,12 @@ class IVData:
             except ValueError as err:
                 if kw in required:
                     raise
-                logger.warning("Ignoring unusable I-V table: %s", err)
-        return cls(curves, refs)
+                warnings.append(f"Ignoring unusable I-V table: {err}")
+            else:
+                warnings.extend(curves[kw].warnings)
+        for warning in warnings:  # ``Model.spec_warnings`` carries them to the parser, which logs them at WARNING.
+            logger.debug("%s", warning)
+        return cls(curves, refs, tuple(warnings))
 
     @property
     def vdd(self) -> float:
@@ -291,6 +309,19 @@ class IVData:
     def ground_referenced(self, kw: IVKeyword) -> IVCurve:
         "``kw``'s curve, its voltages pin voltages (see ``IVCurve.ground_referenced()``)."
         return self.curves[kw].ground_referenced(self.reference(kw))
+
+    def impedance(self, kw: IVKeyword, v_pin: float, corner: IVCorner = "typ") -> float:
+        """
+        Small-signal impedance of ``kw``'s curve at the (ground-referenced) pin voltage ``v_pin``.
+
+        Table voltages are relative to their reference (``[Pullup]``/``[POWER Clamp]``: ref - Vpin;
+        ``[Pulldown]``/``[GND Clamp]``: Vpin - ref), so the curve is re-referenced first.
+
+        Raises:
+            KeyError: If there's no ``kw`` curve.
+            ValueError: If ``v_pin`` is outside the table.
+        """
+        return self.ground_referenced(kw).impedance(v_pin, corner)
 
     @property
     def rails(self) -> tuple[float, float]:

@@ -59,18 +59,6 @@ _VINL_VINH_TYPES = {  # IBIS 8.0 Section 6.1, Table 1, p.62.
 }
 
 
-def _impedance_at(iv_data: IVData, kw: IVKeyword, v_pin: float) -> float:
-    """Small-signal impedance of ``kw``'s curve at the (ground-referenced) pin voltage ``v_pin``.
-
-    I-V table voltages are relative to their reference (``[Pullup]``/``[POWER Clamp]``: ref - Vpin, ref defaulting to
-    Vdd; ``[Pulldown]``/``[GND Clamp]``: Vpin - ref, ref defaulting to 0 V), so the curve is re-referenced first.
-
-    Raises:
-        ValueError: If ``v_pin`` is outside the table.
-    """
-    return iv_data.ground_referenced(kw).impedance(v_pin)
-
-
 def _clamp_impedance(iv_data: IVData, v_pin: float) -> float:
     """Input impedance of the clamps (in parallel, as both are always active) at the pin voltage ``v_pin``.
 
@@ -82,7 +70,7 @@ def _clamp_impedance(iv_data: IVData, v_pin: float) -> float:
 
     def clamp_z(kw: IVKeyword) -> float:
         try:
-            return _impedance_at(iv_data, kw, v_pin) if kw in curves else NO_CLAMP_Z
+            return iv_data.impedance(kw, v_pin) if kw in curves else NO_CLAMP_Z
         except ValueError:
             return NO_CLAMP_Z
 
@@ -237,6 +225,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
 
         # Infer impedance and/or rise/fall time, as per model type.
         self._iv_data: Optional[IVData] = None
+        self._iv_warnings: tuple[str, ...] = ()
         self._zout: Optional[float] = None
         self._slew: Optional[float] = None
         self._zin: Optional[float] = None
@@ -296,6 +285,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             raise LookupError(f"Unusable I-V table: {err}") from err
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
+        self._iv_warnings = iv_data.warnings  # Kept even when no table was usable.
         if sides:
             missing = [_KEYWORD_NAMES[kw] for kw in sides if kw not in curves]
             if not self._ramp:
@@ -305,7 +295,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                name or "<unnamed>", self._mtype, ", ".join(missing))
             if all(kw in curves for kw in sides):
                 try:
-                    self._zout = sum(_impedance_at(iv_data, kw, self._vout_op) for kw in sides) / len(sides)
+                    self._zout = sum(iv_data.impedance(kw, self._vout_op) for kw in sides) / len(sides)
                 except ValueError as err:  # Vmeas off the table: no data there.
                     logger.warning("[Model] %s: %s Its output impedance is unknown.", name or "<unnamed>", err)
             if self._ramp:
@@ -334,9 +324,11 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             # A submodel's tables have our references, unless it gives its own.
             sub_refs = IVReferences.from_model_dict(sub, parent=self._iv_refs)
             sub_iv = IVData.from_model_dict(sub, sub_refs, required=())
+            warnings.extend(f"[Model] {self._name or '<unnamed>'}: [Submodel] {sub_name}: {warning}."
+                            for warning in sub_iv.warnings)
             for kw in sub_iv.curves:
                 try:
-                    conductance += 1 / _impedance_at(sub_iv, kw, self._vin_op)
+                    conductance += 1 / sub_iv.impedance(kw, self._vin_op)
                 except ValueError:  # The operating point is off the table: the clamp is off there.
                     pass
         if conductance:
@@ -436,7 +428,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         """IBIS spec rules this model breaks, which don't stop it loading (diagnostics only).
 
         Checks ``[Algorithmic Model]`` use per ``Model_type`` (IBIS 8.0 Section 10.1, p.213-214, Table 47),
-        the ``.ami`` file extension (p.214), and the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1).
+        the ``.ami`` file extension (p.214), the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1),
+        and the I-V tables (``IVData.warnings``).
         """
         mtype = self._mtype.lower()
         execs = self._ami_executables
@@ -470,6 +463,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                 "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62); "
                                 "not needed if the model is only used through [Diff Pin], whose vdiff supersedes them "
                                 "(Section 5, p.55)")
+        problems.extend(self._iv_warnings)
         return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property
