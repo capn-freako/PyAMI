@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyibisami.ibis.file import IBISModel
-from pyibisami.ibis.iv import OPEN_CIRCUIT_Z, IVCurve, IVData
+from pyibisami.ibis.iv import OPEN_CIRCUIT_Z, IVCurve, IVData, IVReferences
 
 PULLDOWN = [(-1.8, [-10.0, -10.0, -10.0]), (0.0, [0.0, 0.0, 0.0]), (1.8, [0.036, 0.04, 0.03273]), (3.6, [10.0, 10.0, 10.0])]
 PULLUP = [(v, [-i for i in iss]) for v, iss in PULLDOWN]
@@ -344,6 +344,41 @@ def test_repeated_voltage_keeps_the_row_with_a_typical_current():
     """An ``NA`` typical current at a repeated lowest/highest voltage used to reject a usable table."""
     curve = IVCurve.from_table("gnd_clamp", [(0.0, [None, None, None]), (0.0, [0.01, 0.01, 0.01]), (1.0, [0.02] * 3)])
     np.testing.assert_allclose(curve.i_typ, [0.01, 0.02])
+
+
+@pytest.mark.parametrize("sub_dict, vdd", [
+    ({"voltage_range": [1.8, 1.7, 1.9], "pullup_reference": [1.2]}, 1.8),  # [Voltage Range] first,
+    ({"pullup_reference": [1.2], "power_clamp_reference": [1.5]}, 1.2),  # then [Pullup Reference],
+    ({"power_clamp_reference": [1.5]}, 1.5),  # then [POWER Clamp Reference].
+])
+def test_references_power_rail(sub_dict, vdd):
+    refs = IVReferences.from_model_dict(sub_dict)
+    assert refs.vdd == pytest.approx(vdd)
+    assert refs.reference("pulldown") == 0.0
+    assert refs.midway("pulldown", "pullup") == pytest.approx(refs.reference("pullup") / 2)
+
+
+def test_references_need_a_power_rail():
+    with pytest.raises(ValueError, match="Voltage Range"):
+        IVReferences.from_model_dict({"pulldown_reference": [0.0]})
+
+
+def test_submodel_references_inherit_the_parents():
+    """A [Submodel] has its parent's power rail, and its references where it gives none."""
+    parent = IVReferences.from_model_dict({"voltage_range": [1.8], "power_clamp_reference": [1.2],
+                                           "gnd_clamp_reference": [0.1]})
+    sub = IVReferences.from_model_dict({"voltage_range": [3.3], "power_clamp_reference": [1.5]}, parent=parent)
+    assert sub.vdd == pytest.approx(1.8)
+    assert sub.reference("power_clamp") == pytest.approx(1.5)
+    assert sub.reference("gnd_clamp") == pytest.approx(0.1)
+
+
+def test_model_without_iv_tables_has_no_iv_data():
+    """The references exist for every model, but ``iv_data`` stays ``None`` without any I-V tables."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Terminator", "voltage_range": [1.8, 1.7, 1.9]})
+    assert model.iv_data is None
 
 
 def test_plot_voltage_span_is_the_references():

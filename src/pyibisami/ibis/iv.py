@@ -40,22 +40,54 @@ def typ_value(value: object) -> Optional[float]:
     return None
 
 
-def given_references(
-    sub_dict: Mapping[str, object], inherited: Optional[Mapping[IVKeyword, float]] = None
-) -> dict[IVKeyword, float]:
-    """The typical ``[Pullup Reference]``-style voltages a parsed ``[Model]`` (or ``[Submodel]``) gives
-    (IBIS 8.0 Section 6.1), over any ``inherited`` ones (e.g. - a ``[Submodel]``'s parent model's)."""
-    refs = dict(inherited or {})
-    for kw in IV_KEYWORDS:
-        ref = typ_value(sub_dict.get(f"{kw}_reference"))
-        if ref is not None:
-            refs[kw] = ref
-    return refs
+@dataclass(frozen=True)
+class IVReferences:
+    """The typical voltages a ``[Model]``'s (or ``[Submodel]``'s) I-V tables are referenced to (IBIS 8.0 Section 6.1).
 
+    Every model has these, whether or not it has any I-V tables.
+    Only typical values are kept, so every corner's table is referenced to them.
+    TODO(IBIS 11): min/max references.
+    """
 
-def reference_voltage(kw: IVKeyword, refs: Mapping[IVKeyword, float], vdd: float) -> float:
-    "The voltage ``kw``'s table is referenced to: its ``[... Reference]``; else, Vdd (pull-up/power) or 0 V."
-    return refs.get(kw, vdd if kw in VDD_RELATIVE else 0.0)
+    vdd: float  # The power rail.
+    given: Mapping[IVKeyword, float] = field(default_factory=dict)  # The ``[... Reference]`` voltages given.
+
+    @classmethod
+    def from_model_dict(cls, sub_dict: Mapping[str, object], parent: Optional[IVReferences] = None) -> IVReferences:
+        """
+        The references a parsed ``[Model]`` (or ``[Submodel]``) gives.
+
+        Args:
+            sub_dict: Parsed ``[Model]`` (or ``[Submodel]``) sub-keywords.
+            parent: The references of the model a ``[Submodel]`` is added to; its power rail is the parent's,
+                as are any ``[... Reference]`` voltages it doesn't give itself.
+
+        Returns:
+            The references; the power rail is the parent's, else ``[Voltage Range]``, else (as IBIS allows, requiring
+            the ``[... Reference]`` keywords instead) ``[Pullup Reference]``, else ``[POWER Clamp Reference]``.
+
+        Raises:
+            ValueError: If there's no power rail.
+        """
+        given = dict(parent.given) if parent else {}
+        for kw in IV_KEYWORDS:
+            ref = typ_value(sub_dict.get(f"{kw}_reference"))
+            if ref is not None:
+                given[kw] = ref
+        vdd = parent.vdd if parent else typ_value(sub_dict.get("voltage_range"))
+        if vdd is None:
+            vdd = given.get("pullup", given.get("power_clamp"))
+        if vdd is None:
+            raise ValueError("Missing [Voltage Range] (or [Pullup Reference]/[POWER Clamp Reference])!")
+        return cls(vdd, given)
+
+    def reference(self, kw: IVKeyword) -> float:
+        "The voltage ``kw``'s table is referenced to: its ``[... Reference]``; else, Vdd (pull-up/power) or 0 V."
+        return self.given.get(kw, self.vdd if kw in VDD_RELATIVE else 0.0)
+
+    def midway(self, low: IVKeyword, high: IVKeyword) -> float:
+        "The voltage midway between ``low``'s and ``high``'s references (by default, Vdd / 2)."
+        return (self.reference(low) + self.reference(high)) / 2
 
 
 def _fill_na(v: NDArray[np.float64], i: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -214,28 +246,27 @@ class IVData:
     """All I-V curves of one IBIS ``[Model]``."""
 
     curves: Mapping[IVKeyword, IVCurve]
-    vdd: float
-    refs: Mapping[IVKeyword, float] = field(default_factory=dict)  # Typical ``[... Reference]`` voltages given.
+    refs: IVReferences
 
     @classmethod
     def from_model_dict(
-        cls, sub_dict: Mapping[str, object], vdd: float, required: Sequence[IVKeyword] = IV_KEYWORDS,
-        refs: Optional[Mapping[IVKeyword, float]] = None,
+        cls, sub_dict: Mapping[str, object], refs: IVReferences | float, required: Sequence[IVKeyword] = IV_KEYWORDS
     ) -> IVData:
         """
         Collect every I-V table found in a parsed ``[Model]`` dictionary.
 
         Args:
             sub_dict: Parsed ``[Model]`` sub-keywords.
-            vdd: Typical power rail voltage (i.e. - ``[Voltage Range]`` typ).
+            refs: The model's references (see ``IVReferences.from_model_dict()``); or just its typical power rail
+                voltage, the references then being those ``sub_dict`` gives.
             required: Keywords whose tables must be valid, if present.
                 Any other invalid table is skipped, with a warning.
-            refs: Reference voltages to use where ``sub_dict`` gives none (e.g. - a ``[Submodel]``'s parent model's).
 
         Raises:
             ValueError: If a ``required`` table is invalid.
         """
-        given_refs = given_references(sub_dict, refs)
+        if not isinstance(refs, IVReferences):
+            refs = IVReferences.from_model_dict(sub_dict, parent=IVReferences(float(refs)))
         curves: dict[IVKeyword, IVCurve] = {}
         for kw in IV_KEYWORDS:
             if kw not in sub_dict:
@@ -246,11 +277,16 @@ class IVData:
                 if kw in required:
                     raise
                 logger.warning("Ignoring unusable I-V table: %s", err)
-        return cls(curves, vdd, given_refs)
+        return cls(curves, refs)
+
+    @property
+    def vdd(self) -> float:
+        "The typical power rail voltage."
+        return self.refs.vdd
 
     def reference(self, kw: IVKeyword) -> float:
-        "The voltage ``kw``'s table is referenced to (see ``reference_voltage()``)."
-        return reference_voltage(kw, self.refs, self.vdd)
+        "The voltage ``kw``'s table is referenced to (see ``IVReferences.reference()``)."
+        return self.refs.reference(kw)
 
     def ground_referenced(self, kw: IVKeyword) -> IVCurve:
         "``kw``'s curve, its voltages pin voltages (see ``IVCurve.ground_referenced()``)."
