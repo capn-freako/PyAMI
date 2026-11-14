@@ -17,7 +17,7 @@ from typing import NamedTuple, Optional
 
 from traits.api import Any, Float, HasTraits, Property, String, Trait, cached_property
 
-from .iv import IVCurve, IVData, IVKeyword
+from .iv import IVData, IVKeyword, IVReferences, typ_value
 
 logger = logging.getLogger(__name__)
 
@@ -59,15 +59,18 @@ _VINL_VINH_TYPES = {  # IBIS 8.0 Section 6.1, Table 1, p.62.
 }
 
 
-def _clamp_impedance(curves: Mapping[IVKeyword, IVCurve], vmeas: Optional[float]) -> float:
-    """Input impedance of the clamps (in parallel, as both are always active).
+def _clamp_impedance(iv_data: IVData, v_pin: float) -> float:
+    """Input impedance of the clamps (in parallel, as both are always active) at the pin voltage ``v_pin``.
 
-    ``NO_CLAMP_Z`` for a missing clamp, or one whose table doesn't reach ``vmeas``: clamp tables often cover only the
-    region where the clamp conducts (e.g. - a ``[POWER Clamp]`` from -Vcc to 0 V), so it's off there.
+    ``NO_CLAMP_Z`` for a missing clamp, or one whose table doesn't reach ``v_pin``: clamp tables often cover only the
+    region where the clamp conducts (e.g. - a ``[POWER Clamp]`` from -Vdd to 0 V, i.e. - pin voltages above Vdd),
+    so it's off there.
     """
+    curves = iv_data.curves
+
     def clamp_z(kw: IVKeyword) -> float:
         try:
-            return curves[kw].impedance(vmeas) if kw in curves else NO_CLAMP_Z
+            return iv_data.impedance(kw, v_pin) if kw in curves else NO_CLAMP_Z
         except ValueError:
             return NO_CLAMP_Z
 
@@ -166,7 +169,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 Default: "" (unnamed)
 
         Raises:
-            LookupError: A required keyword is missing.
+            LookupError: A required keyword is missing, or a required I-V table is unusable.
         """
 
         # Super-class initialization is ABSOLUTELY NECESSARY, in order
@@ -197,21 +200,32 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         self._vrange = maybe("voltage_range")
         self._ramp = maybe("ramp")
         self._add_submodel = maybe("add_submodel") or []
-        # Receiver operating point for the input impedance: ``Vmeas``,
-        # else the threshold midpoint (``Vinl`` + ``Vinh``) / 2.
-        vinl, vinh = maybe("vinl"), maybe("vinh")
-        self._vin_op = self._vmeas
-        if self._vin_op is None and isinstance(vinl, float) and isinstance(vinh, float):
-            self._vin_op = (vinl + vinh) / 2
 
         # Check for the required keywords.
         if not self._mtype:
             raise LookupError("Missing Model_type!")
-        if not self._vrange:
-            raise LookupError("Missing [Voltage Range]!")
+        # The power rail and I-V table references (for our submodels' tables, too).
+        try:
+            self._iv_refs = IVReferences.from_model_dict(subDict)
+        except ValueError as err:
+            raise LookupError(str(err)) from err
+
+        # Operating points (typical, ground-referenced pin voltages) at which every I-V curve's slope is taken.
+        # Output impedance: ``Vmeas``, else midway between the pull-down and pull-up references (by default, Vdd / 2).
+        # Input impedance: ``Vmeas``, else the threshold midpoint (``Vinl`` + ``Vinh``) / 2,
+        # else midway between the clamps' references (by default, Vdd / 2).
+        vmeas, vinl, vinh = typ_value(self._vmeas), typ_value(maybe("vinl")), typ_value(maybe("vinh"))
+        self._vout_op = vmeas if vmeas is not None else self._iv_refs.midway("pulldown", "pullup")
+        if vmeas is not None:
+            self._vin_op = vmeas
+        elif vinl is not None and vinh is not None:
+            self._vin_op = (vinl + vinh) / 2
+        else:
+            self._vin_op = self._iv_refs.midway("gnd_clamp", "power_clamp")
 
         # Infer impedance and/or rise/fall time, as per model type.
         self._iv_data: Optional[IVData] = None
+        self._iv_warnings: tuple[str, ...] = ()
         self._zout: Optional[float] = None
         self._slew: Optional[float] = None
         self._zin: Optional[float] = None
@@ -265,9 +279,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
             required = ("gnd_clamp", "power_clamp")
         elif strict:
             required = sides
-        iv_data = IVData.from_model_dict(subDict, self._vrange[0], required=required)
+        try:
+            iv_data = IVData.from_model_dict(subDict, self._iv_refs, required=required)
+        except ValueError as err:  # So that the parser reports it, as for a missing table.
+            raise LookupError(f"Unusable I-V table: {err}") from err
         curves = iv_data.curves
         self._iv_data = iv_data if curves else None
+        self._iv_warnings = iv_data.warnings  # Kept even when no table was usable.
         if sides:
             missing = [_KEYWORD_NAMES[kw] for kw in sides if kw not in curves]
             if not self._ramp:
@@ -277,13 +295,13 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                name or "<unnamed>", self._mtype, ", ".join(missing))
             if all(kw in curves for kw in sides):
                 try:
-                    self._zout = sum(curves[kw].impedance(self._vmeas) for kw in sides) / len(sides)
+                    self._zout = sum(iv_data.impedance(kw, self._vout_op) for kw in sides) / len(sides)
                 except ValueError as err:  # Vmeas off the table: no data there.
                     logger.warning("[Model] %s: %s Its output impedance is unknown.", name or "<unnamed>", err)
             if self._ramp:
                 self._slew = (self._ramp["rising"][0] + self._ramp["falling"][0]) / 2e9  # (V/ns)
         if mtype in _RECEIVER_TYPES:
-            self._zin = _clamp_impedance(curves, self._vin_op)
+            self._zin = _clamp_impedance(iv_data, self._vin_op)
 
     def apply_submodels(self, submodels: Mapping[str, dict]) -> list[str]:
         """Put the clamps of the ``Dynamic_clamp`` submodels that ``[Add Submodel]`` adds in ``Non-Driving``
@@ -303,10 +321,15 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                 continue
             if mode.lower() == "driving" or str(sub.get("submodel_type", "")).lower() != "dynamic_clamp":
                 continue
-            for curve in IVData.from_model_dict(sub, self._vrange[0], required=()).curves.values():
+            # A submodel's tables have our references, unless it gives its own.
+            sub_refs = IVReferences.from_model_dict(sub, parent=self._iv_refs)
+            sub_iv = IVData.from_model_dict(sub, sub_refs, required=())
+            warnings.extend(f"[Model] {self._name or '<unnamed>'}: [Submodel] {sub_name}: {warning}."
+                            for warning in sub_iv.warnings)
+            for kw in sub_iv.curves:
                 try:
-                    conductance += 1 / curve.impedance(self._vin_op)
-                except ValueError:  # Vmeas off the table: the clamp is off there.
+                    conductance += 1 / sub_iv.impedance(kw, self._vin_op)
+                except ValueError:  # The operating point is off the table: the clamp is off there.
                     pass
         if conductance:
             self._zin = 1 / (1 / self._zin + conductance)
@@ -405,7 +428,8 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
         """IBIS spec rules this model breaks, which don't stop it loading (diagnostics only).
 
         Checks ``[Algorithmic Model]`` use per ``Model_type`` (IBIS 8.0 Section 10.1, p.213-214, Table 47),
-        the ``.ami`` file extension (p.214), and the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1).
+        the ``.ami`` file extension (p.214), the ``Vinl``/``Vinh`` that receivers need (Section 6.1, Table 1),
+        and the I-V tables (``IVData.warnings``).
         """
         mtype = self._mtype.lower()
         execs = self._ami_executables
@@ -439,6 +463,7 @@ class Model(HasTraits):  # pylint: disable=too-many-instance-attributes
                                 "the spec default is Vinl = 0.8 V, Vinh = 2.0 V (IBIS 8.0 Section 6.1, Table 1, p.62); "
                                 "not needed if the model is only used through [Diff Pin], whose vdiff supersedes them "
                                 "(Section 5, p.55)")
+        problems.extend(self._iv_warnings)
         return [f"[Model] {self._name or '<unnamed>'}: {problem}." for problem in problems]
 
     @property

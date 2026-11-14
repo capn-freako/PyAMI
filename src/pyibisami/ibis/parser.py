@@ -180,19 +180,24 @@ def typminmax() -> GenParser[list[float]]:
     return [typ] + [typ if val is None else val for val in minmax]
 
 
-@generate("I-V currents")
-def iv_currents() -> GenParser[list[Optional[float]]]:
-    """Parse the Typ/Min/Max currents of an I-V table row.
+@Parser
+def vi_line(text: Sequence[Any], index: int) -> Value:
+    """Parse one I-V table row into ``(voltage, [i_typ, i_min, i_max])``.
 
-    Any of them may be ``NA`` (``None``); ``IVCurve.from_table()`` fills those in (IBIS 8.0 Section 6.1, p.91).
+    A row is one line: ``number`` skips newlines, so reading it column by column would let a short row take its
+    missing currents from the next one. Any current may be ``NA``, or left off the end (``None``);
+    ``IVCurve.from_table()`` fills those in (IBIS 8.0 Section 6.1, p.91).
     """
-    typ = yield number | na
-    minmax = yield optional(count(number | na, 2), [None, None])
-    yield ignore  # So that ``iv_currents`` behaves as a lexeme.
-    return [typ] + minmax
-
-
-vi_line: Parser = (number + iv_currents) << ignore
+    line = rest_line(text, index)
+    columns = line.value.split()
+    if not 2 <= len(columns) <= 4:
+        return Value.failure(index, "I-V table row")
+    try:
+        voltage = number.parse_strict(columns[0])
+        currents = [None if column.upper() == "NA" else number.parse_strict(column) for column in columns[1:]]
+    except ParseError:
+        return Value.failure(index, "I-V table row")
+    return Value.success(line.index, (voltage, currents + [None] * (4 - len(columns))))
 
 
 @generate("ratio")
@@ -444,8 +449,15 @@ def ramp() -> GenParser[dict[str, Any]]:
     return rslt
 
 
+# ``[Pullup Reference]`` etc.: the voltage each I-V table is referenced to, if not the default
+# (``[Voltage Range]`` for ``[Pullup]``/``[POWER Clamp]``, 0 V for ``[Pulldown]``/``[GND Clamp]``; IBIS 8.0 Section 6.1).
+IV_reference_keywords: dict[str, Parser] = {
+    f"{kw}_reference": typminmax for kw in ("pulldown", "pullup", "gnd_clamp", "power_clamp")
+}
+
 # ToDo: Implement: rising_waveform, falling_waveform, and composite_current.
 Model_keywords: dict[str, Parser] = {
+    **IV_reference_keywords,
     "pulldown": many1(vi_line),
     "pullup": many1(vi_line),
     "ramp": ramp,
@@ -463,6 +475,7 @@ Model_keywords: dict[str, Parser] = {
 
 # ``[Submodel]`` I-V tables used for the receiver input impedance (``Dynamic_clamp`` ODT, IBIS 8.0 Section 6.3).
 Submodel_keywords: dict[str, Parser] = {
+    **IV_reference_keywords,  # Else, the parent [Model]'s.
     "gnd_clamp": many1(vi_line),
     "power_clamp": many1(vi_line),
 }

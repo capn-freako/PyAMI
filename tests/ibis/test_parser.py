@@ -1,6 +1,9 @@
-import pytest
+import re
 
-from pyibisami.ibis.parser import parse_ibis_file
+import pytest
+from parsec import many1
+
+from pyibisami.ibis.parser import parse_ibis_file, vi_line
 
 
 def test_parse_ibis_file_with_ideal_file(ibis_test_file):
@@ -51,13 +54,45 @@ def _parse_edited(ibis_test_file, *edits):
 
 
 def test_na_typical_current_in_iv_table(ibis_test_file):
-    """An I-V row may give ``NA`` for its typical current, except the first and last rows (IBIS 8.0 Section 6.1,
-    p.91). Such a file used to fail to parse."""
+    """An I-V row may give ``NA`` for its typical current, except at the lowest and highest voltages
+    (IBIS 8.0 Section 6.1, p.91). Such a file used to fail to parse."""
     row = "0.00     0.000e+00     0.000e+00     0.000e+00\n"
     status, ibis_dict = _parse_edited(ibis_test_file, (row, row + "0.90     NA            NA            NA\n"))
     assert status == "Success!"
     pulldown = ibis_dict["models"]["example_tx"].iv_data.curves["pulldown"]
     assert pulldown.i_typ[2] == pytest.approx(0.018)  # Halfway between 0 A (0 V) and 36 mA (1.8 V).
+
+
+def test_iv_row_is_one_line():
+    """A row with fewer than three currents used to take the rest from the next row, silently scrambling the table."""
+    table = "0.0 NA NA NA | A comment.\n0.5 NA\n1.0 3e-3 4e-3\n2.0 1m 2m 3m\n[Pullup]\n"
+    assert many1(vi_line).parse(table) == [
+        (0.0, [None, None, None]),
+        (0.5, [None, None, None]),
+        (1.0, [0.003, 0.004, None]),
+        (2.0, [0.001, 0.002, 0.003]),
+    ]
+
+
+@pytest.mark.parametrize("row", ["1.0", "1.0 1 2 3 4", "NA 1 2 3", "1.0 oops 2 3", "[Pullup]"])
+def test_not_an_iv_row(row):
+    assert many1(vi_line).parse("0.0 0 0 0\n" + row + "\n") == [(0.0, [0.0, 0.0, 0.0])]
+
+
+def test_na_typical_current_in_first_row_is_a_parse_failure(ibis_test_file):
+    """It's reported through the status, with a location; a ``ValueError`` used to escape ``parse_ibis_file()``."""
+    first_row = "[Pulldown]\n-1.80    -1.000e+01    -1.000e+01    -1.000e+01\n"
+    status, _ = _parse_edited(ibis_test_file, (first_row, "[Pulldown]\n-1.80    NA    NA    NA\n"))
+    assert re.search(r"at line \d+, column \d+", status), status
+
+
+def test_iv_reference_keywords(ibis_test_file):
+    """``[Pulldown Reference]`` etc. are read (they used to be skipped), and set their tables' references."""
+    status, ibis_dict = _parse_edited(ibis_test_file, ("[Pulldown]\n", "[Pulldown Reference]  0.1V  0.05V  0.15V\n[Pulldown]\n"))
+    assert status == "Success!"
+    iv_data = ibis_dict["models"]["example_tx"].iv_data
+    assert iv_data.reference("pulldown") == pytest.approx(0.1)
+    assert iv_data.reference("pullup") == pytest.approx(1.8)  # Not given: [Voltage Range].
 
 
 def test_signal_names_with_punctuation(ibis_test_file):

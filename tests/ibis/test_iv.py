@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyibisami.ibis.file import IBISModel
-from pyibisami.ibis.iv import OPEN_CIRCUIT_Z, IVCurve, IVData
+from pyibisami.ibis.iv import OPEN_CIRCUIT_Z, IVCurve, IVData, IVReferences
 
 PULLDOWN = [(-1.8, [-10.0, -10.0, -10.0]), (0.0, [0.0, 0.0, 0.0]), (1.8, [0.036, 0.04, 0.03273]), (3.6, [10.0, 10.0, 10.0])]
 PULLUP = [(v, [-i for i in iss]) for v, iss in PULLDOWN]
@@ -23,9 +23,9 @@ def test_missing_min_max_default_to_typ():
 
 
 def test_na_currents_are_interpolated():
-    """A missing (``NA``) current is interpolated in its own column; ``NA`` typical currents are allowed in
-    all but the first and last rows (IBIS 8.0 Section 6.1, p.91). A min/max column with no values on both
-    sides of a gap falls back to the typical value, as before."""
+    """A missing (``NA``) typical current is interpolated in its own column, as is a min/max current in the
+    same row; ``NA`` typical currents are allowed at all but the lowest and highest voltages
+    (IBIS 8.0 Section 6.1, p.91). A min/max current missing beside a typical one is that typical value."""
     curve = IVCurve.from_table("pulldown", [
         (0.0, [0.0, 0.0, 0.0]),
         (0.9, [None, 0.02, None]),  # As some DRAM vendors' tables have it: only I(min) measured here.
@@ -40,9 +40,34 @@ def test_na_currents_are_interpolated():
 
 def test_na_currents_with_decreasing_voltages():
     curve = IVCurve.from_table("pullup", [(1.8, [-0.036, -0.04, -0.032]), (0.9, [None, None, -0.016]), (0.0, [0.0, 0.0, 0.0])])
-    np.testing.assert_allclose(curve.i_typ, [-0.036, -0.018, 0.0])
-    np.testing.assert_allclose(curve.i_min, [-0.04, -0.02, 0.0])
-    np.testing.assert_allclose(curve.i_max, [-0.032, -0.016, 0.0])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 1.8])  # Sorted.
+    np.testing.assert_allclose(curve.i_typ, [0.0, -0.018, -0.036])
+    np.testing.assert_allclose(curve.i_min, [0.0, -0.02, -0.04])
+    np.testing.assert_allclose(curve.i_max, [0.0, -0.016, -0.032])
+
+
+def test_impedance_of_a_descending_nonlinear_table():
+    """``impedance()`` used to take the top segment of a table written in decreasing voltage, wherever ``vmeas`` was."""
+    rows = [(1.8, [0.1, 0.1, 0.1]), (0.9, [0.018, 0.018, 0.018]), (0.0, [0.0, 0.0, 0.0])]
+    assert IVCurve.from_table("pulldown", rows).impedance(0.5) == pytest.approx(50.0)  # 0.9 V / 18 mA.
+
+
+def test_unordered_rows():
+    """The first/last-row rule applies to the rows as listed (a spec warning); the gaps are filled as long as the
+    lowest and highest voltages have a typical current (an error otherwise). A ``nan`` used to survive here."""
+    curve = IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.018, 0.036])
+    assert len(curve.warnings) == 1 and "first and last rows" in curve.warnings[0]
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
+        IVCurve.from_table("pulldown", [(0.0, [0.0]), (1.8, [None]), (0.9, [0.018])])
+    assert IVCurve.from_table("pulldown", PULLDOWN).warnings == ()
+
+
+def test_na_min_max_beside_a_typical_current_is_that_typical_value():
+    """``typ NA NA`` means the typical value (IBIS 8.0 Section 6.1, p.67 and p.80), not an interpolation."""
+    curve = IVCurve.from_table("pulldown", [(0.0, [0.0, 0.0, 0.0]), (1.0, [0.03, None, None]), (2.0, [0.03, 0.01, 0.05])])
+    np.testing.assert_allclose(curve.i_min, [0.0, 0.03, 0.01])
+    np.testing.assert_allclose(curve.i_max, [0.0, 0.03, 0.05])
 
 
 @pytest.mark.parametrize("rows", [
@@ -50,7 +75,7 @@ def test_na_currents_with_decreasing_voltages():
     [(0.0, [0.0]), (0.9, [0.018]), (1.8, [None, 0.04, 0.03])],
 ])
 def test_na_typical_current_in_first_or_last_row(rows):
-    with pytest.raises(ValueError, match="first and last rows"):
+    with pytest.raises(ValueError, match="lowest and highest voltages"):
         IVCurve.from_table("pulldown", rows)
 
 
@@ -75,12 +100,54 @@ def test_impedance_at_table_edges():
         curve.impedance(4.0)
 
 
+def test_impedance_at_zero_volts():
+    """0 V is a measurement point like any other, not "no ``vmeas`` given"."""
+    curve = IVCurve.from_table("gnd_clamp", [(-1.0, [-0.02, -0.02, -0.02]), (0.0, [0.0, 0.0, 0.0]), (1.0, [0.1, 0.1, 0.1])])
+    assert curve.impedance(0.0) == pytest.approx(50.0)  # The segment ending at 0 V.
+    assert curve.impedance() == pytest.approx(10.0)  # Half the max. table voltage: the 0 to 1 V segment.
+
+
 def test_ground_referenced():
     pullup = IVCurve.from_table("pullup", PULLUP).ground_referenced(1.8)
-    np.testing.assert_allclose(pullup.v, [3.6, 1.8, 0.0, -1.8])
-    np.testing.assert_allclose(pullup.i_typ, [-10.0, 0.0, 0.036, 10.0])
+    np.testing.assert_allclose(pullup.v, [-1.8, 0.0, 1.8, 3.6])  # Still increasing, for ``impedance()``.
+    np.testing.assert_allclose(pullup.i_typ, [10.0, 0.036, 0.0, -10.0])
+    assert pullup.impedance(1.0) == pytest.approx(50.0)  # 1.8 V / 36 mA.
     pulldown = IVCurve.from_table("pulldown", PULLDOWN)
-    assert pulldown.ground_referenced(1.8) is pulldown
+    assert pulldown.ground_referenced(0.0) is pulldown
+    # A ``[Pulldown Reference]`` of 0.2 V: Vpin = v + 0.2 V.
+    np.testing.assert_allclose(pulldown.ground_referenced(0.2).v, [-1.6, 0.2, 2.0, 3.8])
+
+
+# A vertical step at 0.9 V (IBIS allows repeated voltages): 100 Ohms below it, 50 Ohms above.
+STEP = [(0.0, [0.0, 0.0, 0.0]), (0.9, [0.009, 0.009, 0.009]), (0.9, [0.018, 0.018, 0.018]), (1.8, [0.036] * 3)]
+
+
+def test_repeated_voltages_are_kept():
+    """Every row is kept (they used to be pruned to one per voltage), with no zero-width segment in ``impedance()``."""
+    curve = IVCurve.from_table("gnd_clamp", STEP)
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.018, 0.036])
+    assert curve.warnings == ()
+    assert curve.impedance(0.5) == pytest.approx(100.0)
+    assert curve.impedance(0.9) == pytest.approx(100.0)  # At the step: the segment leading up to it.
+    assert curve.impedance(1.2) == pytest.approx(50.0)  # Across the step's top row, not its bottom one.
+    with pytest.raises(ValueError, match="Insufficient"):
+        IVCurve.from_table("gnd_clamp", [(0.5, [0.0]), (0.5, [0.01])])
+
+
+@pytest.mark.parametrize("rows, vmeas, z", [
+    ([(0.0, [0.0]), (0.0, [0.01]), (1.0, [0.03])], 0.0, 50.0),  # A step at the lowest voltage: past it.
+    ([(0.0, [0.0]), (1.0, [0.02]), (1.0, [0.05])], 1.0, 50.0),  # At the highest voltage: the segment up to it.
+])
+def test_impedance_at_a_step_at_the_table_ends(rows, vmeas, z):
+    assert IVCurve.from_table("gnd_clamp", rows).impedance(vmeas) == pytest.approx(z)
+
+
+def test_decreasing_table_keeps_a_steps_rows_in_curve_order():
+    """A table listed in decreasing voltage gets the same curve as its increasing listing, step and all."""
+    curve = IVCurve.from_table("gnd_clamp", STEP[::-1])
+    np.testing.assert_allclose(curve.v, [0.0, 0.9, 0.9, 1.8])
+    np.testing.assert_allclose(curve.i_typ, [0.0, 0.009, 0.018, 0.036])
 
 
 def test_driver_series_exclude_clamps():
@@ -156,7 +223,8 @@ def test_gui_input_model_view_builds():
     assert all(model.trait(name) is not None for name in names), names
 
 
-CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.5, (0.01, 0.008, 0.012)), (1.0, (0.02, 0.016, 0.024))]  # 50 Ohms at Vmeas.
+# 50 Ohms at Vmeas (0.5 V), also as a ``[POWER Clamp]`` (rail-relative: 1.8 - 0.5 = 1.3 V).
+CLAMP_50 = [(0.0, (0.0, 0.0, 0.0)), (0.9, (0.018, 0.0144, 0.0216)), (1.8, (0.036, 0.0288, 0.0432))]
 RAMP = {"rising": [2e9], "falling": [2e9], "load": 50}  # 2 V/ns.
 
 
@@ -209,6 +277,187 @@ def test_tables_that_dont_reach_vmeas(caplog):
         model = _model("Open_drain", name="short_pd", pulldown=PULLDOWN[:2], ramp=RAMP)  # Table ends at 0 V.
     assert model.zout is None and model.slew == pytest.approx(2.0)
     assert "short_pd" in caplog.text and "outside the table" in caplog.text
+
+
+def test_rail_relative_curves_are_read_at_the_pin_voltage():
+    """``[Pullup]``/``[POWER Clamp]`` voltages are Vdd - Vpin; they used to be read at Vpin itself."""
+    from pyibisami.ibis.model import Model
+
+    # Rail-relative: 100 Ohms from 0 to 1 V, then 50 Ohms; Vmeas = 0.5 V is 1.3 V rail-relative (Vdd = 1.8 V).
+    pullup = [(0.0, [0.0, 0.0, 0.0]), (1.0, [-0.01, -0.01, -0.01]), (1.8, [-0.026, -0.026, -0.026])]
+    assert _model("Open_source", pullup=pullup, ramp=RAMP).zout == pytest.approx(50.0)
+    # A VDDQ-terminated ODT (DDR4/5 POD) in [POWER Clamp]: Vdd = 1.2 V, Vmeas = 0.84 V, i.e. - 0.36 V rail-relative.
+    odt = [(0.0, [0.0, 0.0, 0.0]), (0.5, [-0.01, -0.01, -0.01]), (1.2, [-0.017, -0.017, -0.017])]  # 50, then 100 Ohms.
+    model = Model({"model_type": "Input", "voltage_range": [1.2, 1.14, 1.26], "vmeas": 0.84,
+                   "add_submodel": [("odt", "Non-Driving")]})
+    assert model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": odt}}) == []
+    assert model.zin == pytest.approx(50.0, rel=1e-3)  # In parallel with NO_CLAMP_Z.
+
+
+# 50 Ohms below 0.6 V, 100 Ohms above.
+BENT_CLAMP = [(0.0, [0.0, 0.0, 0.0]), (0.6, [0.012, 0.012, 0.012]), (2.0, [0.026, 0.026, 0.026])]
+
+
+def test_reference_keywords():
+    """``[Pullup Reference]`` etc. replace the default references (Vdd, or 0 V) of their tables."""
+    from pyibisami.ibis.model import Model
+
+    vrange = [1.8, 1.62, 1.98]
+    # Rail-relative: 100 Ohms from 0 to 1 V, then 50 Ohms. Vmeas = 0.6 V is 1.2 - 0.6 = 0.6 V rail-relative, not 1.2 V.
+    pullup = [(0.0, [0.0, 0.0, 0.0]), (1.0, [-0.01, -0.01, -0.01]), (1.8, [-0.026, -0.026, -0.026])]
+    model = Model({"model_type": "Open_source", "voltage_range": vrange, "vmeas": 0.6, "pullup": pullup, "ramp": RAMP,
+                   "pullup_reference": [1.2, 1.1, 1.3]})
+    assert model.zout == pytest.approx(100.0)
+    # [GND Clamp Reference] 0.3 V: Vpin = 0.8 V is 0.5 V on the table (50 Ohms), not 0.8 V (100 Ohms).
+    model = Model({"model_type": "Input", "voltage_range": vrange, "vmeas": 0.8, "gnd_clamp": BENT_CLAMP,
+                   "gnd_clamp_reference": [0.3]})
+    assert model.zin == pytest.approx(50.0)
+    # Plots use them, too.
+    iv = IVData.from_model_dict({"pullup": PULLUP, "pullup_reference": [1.2]}, 1.8)
+    np.testing.assert_allclose(iv.series()[0].v, [-2.4, -0.6, 1.2, 3.0])
+
+
+@pytest.mark.parametrize("sub_ref, zin", [
+    ({}, 50.0),  # The parent's [POWER Clamp Reference] (1.2 V): 1.2 - 0.84 = 0.36 V on the table.
+    ({"power_clamp_reference": [1.8]}, 100.0),  # Its own: 1.8 - 0.84 = 0.96 V on the table.
+])
+def test_submodel_references(sub_ref, zin):
+    from pyibisami.ibis.model import Model
+
+    odt = [(0.0, [0.0, 0.0, 0.0]), (0.5, [-0.01, -0.01, -0.01]), (1.8, [-0.023, -0.023, -0.023])]  # 50, then 100 Ohms.
+    model = Model({"model_type": "Input", "voltage_range": [1.8, 1.62, 1.98], "vmeas": 0.84,
+                   "power_clamp_reference": [1.2], "add_submodel": [("odt", "Non-Driving")]})
+    model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": odt, **sub_ref}})
+    assert model.zin == pytest.approx(zin, rel=1e-3)  # In parallel with NO_CLAMP_Z.
+
+
+def test_references_instead_of_voltage_range():
+    """IBIS allows the ``[... Reference]`` keywords in place of ``[Voltage Range]``; Vdd is then the pull-up's."""
+    from pyibisami.ibis.model import Model
+
+    refs = {"pullup_reference": [1.8], "pulldown_reference": [0.0], "power_clamp_reference": [1.8],
+            "gnd_clamp_reference": [0.0]}
+    model = Model({"model_type": "Open_source", "vmeas": 0.5, "pullup": PULLUP, "ramp": RAMP, **refs})
+    assert model.zout == pytest.approx(50.0)
+    assert model.iv_data.vdd == pytest.approx(1.8)
+    with pytest.raises(LookupError, match="Voltage Range"):
+        Model({"model_type": "Open_source", "pulldown_reference": [0.0], "pullup": PULLUP, "ramp": RAMP})
+
+
+# Table voltages: 50 Ohms below 1.2 V, 100 Ohms above.
+BENT_LOW = [(0.0, [0.0, 0.0, 0.0]), (1.2, [0.024, 0.024, 0.024]), (2.0, [0.032, 0.032, 0.032])]
+
+
+@pytest.mark.parametrize("model_type, tables, impedance", [
+    ("Open_drain", {"pulldown": BENT_LOW, "ramp": RAMP, "pulldown_reference": [-1.0], "pullup_reference": [1.0]},
+     "zout"),
+    ("Input", {"gnd_clamp": BENT_LOW, "gnd_clamp_reference": [-1.0], "power_clamp_reference": [1.0]}, "zin"),
+])
+def test_default_operating_point_is_midway_between_references(model_type, tables, impedance):
+    """Without Vmeas (or thresholds), the operating point is midway between the rails: 0 V (1 V on the table, 50 Ohms)
+    here, not Vdd / 2 = 0.5 V (1.5 V on the table, 100 Ohms)."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": model_type, "voltage_range": [1.0, 0.9, 1.1], **tables})
+    assert getattr(model, impedance) == pytest.approx(50.0)
+
+
+def test_na_at_a_repeated_lowest_voltage():
+    """Another row at that voltage gives its typical current, so the table loads (an ``NA`` here used to reject a
+    usable table), with a spec warning (the first row, as listed, must give one)."""
+    curve = IVCurve.from_table("gnd_clamp", [(0.0, [None, None, None]), (0.0, [0.01, 0.01, 0.01]), (1.0, [0.02] * 3)])
+    np.testing.assert_allclose(curve.i_typ, [0.01, 0.01, 0.02])
+    assert len(curve.warnings) == 1
+
+
+def test_iv_data_impedance_is_at_the_pin_voltage():
+    iv = IVData.from_model_dict({"pullup": PULLUP, "pullup_reference": [1.2]}, 1.8)
+    assert iv.impedance("pullup", 0.2) == pytest.approx(50.0)  # 1.0 V on the table.
+    assert iv.impedance("pullup", 0.2, corner="min") == pytest.approx(45.0)
+    with pytest.raises(ValueError, match="outside the table"):
+        iv.impedance("pullup", 5.0)
+
+
+def test_iv_table_warnings_reach_spec_warnings():
+    """They used to go only to the console, never to ``Model.spec_warnings`` (so neither to PyBERT)."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "I/O", "voltage_range": [1.8, 1.7, 1.9], "pulldown": PULLDOWN, "pullup": PULLUP,
+                   "ramp": RAMP, "vinl": [0.6], "vinh": [1.2], "power_clamp": CLAMP,
+                   "gnd_clamp": [(0.0, [0.0])]}, name="io_buf")  # Unusable (one row), but not required here.
+    model2 = Model({"model_type": "Input", "voltage_range": [1.8], "vinl": [0.6], "vinh": [1.2],
+                    "gnd_clamp": [(0.0, [0.0]), (1.8, [0.036]), (0.9, [None])], "power_clamp": CLAMP}, name="in_buf")
+    assert any("io_buf: Ignoring unusable I-V table: [gnd_clamp]" in w for w in model.spec_warnings)
+    assert any("in_buf: [gnd_clamp]: The first and last rows" in w for w in model2.spec_warnings)
+
+
+def test_submodel_iv_table_warnings_are_returned():
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Input", "voltage_range": [1.8], "vinl": [0.6], "vinh": [1.2], "gnd_clamp": CLAMP,
+                   "add_submodel": [("odt", "Non-Driving")]}, name="rx")
+    warnings = model.apply_submodels({"odt": {"submodel_type": "Dynamic_clamp", "power_clamp": [(0.0, [0.0])]}})
+    assert warnings and "rx: [Submodel] odt: Ignoring unusable I-V table" in warnings[0]
+
+
+@pytest.mark.parametrize("sub_dict, vdd", [
+    ({"voltage_range": [1.8, 1.7, 1.9], "pullup_reference": [1.2]}, 1.8),  # [Voltage Range] first,
+    ({"pullup_reference": [1.2], "power_clamp_reference": [1.5]}, 1.2),  # then [Pullup Reference],
+    ({"power_clamp_reference": [1.5]}, 1.5),  # then [POWER Clamp Reference].
+])
+def test_references_power_rail(sub_dict, vdd):
+    refs = IVReferences.from_model_dict(sub_dict)
+    assert refs.vdd == pytest.approx(vdd)
+    assert refs.reference("pulldown") == 0.0
+    assert refs.midway("pulldown", "pullup") == pytest.approx(refs.reference("pullup") / 2)
+
+
+def test_references_need_a_power_rail():
+    with pytest.raises(ValueError, match="Voltage Range"):
+        IVReferences.from_model_dict({"pulldown_reference": [0.0]})
+
+
+def test_submodel_references_inherit_the_parents():
+    """A [Submodel] has its parent's power rail, and its references where it gives none."""
+    parent = IVReferences.from_model_dict({"voltage_range": [1.8], "power_clamp_reference": [1.2],
+                                           "gnd_clamp_reference": [0.1]})
+    sub = IVReferences.from_model_dict({"voltage_range": [3.3], "power_clamp_reference": [1.5]}, parent=parent)
+    assert sub.vdd == pytest.approx(1.8)
+    assert sub.reference("power_clamp") == pytest.approx(1.5)
+    assert sub.reference("gnd_clamp") == pytest.approx(0.1)
+
+
+def test_model_without_iv_tables_has_no_iv_data():
+    """The references exist for every model, but ``iv_data`` stays ``None`` without any I-V tables."""
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Terminator", "voltage_range": [1.8, 1.7, 1.9]})
+    assert model.iv_data is None
+
+
+def test_plot_voltage_span_is_the_references():
+    iv = IVData.from_model_dict({"pulldown": PULLDOWN, "pullup": PULLUP, "pulldown_reference": [-2.0]}, 1.8)
+    assert iv.rails == pytest.approx((-2.0, 1.8))
+    assert IVData.from_model_dict({"gnd_clamp": CLAMP}, 1.8).rails == pytest.approx((0.0, 1.8))
+
+
+@pytest.mark.parametrize("params, zin", [
+    ({"vinl": [0.2, 0.15, 0.25], "vinh": [0.6, 0.55, 0.65]}, 50.0),  # Typ/min/max thresholds: their typical midpoint.
+    ({"vinl": [0.6, 0.55, 0.65], "vinh": [1.0, 0.95, 1.05]}, 100.0),
+    ({"vmeas": [0.4, 0.3, 0.5]}, 50.0),  # A typ/min/max Vmeas: its typical value.
+    ({}, 50.0),  # Neither: Vdd / 2 (it used to be each table's own max. voltage / 2: 1 V here).
+])
+def test_input_operating_point(params, zin):
+    from pyibisami.ibis.model import Model
+
+    model = Model({"model_type": "Input", "voltage_range": [1.0, 0.9, 1.1], "gnd_clamp": BENT_CLAMP, **params})
+    assert model.zin == pytest.approx(zin)
+
+
+def test_unusable_required_iv_table_is_a_lookup_error():
+    """``Model`` reports an unusable required I-V table like a missing one, so the parser catches it."""
+    with pytest.raises(LookupError, match="Unusable I-V table"):
+        _model("Output", pulldown=[(0.0, [None]), (1.8, [0.036])], pullup=PULLUP, ramp=RAMP)
 
 
 def test_output_still_requires_driver_data():

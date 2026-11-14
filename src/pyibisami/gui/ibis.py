@@ -49,8 +49,7 @@ def make_iv_plot(iv_data: IVData) -> Plot:
     plot_iv.title = iv_data.title
     plot_iv.index_axis.title = iv_data.v_label
     plot_iv.value_axis.title = iv_data.i_label
-    plot_iv.index_range.low_setting = 0
-    plot_iv.index_range.high_setting = iv_data.vdd
+    plot_iv.index_range.low_setting, plot_iv.index_range.high_setting = iv_data.rails
     plot_iv.value_range.low_setting = 0
     plot_iv.value_range.high_setting = 0.1
     plot_iv.legend.visible = True
